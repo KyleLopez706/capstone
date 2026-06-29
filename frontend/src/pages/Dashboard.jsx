@@ -5,18 +5,18 @@ function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen px-6 py-10" style={{ backgroundColor: "#F9F9FB" }}>
+    <div className="min-h-screen px-4 md:px-8 py-6 md:py-10" style={{ backgroundColor: "#F9F9FB" }}>
 
       {/* Top Header Bar */}
       <div
-        className="max-w-7xl mx-auto flex items-center justify-between mb-10 px-6 py-4 rounded-2xl shadow-sm"
+        className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center sm:justify-between gap-4 mb-6 md:mb-10 px-4 sm:px-6 py-4 rounded-2xl shadow-sm text-center sm:text-left"
         style={{ backgroundColor: "#232B32", border: "1px solid #E2E8F0" }}
       >
         <div>
-          <h1 className="text-2xl font-light tracking-widest uppercase" style={{ color: "#F9F9FB" }}>
+          <h1 className="text-xl sm:text-2xl font-light tracking-widest uppercase" style={{ color: "#F9F9FB" }}>
             Six Sigmaphil
           </h1>
-          <p className="text-xs tracking-wide mt-1" style={{ color: "#C5A059" }}>Admin Dashboard</p>
+          <p className="text-xs sm:text-sm tracking-wide mt-1" style={{ color: "#C5A059" }}>Admin Dashboard</p>
         </div>
 
         <button

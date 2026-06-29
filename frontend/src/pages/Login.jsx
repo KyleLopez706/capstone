@@ -278,9 +278,9 @@ function Login() {
   const onBlur  = (e) => (e.target.style.borderColor = "#E2E8F0");
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-10" style={{ backgroundColor: "#F9F9FB" }}>
+    <div className="min-h-screen flex items-center justify-center px-4 sm:px-6 py-6 sm:py-10" style={{ backgroundColor: "#F9F9FB" }}>
       <div
-        className="w-full max-w-md rounded-2xl shadow-xl p-8"
+        className="w-full max-w-md lg:max-w-lg rounded-2xl shadow-xl p-6 sm:p-8 md:p-10"
         style={{ backgroundColor: "#ffffff", border: "1px solid #E2E8F0" }}
       >
         {/* ── Brand Header ── */}
