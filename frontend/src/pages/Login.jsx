@@ -47,7 +47,7 @@ const EyeToggle = ({ show, onToggle }) => (
   </button>
 );
 
-function Login() {
+function Login({ modal = false }) {
   /* ── Mode: "admin" | "user" ── */
   const [mode, setMode] = useState("admin");
 
@@ -278,11 +278,45 @@ function Login() {
   const onBlur  = (e) => (e.target.style.borderColor = "#E2E8F0");
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 sm:px-6 py-6 sm:py-10" style={{ backgroundColor: "#F9F9FB" }}>
+    /*
+     * When rendered as a modal overlay (from Home page), the outer wrapper is a
+     * fixed full-screen frosted glass panel so the Home page shows through behind.
+     * When accessed directly via /login URL, it renders as a normal standalone page.
+     */
+    <div
+      className={`${
+        modal
+          ? "fixed inset-0 z-50 flex items-center justify-center px-4 sm:px-6 py-6"
+          : "min-h-screen w-full flex items-center justify-center px-4 sm:px-6 py-6 md:py-12"
+      }`}
+      style={{
+        backgroundColor: modal ? "rgba(35, 43, 50, 0.65)" : "#F9F9FB",
+        backdropFilter: modal ? "blur(10px)" : "none",
+        WebkitBackdropFilter: modal ? "blur(10px)" : "none",
+      }}
+      // Clicking the backdrop (not the card) closes the modal and goes back to home
+      onClick={modal ? (e) => { if (e.target === e.currentTarget) navigate("/"); } : undefined}
+    >
       <div
-        className="w-full max-w-md lg:max-w-lg rounded-2xl shadow-xl p-6 sm:p-8 md:p-10"
+        className="w-full max-w-md lg:max-w-lg rounded-2xl shadow-xl p-6 sm:p-8 md:p-10 relative"
         style={{ backgroundColor: "#ffffff", border: "1px solid #E2E8F0" }}
       >
+        {/* ── Back Arrow Button ── */}
+        <button
+          id="login-back-btn"
+          onClick={() => navigate("/")}
+          className="inline-flex items-center gap-1.5 mb-6 text-xs font-medium tracking-wide cursor-pointer transition-colors duration-150 group"
+          style={{ color: "#9CA3AF" }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "#C5A059")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "#9CA3AF")}
+          aria-label="Go back to home"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+          </svg>
+          Back to Home
+        </button>
+
         {/* ── Brand Header ── */}
         <div className="text-center mb-7">
           <div
@@ -435,29 +469,6 @@ function Login() {
               ))}
             </div>
 
-            {/* ── Google Button ── */}
-            {googleError && (
-              <div className="mb-4 px-4 py-3 rounded-lg text-sm text-center" style={{ backgroundColor: "#FEF2F2", border: "1px solid #FECACA", color: "#DC2626" }}>
-                {googleError}
-              </div>
-            )}
-            <div className="w-full flex justify-center mb-5">
-              <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={handleGoogleError}
-                theme="outline"
-                shape="rectangular"
-                width="384px"
-              />
-            </div>
-
-            {/* Divider */}
-            <div className="flex items-center gap-3 mb-5">
-              <div className="flex-1 h-px" style={{ backgroundColor: "#E2E8F0" }} />
-              <span className="text-xs tracking-widest uppercase" style={{ color: "#9CA3AF" }}>or</span>
-              <div className="flex-1 h-px" style={{ backgroundColor: "#E2E8F0" }} />
-            </div>
-
             {/* ── USER SIGN IN ── */}
             {userView === "signin" && !forgotStep && (
               <div>
@@ -551,6 +562,21 @@ function Login() {
                     ) : "Sign In"}
                   </button>
                 </form>
+
+                {googleError && (
+                  <div className="mt-4 px-4 py-3 rounded-lg text-sm text-center" style={{ backgroundColor: "#FEF2F2", border: "1px solid #FECACA", color: "#DC2626" }}>
+                    {googleError}
+                  </div>
+                )}
+                <div className="w-full flex justify-center mt-4">
+                  <GoogleLogin
+                    onSuccess={handleGoogleSuccess}
+                    onError={handleGoogleError}
+                    theme="outline"
+                    shape="rectangular"
+                    width="384px"
+                  />
+                </div>
 
                 <p className="text-center text-xs mt-5" style={{ color: "#9CA3AF" }}>
                   Don't have an account?{" "}
