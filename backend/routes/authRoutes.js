@@ -310,7 +310,7 @@ router.post("/google-login", async (req, res) => {
       { expiresIn: "24h" },
     );
 
-    res.status(200).json({ message: "Google login successful.", token });
+    res.status(200).json({ message: "Google login successful.", token, email });
   } catch (error) {
     console.error("Google login error:", error.message);
     res.status(401).json({ message: "Invalid Google token. Please try again." });
