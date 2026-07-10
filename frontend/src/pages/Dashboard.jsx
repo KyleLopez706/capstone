@@ -1,8 +1,78 @@
-function Dashboard() {
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    window.location.href = "/admin-login";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "../supabaseClient";
+
+/* ─────────────────────────────────────────
+   DASHBOARD PAGE — Admin Only
+   On mount, verifies the active Supabase session
+   and checks the profiles table for role === 'admin'.
+   Any non-admin session is immediately redirected
+   to the homepage. Unauthenticated visits are
+   redirected to /login.
+───────────────────────────────────────── */
+export default function Dashboard() {
+  const navigate = useNavigate();
+  const [isVerifying, setIsVerifying] = useState(true);
+
+  /* ── Guard: verify session and admin role on mount ── */
+  useEffect(() => {
+    const verifyAdmin = async () => {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      // No active session — redirect to login
+      if (sessionError || !session) {
+        navigate("/login");
+        return;
+      }
+
+      // Query only the role column — lean query per AGENTS.md §A
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", session.user.id)
+        .single();
+
+      if (profileError || profile?.role !== "admin") {
+        // Graceful RLS fallback — redirect unauthorized users home
+        console.warn("Admin access denied:", profileError?.message ?? "insufficient role");
+        navigate("/");
+        return;
+      }
+
+      setIsVerifying(false);
+    };
+
+    verifyAdmin();
+  }, [navigate]);
+
+  /* ── Sign Out handler ── */
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error("Sign out error:", error.message);
+    }
+    navigate("/login");
   };
+
+  /* ── Loading state while verifying session ── */
+  if (isVerifying) {
+    return (
+      <div
+        className="min-h-screen w-full flex items-center justify-center"
+        style={{ backgroundColor: "#F9F9FB" }}
+      >
+        <div className="text-center">
+          <div
+            className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin mx-auto mb-4"
+            style={{ borderColor: "#C5A059", borderTopColor: "transparent" }}
+          />
+          <p className="text-xs tracking-widest uppercase" style={{ color: "#9CA3AF" }}>
+            Verifying access…
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen px-4 md:px-8 py-6 md:py-10" style={{ backgroundColor: "#F9F9FB" }}>
@@ -23,8 +93,8 @@ function Dashboard() {
           onClick={handleLogout}
           className="font-semibold text-xs tracking-widest uppercase py-2.5 px-6 rounded-lg transition-all duration-200 cursor-pointer"
           style={{ backgroundColor: "#C5A059", color: "#ffffff" }}
-          onMouseEnter={(e) => (e.target.style.backgroundColor = "#b08d47")}
-          onMouseLeave={(e) => (e.target.style.backgroundColor = "#C5A059")}
+          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#b08d47")}
+          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#C5A059")}
         >
           Sign Out
         </button>
@@ -38,7 +108,6 @@ function Dashboard() {
           className="rounded-2xl shadow-sm overflow-hidden"
           style={{ backgroundColor: "#ffffff", border: "1px solid #E2E8F0" }}
         >
-          {/* Table Header */}
           <div
             className="px-6 py-5 flex items-center gap-3"
             style={{ borderBottom: "1px solid #E2E8F0" }}
@@ -59,8 +128,7 @@ function Dashboard() {
             </div>
           </div>
 
-          {/* Table */}
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto w-full">
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: "1px solid #E2E8F0" }}>
@@ -87,7 +155,6 @@ function Dashboard() {
           className="rounded-2xl shadow-sm overflow-hidden"
           style={{ backgroundColor: "#ffffff", border: "1px solid #E2E8F0" }}
         >
-          {/* Table Header */}
           <div
             className="px-6 py-5 flex items-center gap-3"
             style={{ borderBottom: "1px solid #E2E8F0" }}
@@ -108,8 +175,7 @@ function Dashboard() {
             </div>
           </div>
 
-          {/* Table */}
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto w-full">
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: "1px solid #E2E8F0" }}>
@@ -140,5 +206,3 @@ function Dashboard() {
     </div>
   );
 }
-
-export default Dashboard;

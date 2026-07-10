@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { supabase } from "../supabaseClient";
 
 /* ─────────────────────────────────────────
    NAV LINKS — single source of truth shared
@@ -16,11 +17,15 @@ const NAV_LINKS = [
 /* ─────────────────────────────────────────
    PROFILE DROPDOWN
 ───────────────────────────────────────── */
-function ProfileDropdown({ onSignOut }) {
+function ProfileDropdown({ user, onSignOut }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
-  const name = localStorage.getItem("userName") || "User";
+  // Derive display name from Supabase user metadata or email prefix
+  const email = user?.email ?? "";
+  const name = user?.user_metadata?.full_name
+    ?? email.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    ?? "User";
   const initials = name
     .split(" ")
     .map((n) => n[0])
@@ -63,18 +68,8 @@ function ProfileDropdown({ onSignOut }) {
           style={{ color: "#F9F9FB" }}
         >
           {name.split(" ")[0]}
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M19.5 8.25l-7.5 7.5-7.5-7.5"
-            />
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
           </svg>
         </span>
       </button>
@@ -87,14 +82,11 @@ function ProfileDropdown({ onSignOut }) {
         >
           {/* User info */}
           <div className="px-4 py-3" style={{ borderBottom: "1px solid #E2E8F0" }}>
-            <p
-              className="text-xs font-semibold tracking-wider uppercase truncate"
-              style={{ color: "#232B32" }}
-            >
+            <p className="text-xs font-semibold tracking-wider uppercase truncate" style={{ color: "#232B32" }}>
               {name}
             </p>
             <p className="text-xs mt-0.5 truncate" style={{ color: "#9CA3AF" }}>
-              {localStorage.getItem("userEmail") || ""}
+              {email}
             </p>
           </div>
 
@@ -102,18 +94,11 @@ function ProfileDropdown({ onSignOut }) {
           <div className="py-1">
             <button
               id="dropdown-signout-btn"
-              onClick={() => {
-                setOpen(false);
-                onSignOut();
-              }}
+              onClick={() => { setOpen(false); onSignOut(); }}
               className="w-full text-left px-4 py-2.5 text-sm transition-colors duration-150 cursor-pointer"
               style={{ color: "#DC2626" }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.backgroundColor = "#FEF2F2")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.backgroundColor = "transparent")
-              }
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#FEF2F2")}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
             >
               Sign Out
             </button>
@@ -128,32 +113,32 @@ function ProfileDropdown({ onSignOut }) {
    NAVBAR  (default export — used by all pages)
 ───────────────────────────────────────── */
 export default function Navbar() {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate  = useNavigate();
+  const location  = useLocation();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Auth state — checks for "userToken" written by Login.jsx on sign-in
-  const [isLoggedIn, setIsLoggedIn] = useState(
-    !!localStorage.getItem("userToken")
-  );
+  // Auth state — driven by Supabase session (single source of truth per AGENTS.md §B)
+  const [user, setUser] = useState(null);
 
-  // Sync auth across tabs ("storage") and within the same tab ("userAuthChange")
   useEffect(() => {
-    const sync = () => setIsLoggedIn(!!localStorage.getItem("userToken"));
-    window.addEventListener("storage", sync);
-    window.addEventListener("userAuthChange", sync);
-    return () => {
-      window.removeEventListener("storage", sync);
-      window.removeEventListener("userAuthChange", sync);
-    };
+    // Grab the initial session on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+
+    // Subscribe to all future auth state changes (login, logout, token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const handleSignOut = () => {
-    localStorage.removeItem("userToken");
-    localStorage.removeItem("userName");
-    localStorage.removeItem("userEmail");
-    setIsLoggedIn(false);
+  const handleSignOut = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) console.error("Sign out error:", error.message);
+    setUser(null);
     navigate("/");
   };
 
@@ -167,32 +152,13 @@ export default function Navbar() {
       }}
     >
       {/* ── Main navbar row ── */}
-      <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <nav className="w-full px-4 sm:px-8 lg:px-12 xl:px-16 h-16 flex items-center justify-between">
         {/* Logo */}
         <button
           id="home-logo-btn"
           onClick={() => navigate("/")}
           className="flex items-center gap-3 cursor-pointer group focus:outline-none shrink-0"
         >
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-            style={{ backgroundColor: "#C5A059" }}
-          >
-            <svg
-              className="w-4 h-4"
-              style={{ color: "#ffffff" }}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125v-3.75"
-              />
-            </svg>
-          </div>
           <span
             className="text-base sm:text-lg font-light tracking-widest uppercase"
             style={{ color: "#F9F9FB" }}
@@ -204,7 +170,6 @@ export default function Navbar() {
         {/* ── Centered desktop nav links ── */}
         <div className="hidden lg:flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
           {NAV_LINKS.map((link) => {
-            // Highlight the active page link
             const isActive = location.pathname === link.href;
             return (
               <button
@@ -212,22 +177,17 @@ export default function Navbar() {
                 onClick={() => navigate(link.href)}
                 className="relative px-4 py-2 text-sm font-medium tracking-wide cursor-pointer transition-colors duration-200 rounded-lg group"
                 style={{ color: isActive ? "#C5A059" : "#D1D5DB" }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.color = "#C5A059")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.color = isActive ? "#C5A059" : "#D1D5DB")
-                }
+                onMouseEnter={(e) => (e.currentTarget.style.color = "#C5A059")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = isActive ? "#C5A059" : "#D1D5DB")}
               >
                 {link.label}
-                {/* Underline — always visible for active, slides in on hover for others */}
+                {/* Active underline indicator */}
                 <span
                   className="absolute bottom-1 left-4 right-4 h-px rounded-full transition-transform duration-200 origin-center"
                   style={{
                     backgroundColor: "#C5A059",
                     transform: isActive ? "scaleX(1)" : "scaleX(0)",
                   }}
-                  // CSS group-hover handles the hover scale via Tailwind group
                 />
               </button>
             );
@@ -236,21 +196,17 @@ export default function Navbar() {
 
         {/* ── Right side: auth controls + hamburger ── */}
         <div className="flex items-center gap-3">
-          {/* Auth */}
-          {isLoggedIn ? (
-            <ProfileDropdown onSignOut={handleSignOut} />
+          {/* Auth — driven by Supabase session */}
+          {user ? (
+            <ProfileDropdown user={user} onSignOut={handleSignOut} />
           ) : (
             <button
               id="navbar-signin-btn"
               onClick={() => navigate("/login")}
               className="font-semibold text-xs sm:text-sm tracking-widest uppercase py-2 px-4 rounded-lg transition-all duration-200 cursor-pointer"
               style={{ backgroundColor: "#C5A059", color: "#ffffff" }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.backgroundColor = "#b08d47")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.backgroundColor = "#C5A059")
-              }
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#b08d47")}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#C5A059")}
             >
               Sign In
             </button>
@@ -268,25 +224,18 @@ export default function Navbar() {
               className="block w-5 h-px rounded-full transition-all duration-300"
               style={{
                 backgroundColor: "#F9F9FB",
-                transform: mobileMenuOpen
-                  ? "translateY(4px) rotate(45deg)"
-                  : "none",
+                transform: mobileMenuOpen ? "translateY(4px) rotate(45deg)" : "none",
               }}
+            />
+            <span
+              className="block w-5 h-px rounded-full transition-all duration-300"
+              style={{ backgroundColor: "#F9F9FB", opacity: mobileMenuOpen ? 0 : 1 }}
             />
             <span
               className="block w-5 h-px rounded-full transition-all duration-300"
               style={{
                 backgroundColor: "#F9F9FB",
-                opacity: mobileMenuOpen ? 0 : 1,
-              }}
-            />
-            <span
-              className="block w-5 h-px rounded-full transition-all duration-300"
-              style={{
-                backgroundColor: "#F9F9FB",
-                transform: mobileMenuOpen
-                  ? "translateY(-4px) rotate(-45deg)"
-                  : "none",
+                transform: mobileMenuOpen ? "translateY(-4px) rotate(-45deg)" : "none",
               }}
             />
           </button>
@@ -304,26 +253,19 @@ export default function Navbar() {
             return (
               <button
                 key={link.label}
-                onClick={() => navigate(link.href)}
+                onClick={() => { navigate(link.href); setMobileMenuOpen(false); }}
                 className="w-full text-left px-4 py-3 text-sm font-medium tracking-wide rounded-lg cursor-pointer transition-colors duration-150"
                 style={{
                   color: isActive ? "#C5A059" : "#D1D5DB",
-                  backgroundColor: isActive
-                    ? "rgba(197,160,89,0.08)"
-                    : "transparent",
+                  backgroundColor: isActive ? "rgba(197,160,89,0.08)" : "transparent",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor =
-                    "rgba(197,160,89,0.1)";
+                  e.currentTarget.style.backgroundColor = "rgba(197,160,89,0.1)";
                   e.currentTarget.style.color = "#C5A059";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = isActive
-                    ? "rgba(197,160,89,0.08)"
-                    : "transparent";
-                  e.currentTarget.style.color = isActive
-                    ? "#C5A059"
-                    : "#D1D5DB";
+                  e.currentTarget.style.backgroundColor = isActive ? "rgba(197,160,89,0.08)" : "transparent";
+                  e.currentTarget.style.color = isActive ? "#C5A059" : "#D1D5DB";
                 }}
               >
                 {link.label}

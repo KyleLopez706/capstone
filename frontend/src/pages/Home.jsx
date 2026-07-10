@@ -1,6 +1,8 @@
+import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import kitchenImg from "../assets/kitchen.png";
 import blackMarquinaImg from "../assets/Black Marquina.jpg";
+import kitchenCountertopBlackMarquinaImg from "../assets/Kitchen countertop black marquina.png";
 import blackGalaxyImg from "../assets/Black galaxy.png";
 import calacattaImg from "../assets/calacatta quarts.jpg";
 import saltPepperImg from "../assets/salt and pepper.png";
@@ -52,6 +54,7 @@ const STONE_DESIGNS = [
    MAIN HOME COMPONENT
 ───────────────────────────────────────── */
 export default function Home() {
+  const navigate = useNavigate();
   return (
     <div className="min-h-screen w-full" style={{ backgroundColor: "#F9F9FB" }}>
       {/* Shared navbar — handles auth, nav links, and hamburger */}
@@ -109,6 +112,239 @@ export default function Home() {
               architecture. Visualize, configure, and order premium stone
               surfaces.
             </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ════════════════════════════════════════
+          3D CONFIGURATOR SHOWCASE SECTION
+      ════════════════════════════════════════ */}
+      <section
+        className="w-full py-20 sm:py-24 lg:py-28"
+        style={{ backgroundColor: "#232B32" }}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* ── Section Label (centered, above image) ── */}
+          <div className="text-center mb-12">
+            <span
+              className="inline-block text-xs font-semibold tracking-widest uppercase mb-4"
+              style={{ color: "#C5A059" }}
+            >
+              3D Visualization
+            </span>
+            <h2
+              className="text-3xl sm:text-4xl lg:text-5xl font-light tracking-tight mb-4"
+              style={{ color: "#F9F9FB" }}
+            >
+              From Stone to{" "}
+              <span
+                className="font-semibold"
+                style={{
+                  background:
+                    "linear-gradient(135deg, #C5A059 0%, #e8c97a 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                Stunning Reality
+              </span>
+            </h2>
+            <p
+              className="text-sm sm:text-base max-w-xl mx-auto leading-relaxed"
+              style={{ color: "#9CA3AF" }}
+            >
+              Our 3D configurator transforms raw stone textures into
+              photorealistic, interactive models — so you can see exactly how
+              your surface will look before it ever arrives.
+            </p>
+          </div>
+
+          {/* ── Main Layout: Images Left | Description Right ── */}
+          <div className="flex flex-col lg:flex-row gap-6 lg:gap-10 items-stretch">
+            {/* LEFT — Two stacked images */}
+            <div className="flex flex-row lg:flex-col gap-4 lg:gap-4 w-full lg:w-[48%]">
+              {/* Black Marquina slab */}
+              <div
+                className="relative overflow-hidden rounded-2xl flex-1"
+                style={{
+                  border: "1px solid rgba(226,232,240,0.12)",
+                  minHeight: "220px",
+                }}
+              >
+                <img
+                  src={blackMarquinaImg}
+                  alt="Black Marquina granite slab"
+                  className="w-full h-full object-cover"
+                  style={{ maxHeight: "280px" }}
+                />
+                {/* Overlay label */}
+                <div
+                  className="absolute bottom-0 left-0 right-0 px-4 py-3"
+                  style={{
+                    background:
+                      "linear-gradient(0deg, rgba(35,43,50,0.9) 0%, transparent 100%)",
+                  }}
+                >
+                  <p
+                    className="text-xs font-semibold tracking-widest uppercase"
+                    style={{ color: "#C5A059" }}
+                  >
+                    Raw Slab
+                  </p>
+                  <p
+                    className="text-sm font-light"
+                    style={{ color: "#F9F9FB" }}
+                  >
+                    Black Marquina
+                  </p>
+                </div>
+              </div>
+
+              {/* Kitchen countertop application */}
+              <div
+                className="relative overflow-hidden rounded-2xl flex-1"
+                style={{
+                  border: "1px solid rgba(226,232,240,0.12)",
+                  minHeight: "220px",
+                }}
+              >
+                <img
+                  src={kitchenCountertopBlackMarquinaImg}
+                  alt="Black Marquina kitchen countertop"
+                  className="w-full h-full object-cover"
+                  style={{ maxHeight: "280px" }}
+                />
+                {/* Overlay label */}
+                <div
+                  className="absolute bottom-0 left-0 right-0 px-4 py-3"
+                  style={{
+                    background:
+                      "linear-gradient(0deg, rgba(35,43,50,0.9) 0%, transparent 100%)",
+                  }}
+                >
+                  <p
+                    className="text-xs font-semibold tracking-widest uppercase"
+                    style={{ color: "#C5A059" }}
+                  >
+                    In Application
+                  </p>
+                  <p
+                    className="text-sm font-light"
+                    style={{ color: "#F9F9FB" }}
+                  >
+                    Kitchen Countertop
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT — Rich Description */}
+            <div
+              className="w-full lg:w-[52%] rounded-2xl p-8 sm:p-10 flex flex-col justify-between"
+              style={{
+                backgroundColor: "rgba(249,249,251,0.04)",
+                border: "1px solid rgba(226,232,240,0.1)",
+              }}
+            >
+              {/* Title */}
+              <div>
+                <h3
+                  className="text-2xl sm:text-3xl font-light tracking-wide mb-2"
+                  style={{ color: "#F9F9FB" }}
+                >
+                  The Allure of{" "}
+                  <span
+                    style={{
+                      background:
+                        "linear-gradient(135deg, #C5A059 0%, #e8c97a 100%)",
+                      WebkitBackgroundClip: "text",
+                      WebkitTextFillColor: "transparent",
+                      backgroundClip: "text",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Black Marquina
+                  </span>
+                </h3>
+
+                {/* Gold divider */}
+                <div
+                  className="mb-6 mt-4 w-12 h-0.5 rounded-full"
+                  style={{ backgroundColor: "#C5A059" }}
+                />
+
+                {/* Stone description */}
+                <p
+                  className="text-sm sm:text-base leading-relaxed mb-5"
+                  style={{ color: "#9CA3AF" }}
+                >
+                  Born from the quarries of northern Spain, Black Marquina is
+                  nature&apos;s most dramatic masterpiece. Its profound,
+                  jet-black canvas is traversed by a delicate network of{" "}
+                  <span style={{ color: "#F9F9FB", fontWeight: 500 }}>
+                    ivory-white veining
+                  </span>{" "}
+                  — a contrast so striking, it commands the entire character of
+                  any space it inhabits. Each slab is a singular work of art,
+                  unrepeatable, timeless, and utterly commanding.
+                </p>
+
+                {/* Countertop & 3D model description */}
+                <div
+                  className="rounded-xl p-5 mb-6"
+                  style={{
+                    backgroundColor: "rgba(197,160,89,0.07)",
+                    border: "1px solid rgba(197,160,89,0.2)",
+                  }}
+                >
+                  <div className="flex items-start gap-3">
+                    <div>
+                      <p
+                        className="text-xs font-semibold tracking-widest uppercase mb-1"
+                        style={{ color: "#C5A059" }}
+                      >
+                        Elevated to 3D
+                      </p>
+                      <p
+                        className="text-sm leading-relaxed"
+                        style={{ color: "#9CA3AF" }}
+                      >
+                        The countertop image you see is not merely a photograph
+                        — it is{" "}
+                        <span style={{ color: "#F9F9FB", fontWeight: 500 }}>
+                          transformed into a fully interactive 3D model
+                        </span>
+                        , rendered with precision and depth to give you an
+                        immersive spatial experience. Inspect every vein, every
+                        reflection, every curve — as if the stone were right in
+                        front of you.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* CTA Button */}
+              <button
+                onClick={() => navigate("/configurator-3d")}
+                className="inline-flex items-center justify-center gap-3 w-full sm:w-auto px-8 py-4 rounded-xl text-sm font-semibold tracking-widest uppercase cursor-pointer transition-all duration-200"
+                style={{ backgroundColor: "#C5A059", color: "#ffffff" }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "#b08d47";
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.boxShadow =
+                    "0 8px 24px rgba(197,160,89,0.35)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "#C5A059";
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "none";
+                }}
+              >
+                Launch 3D Configurator
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -227,25 +463,6 @@ export default function Home() {
           <div className="flex flex-col sm:flex-row items-center sm:justify-between gap-6">
             {/* Brand */}
             <div className="flex items-center gap-3">
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                style={{ backgroundColor: "#C5A059" }}
-              >
-                <svg
-                  className="w-4 h-4"
-                  style={{ color: "#ffffff" }}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125v-3.75"
-                  />
-                </svg>
-              </div>
               <div>
                 <p
                   className="text-sm font-light tracking-widest uppercase"

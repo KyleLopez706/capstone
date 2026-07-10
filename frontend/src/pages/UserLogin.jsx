@@ -1,17 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { GoogleLogin } from "@react-oauth/google";
+import { supabase } from "../supabaseClient";
 import { inputBase, onFocus, onBlur } from "../components/formConstants";
 import {
   InputIcon, EyeToggle,
   Alert, SubmitButton, BackButton,
 } from "../components/FormHelpers";
 
-
 /* ─────────────────────────────────────────
    USER LOGIN PAGE
    Handles: Sign In, Sign Up, Forgot Password,
-            and Google OAuth login.
+            and Google OAuth — all via Supabase GoTrue.
+   On successful login, queries the profiles table to
+   check the user role and routes accordingly:
+     - role === 'admin'  → /dashboard
+     - role === 'user'   → /
 ───────────────────────────────────────── */
 export default function UserLogin() {
   /* ── Sub-mode: "signin" | "signup" ── */
@@ -36,45 +39,58 @@ export default function UserLogin() {
      forgotStep: null | "request" | "verify" */
   const [forgotStep,      setForgotStep]      = useState(null);
   const [resetEmail,      setResetEmail]      = useState("");
-  const [resetPin,        setResetPin]        = useState("");
-  const [newPassword,     setNewPassword]     = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showNewPw,       setShowNewPw]       = useState(false);
-  const [showConfirmPw,   setShowConfirmPw]   = useState(false);
   const [forgotError,     setForgotError]     = useState("");
   const [forgotSuccess,   setForgotSuccess]   = useState("");
   const [forgotLoading,   setForgotLoading]   = useState(false);
 
-  /* ── Google error state ── */
-  const [googleError, setGoogleError] = useState("");
-
   const navigate = useNavigate();
 
-  /* ─── User Sign-In ─── */
+  /* ── Role-based routing helper ──
+     Queries only the 'role' column to keep the query lean (AGENTS.md §A).
+     If RLS blocks the query, silently falls back to homepage (AGENTS.md §B). */
+  const routeByRole = async (userId) => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .single();
+
+    if (error) {
+      // RLS permission denial or network failure — graceful fallback
+      console.error("Role check failed:", error.message);
+      navigate("/");
+      return;
+    }
+
+    if (data?.role === "admin") {
+      navigate("/dashboard");
+    } else {
+      navigate("/");
+    }
+  };
+
+  /* ── If already logged in, route them away from the login page ── */
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) routeByRole(session.user.id);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ─── User Sign-In via Supabase GoTrue ─── */
   const handleUserSignIn = async (e) => {
     e.preventDefault();
     setUserSignInError("");
-    setUserSignInLoading(true);
+    setUserSignInLoading(true); // Disable button immediately (rate-limit protection)
     try {
-      const response = await fetch("http://localhost:3000/api/auth/user-login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: userEmail, password: userPassword }),
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: userEmail,
+        password: userPassword,
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Sign in failed.");
-      // Store token + identity so the Navbar can show the profile avatar
-      localStorage.setItem("userToken", data.token);
-      localStorage.setItem("userEmail", userEmail);
-      // Derive a display name from the email prefix (e.g. "john.doe@..." → "John Doe")
-      const derivedName = userEmail
-        .split("@")[0]
-        .replace(/[._-]/g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase());
-      localStorage.setItem("userName", derivedName);
-      // Dispatch custom event so Navbar updates within the same tab
-      window.dispatchEvent(new Event("userAuthChange"));
-      navigate("/");
+
+      if (error) throw new Error(error.message);
+
+      await routeByRole(data.user.id);
     } catch (err) {
       setUserSignInError(err.message);
     } finally {
@@ -82,28 +98,52 @@ export default function UserLogin() {
     }
   };
 
-  /* ─── User Sign-Up ─── */
+  /* ─── User Sign-Up via Supabase GoTrue ─── */
   const handleUserSignUp = async (e) => {
     e.preventDefault();
     setSignUpError("");
     setSignUpSuccess("");
-    setSignUpLoading(true);
+
+    // Basic client-side validation before hitting the API
+    if (!signUpEmail || !signUpPassword) {
+      setSignUpError("Email and password are required.");
+      return;
+    }
+    if (signUpPassword.length < 6) {
+      setSignUpError("Password must be at least 6 characters.");
+      return;
+    }
+
+    setSignUpLoading(true); // Disable button immediately (rate-limit protection)
     try {
-      const response = await fetch("http://localhost:3000/api/auth/user-register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: signUpEmail, password: signUpPassword }),
+      const { data, error } = await supabase.auth.signUp({
+        email: signUpEmail,
+        password: signUpPassword,
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Registration failed.");
-      // Show success then switch back to Sign In tab
-      setSignUpSuccess("Account created! Please sign in.");
+
+      if (error) {
+        // Supabase rate limit — translate to a human-readable message
+        if (error.message.toLowerCase().includes("rate limit") || error.status === 429) {
+          throw new Error("Too many sign-up attempts. Please wait a few minutes and try again.");
+        }
+        throw new Error(error.message);
+      }
+
+      /* Supabase intentionally returns a fake "success" when the email already
+         exists to prevent email enumeration attacks. The tell-tale sign is an
+         empty identities array on the returned user object. */
+      if (data?.user && data.user.identities?.length === 0) {
+        throw new Error("An account with this email already exists. Please sign in instead.");
+      }
+
+      setSignUpSuccess("Account created! You can now sign in.");
       setSignUpEmail("");
       setSignUpPassword("");
+      // Switch to Sign In tab after a short pause
       setTimeout(() => {
         setSignUpSuccess("");
         switchUserView("signin");
-      }, 1500);
+      }, 2500);
     } catch (err) {
       setSignUpError(err.message);
     } finally {
@@ -111,95 +151,41 @@ export default function UserLogin() {
     }
   };
 
-  /* ─── Google Login ─── */
-  const handleGoogleSuccess = async (credentialResponse) => {
-    setGoogleError("");
-    try {
-      // Exchange Google ID token for our backend JWT
-      const response = await fetch("http://localhost:3000/api/auth/google-login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ credential: credentialResponse.credential }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Google login failed.");
-      // Store token + identity from Google payload
-      localStorage.setItem("userToken", data.token);
-      if (data.email) {
-        localStorage.setItem("userEmail", data.email);
-        const derivedName = data.email
-          .split("@")[0]
-          .replace(/[._-]/g, " ")
-          .replace(/\b\w/g, (c) => c.toUpperCase());
-        localStorage.setItem("userName", derivedName);
-      }
-      window.dispatchEvent(new Event("userAuthChange"));
-      navigate("/");
-    } catch (err) {
-      setGoogleError(err.message);
+  /* ─── Google OAuth via Supabase GoTrue ─── */
+  const handleGoogleSignIn = async () => {
+    // Supabase handles the full OAuth redirect flow
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/`,
+      },
+    });
+    if (error) {
+      setUserSignInError("Google sign-in failed. Please try again.");
+      console.error("Google OAuth error:", error.message);
     }
   };
 
-  const handleGoogleError = () => {
-    setGoogleError("Google sign-in was cancelled or failed.");
-  };
-
-  /* ─── Forgot Password: request PIN ─── */
+  /* ─── Forgot Password: send reset email via Supabase ─── */
   const handleForgotRequest = async (e) => {
     e.preventDefault();
     setForgotError("");
     setForgotSuccess("");
-    setForgotLoading(true);
-    try {
-      const response = await fetch("http://localhost:3000/api/auth/forgot-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: resetEmail }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Failed to send PIN.");
-      setForgotSuccess(data.message);
-      // Move to verify step after a short pause
-      setTimeout(() => {
-        setForgotSuccess("");
-        setForgotStep("verify");
-      }, 1200);
-    } catch (err) {
-      setForgotError(err.message);
-    } finally {
-      setForgotLoading(false);
-    }
-  };
 
-  /* ─── Forgot Password: verify PIN & reset ─── */
-  const handleResetPassword = async (e) => {
-    e.preventDefault();
-    setForgotError("");
-    setForgotSuccess("");
-    if (newPassword !== confirmPassword) {
-      setForgotError("Passwords do not match.");
+    if (!resetEmail) {
+      setForgotError("Please enter your email address.");
       return;
     }
+
     setForgotLoading(true);
     try {
-      const response = await fetch("http://localhost:3000/api/auth/reset-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: resetEmail, pin: resetPin, newPassword }),
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Failed to reset password.");
-      setForgotSuccess(data.message);
-      // Clear state and return to sign-in after success
-      setTimeout(() => {
-        setForgotStep(null);
-        setResetEmail("");
-        setResetPin("");
-        setNewPassword("");
-        setConfirmPassword("");
-        setForgotSuccess("");
-        setUserView("signin");
-      }, 1800);
+
+      if (error) throw new Error(error.message);
+
+      setForgotSuccess("Password reset email sent! Check your inbox.");
     } catch (err) {
       setForgotError(err.message);
     } finally {
@@ -248,14 +234,6 @@ export default function UserLogin() {
 
         {/* ── Brand Header ── */}
         <div className="text-center mb-7">
-          <div
-            className="mx-auto mb-4 rounded-xl flex items-center justify-center shadow-sm"
-            style={{ backgroundColor: "#232B32", width: 52, height: 52 }}
-          >
-            <svg className="w-7 h-7" style={{ color: "#C5A059" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125v-3.75" />
-            </svg>
-          </div>
           <h1 className="text-2xl font-light tracking-widest uppercase" style={{ color: "#232B32" }}>
             Six Sigmaphil
           </h1>
@@ -265,25 +243,27 @@ export default function UserLogin() {
         </div>
 
         {/* ── Sign In / Sign Up tab toggle ── */}
-        <div className="flex gap-1 mb-6 border-b" style={{ borderColor: "#E2E8F0" }}>
-          {[
-            { key: "signin", label: "Sign In" },
-            { key: "signup", label: "Sign Up" },
-          ].map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => switchUserView(key)}
-              className="flex-1 pb-3 text-sm font-semibold tracking-wide transition-all duration-200 cursor-pointer"
-              style={
-                userView === key
-                  ? { color: "#C5A059", borderBottom: "2px solid #C5A059" }
-                  : { color: "#9CA3AF", borderBottom: "2px solid transparent" }
-              }
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {!forgotStep && (
+          <div className="flex gap-1 mb-6 border-b" style={{ borderColor: "#E2E8F0" }}>
+            {[
+              { key: "signin", label: "Sign In" },
+              { key: "signup", label: "Sign Up" },
+            ].map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => switchUserView(key)}
+                className="flex-1 pb-3 text-sm font-semibold tracking-wide transition-all duration-200 cursor-pointer"
+                style={
+                  userView === key
+                    ? { color: "#C5A059", borderBottom: "2px solid #C5A059" }
+                    : { color: "#9CA3AF", borderBottom: "2px solid transparent" }
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* ════════════════════════════
             USER SIGN IN
@@ -352,16 +332,35 @@ export default function UserLogin() {
               <SubmitButton loading={userSignInLoading} label="Sign In" loadingLabel="Signing In…" />
             </form>
 
-            {/* Google Sign-In */}
-            {googleError && <Alert type="error" message={googleError} />}
-            <div className="w-full flex justify-center mt-4">
-              <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={handleGoogleError}
-                theme="outline"
-                shape="rectangular"
-                width="384px"
-              />
+            {/* ── Google Sign-In via Supabase OAuth ── */}
+            <div className="mt-5">
+              <div className="relative flex items-center gap-3 mb-4">
+                <div className="flex-1 h-px" style={{ backgroundColor: "#E2E8F0" }} />
+                <span className="text-xs tracking-wide" style={{ color: "#9CA3AF" }}>or continue with</span>
+                <div className="flex-1 h-px" style={{ backgroundColor: "#E2E8F0" }} />
+              </div>
+              <button
+                id="google-signin-btn"
+                type="button"
+                onClick={handleGoogleSignIn}
+                className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-lg text-sm font-medium tracking-wide transition-all duration-200 cursor-pointer"
+                style={{
+                  backgroundColor: "#ffffff",
+                  border: "1px solid #E2E8F0",
+                  color: "#232B32",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F9F9FB")}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ffffff")}
+              >
+                {/* Google SVG icon */}
+                <svg className="w-4 h-4" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Continue with Google
+              </button>
             </div>
 
             <p className="text-center text-xs mt-5" style={{ color: "#9CA3AF" }}>
@@ -380,7 +379,7 @@ export default function UserLogin() {
         )}
 
         {/* ════════════════════════════
-            FORGOT PASSWORD — REQUEST PIN
+            FORGOT PASSWORD — REQUEST EMAIL
         ════════════════════════════ */}
         {forgotStep === "request" && (
           <div>
@@ -392,126 +391,38 @@ export default function UserLogin() {
               Reset Password
             </h3>
             <p className="text-xs mb-6" style={{ color: "#9CA3AF" }}>
-              Enter your email and we&apos;ll send you a 6-digit PIN.
+              Enter your email and we&apos;ll send you a secure reset link.
             </p>
 
             {forgotError   && <Alert type="error"   message={forgotError} />}
             {forgotSuccess && <Alert type="success" message={forgotSuccess} />}
 
-            <form onSubmit={handleForgotRequest} className="space-y-4">
-              <div>
-                <label htmlFor="reset-email" className="block text-xs font-medium tracking-wider uppercase mb-2" style={{ color: "#232B32" }}>
-                  Email Address
-                </label>
-                <div className="relative">
-                  <InputIcon icon="email" />
-                  <input
-                    id="reset-email"
-                    type="email"
-                    value={resetEmail}
-                    onChange={(e) => setResetEmail(e.target.value)}
-                    required
-                    placeholder="you@example.com"
-                    className="w-full rounded-lg pl-11 pr-4 py-3 text-sm outline-none transition-all duration-200"
-                    style={inputBase}
-                    onFocus={onFocus}
-                    onBlur={onBlur}
-                  />
+            {/* Only show the form if no success message yet */}
+            {!forgotSuccess && (
+              <form onSubmit={handleForgotRequest} className="space-y-4">
+                <div>
+                  <label htmlFor="reset-email" className="block text-xs font-medium tracking-wider uppercase mb-2" style={{ color: "#232B32" }}>
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <InputIcon icon="email" />
+                    <input
+                      id="reset-email"
+                      type="email"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      required
+                      placeholder="you@example.com"
+                      className="w-full rounded-lg pl-11 pr-4 py-3 text-sm outline-none transition-all duration-200"
+                      style={inputBase}
+                      onFocus={onFocus}
+                      onBlur={onBlur}
+                    />
+                  </div>
                 </div>
-              </div>
-              <SubmitButton loading={forgotLoading} label="Send Reset PIN" loadingLabel="Sending PIN…" />
-            </form>
-          </div>
-        )}
-
-        {/* ════════════════════════════
-            FORGOT PASSWORD — VERIFY PIN & RESET
-        ════════════════════════════ */}
-        {forgotStep === "verify" && (
-          <div>
-            <BackButton
-              onClick={() => { setForgotStep("request"); setForgotError(""); setForgotSuccess(""); }}
-              label="Back"
-            />
-            <h3 className="text-sm font-semibold tracking-widest uppercase mb-1" style={{ color: "#232B32" }}>
-              Enter Your PIN
-            </h3>
-            <p className="text-xs mb-6" style={{ color: "#9CA3AF" }}>
-              Check your inbox. Enter the 6-digit PIN and your new password.
-            </p>
-
-            {forgotError   && <Alert type="error"   message={forgotError} />}
-            {forgotSuccess && <Alert type="success" message={forgotSuccess} />}
-
-            <form onSubmit={handleResetPassword} className="space-y-4">
-              {/* 6-digit PIN */}
-              <div>
-                <label htmlFor="reset-pin" className="block text-xs font-medium tracking-wider uppercase mb-2" style={{ color: "#232B32" }}>
-                  6-Digit PIN
-                </label>
-                <input
-                  id="reset-pin"
-                  type="text"
-                  value={resetPin}
-                  onChange={(e) => setResetPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  required
-                  placeholder="••••••"
-                  maxLength={6}
-                  className="w-full rounded-lg px-4 py-3 text-sm outline-none transition-all duration-200 text-center tracking-widest font-bold"
-                  style={inputBase}
-                  onFocus={onFocus}
-                  onBlur={onBlur}
-                />
-              </div>
-
-              {/* New Password */}
-              <div>
-                <label htmlFor="new-password" className="block text-xs font-medium tracking-wider uppercase mb-2" style={{ color: "#232B32" }}>
-                  New Password
-                </label>
-                <div className="relative">
-                  <InputIcon icon="lock" />
-                  <input
-                    id="new-password"
-                    type={showNewPw ? "text" : "password"}
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    required
-                    placeholder="Enter new password"
-                    className="w-full rounded-lg pl-11 pr-11 py-3 text-sm outline-none transition-all duration-200"
-                    style={inputBase}
-                    onFocus={onFocus}
-                    onBlur={onBlur}
-                  />
-                  <EyeToggle show={showNewPw} onToggle={() => setShowNewPw(!showNewPw)} />
-                </div>
-              </div>
-
-              {/* Confirm Password */}
-              <div>
-                <label htmlFor="confirm-password" className="block text-xs font-medium tracking-wider uppercase mb-2" style={{ color: "#232B32" }}>
-                  Confirm Password
-                </label>
-                <div className="relative">
-                  <InputIcon icon="lock" />
-                  <input
-                    id="confirm-password"
-                    type={showConfirmPw ? "text" : "password"}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    placeholder="Confirm new password"
-                    className="w-full rounded-lg pl-11 pr-11 py-3 text-sm outline-none transition-all duration-200"
-                    style={inputBase}
-                    onFocus={onFocus}
-                    onBlur={onBlur}
-                  />
-                  <EyeToggle show={showConfirmPw} onToggle={() => setShowConfirmPw(!showConfirmPw)} />
-                </div>
-              </div>
-
-              <SubmitButton loading={forgotLoading} label="Reset Password" loadingLabel="Resetting…" />
-            </form>
+                <SubmitButton loading={forgotLoading} label="Send Reset Link" loadingLabel="Sending…" />
+              </form>
+            )}
           </div>
         )}
 
@@ -558,7 +469,7 @@ export default function UserLogin() {
                     value={signUpPassword}
                     onChange={(e) => setSignUpPassword(e.target.value)}
                     required
-                    placeholder="Create a password"
+                    placeholder="Create a password (min. 6 characters)"
                     className="w-full rounded-lg pl-11 pr-11 py-3 text-sm outline-none transition-all duration-200"
                     style={inputBase}
                     onFocus={onFocus}

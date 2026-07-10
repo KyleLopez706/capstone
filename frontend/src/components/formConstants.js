@@ -1,6 +1,6 @@
 /**
  * formConstants.js
- * Non-component shared values used by UserLogin and AdminLogin.
+ * Non-component shared values used by UserLogin and form inputs.
  */
 
 /* Base style for every text input */

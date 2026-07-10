@@ -77,10 +77,10 @@ export default function About() {
                 className="text-base leading-relaxed mb-4"
                 style={{ color: "#6B7280" }}
               >
-                Founded with a passion for natural stone, Six Sigmaphil has grown
-                into a full-service granite and marble specialist. We source the
-                finest materials from quarries around the world and deliver them
-                with precision and care directly to your project.
+                Founded with a passion for natural stone, Six Sigmaphil has
+                grown into a full-service granite and marble specialist. We
+                source the finest materials from quarries around the world and
+                deliver them with precision and care directly to your project.
               </p>
               <p
                 className="text-base leading-relaxed"
