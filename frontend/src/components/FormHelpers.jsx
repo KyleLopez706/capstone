@@ -49,7 +49,8 @@ export function EyeToggle({ show, onToggle }) {
       onMouseLeave={(e) => (e.currentTarget.style.color = "#9CA3AF")}
       tabIndex={-1}
     >
-      {show ? <EyeOffIcon /> : <EyeIcon />}
+      {/* open eye = password visible (click to hide); closed eye = password hidden (click to show) */}
+      {show ? <EyeIcon /> : <EyeOffIcon />}
     </button>
   );
 }

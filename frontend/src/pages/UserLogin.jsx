@@ -35,6 +35,11 @@ export default function UserLogin() {
   const [signUpSuccess,  setSignUpSuccess]  = useState("");
   const [signUpLoading,  setSignUpLoading]  = useState(false);
 
+  /* ── "Stay signed in" / Remember-me preference ──────────────────────────
+     false (default) — session-only: clears when browser is fully closed
+     true            — persists across browser restarts (localStorage)      */
+  const [rememberMe, setRememberMe] = useState(false);
+
   /* ── Forgot Password state machine ──
      forgotStep: null | "request" | "verify" */
   const [forgotStep,      setForgotStep]      = useState(null);
@@ -69,10 +74,15 @@ export default function UserLogin() {
     }
   };
 
-  /* ── If already logged in, route them away from the login page ── */
+  /* ── If already logged in, route them away from the login page ──
+     Exception: do NOT redirect if this is a password-recovery session —
+     the global App.jsx interceptor owns that routing to /reset-password. */
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) routeByRole(session.user.id);
+      // session.user.aud can be 'recovery' during a password reset flow
+      if (session && session.user?.aud !== "recovery") {
+        routeByRole(session.user.id);
+      }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -89,6 +99,15 @@ export default function UserLogin() {
       });
 
       if (error) throw new Error(error.message);
+
+      // Write persistence flags BEFORE navigating so the boot check in
+      // App.jsx doesn't race and sign the user out immediately.
+      sessionStorage.setItem("sixsigma_active", "1");
+      if (rememberMe) {
+        localStorage.setItem("sixsigma_remember", "1");
+      } else {
+        localStorage.removeItem("sixsigma_remember");
+      }
 
       await routeByRole(data.user.id);
     } catch (err) {
@@ -153,6 +172,11 @@ export default function UserLogin() {
 
   /* ─── Google OAuth via Supabase GoTrue ─── */
   const handleGoogleSignIn = async () => {
+    // Save the remember-me preference to localStorage before the redirect.
+    // App.jsx's onAuthStateChange SIGNED_IN handler reads this flag after
+    // the page re-mounts and sets the real persistence flags.
+    localStorage.setItem("sixsigma_oauth_remember", rememberMe ? "1" : "0");
+
     // Supabase handles the full OAuth redirect flow
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -161,6 +185,7 @@ export default function UserLogin() {
       },
     });
     if (error) {
+      localStorage.removeItem("sixsigma_oauth_remember"); // Clean up if redirect fails
       setUserSignInError("Google sign-in failed. Please try again.");
       console.error("Google OAuth error:", error.message);
     }
@@ -327,6 +352,44 @@ export default function UserLogin() {
                   />
                   <EyeToggle show={userShowPw} onToggle={() => setUserShowPw(!userShowPw)} />
                 </div>
+              </div>
+
+              {/* ── Stay signed in checkbox ── */}
+              <div className="flex items-center gap-2.5 pt-1">
+                <button
+                  id="remember-me-toggle"
+                  type="button"
+                  role="checkbox"
+                  aria-checked={rememberMe}
+                  onClick={() => setRememberMe(!rememberMe)}
+                  className="relative flex-shrink-0 w-4 h-4 rounded transition-all duration-150 border cursor-pointer focus:outline-none"
+                  style={{
+                    backgroundColor: rememberMe ? "#C5A059" : "#ffffff",
+                    borderColor:     rememberMe ? "#C5A059" : "#D1D5DB",
+                  }}
+                >
+                  {rememberMe && (
+                    <svg
+                      className="absolute inset-0 m-auto w-2.5 h-2.5"
+                      viewBox="0 0 12 10"
+                      fill="none"
+                      stroke="#ffffff"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="1 5 4.5 8.5 11 1" />
+                    </svg>
+                  )}
+                </button>
+                <label
+                  htmlFor="remember-me-toggle"
+                  className="text-xs cursor-pointer select-none"
+                  style={{ color: "#6B7280" }}
+                  onClick={() => setRememberMe(!rememberMe)}
+                >
+                  Stay signed in
+                </label>
               </div>
 
               <SubmitButton loading={userSignInLoading} label="Sign In" loadingLabel="Signing In…" />

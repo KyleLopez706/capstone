@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import { supabase } from "./supabaseClient";
 import Home           from "./pages/Home";
@@ -9,8 +9,92 @@ import Services       from "./pages/Services";
 import Gallery        from "./pages/Gallery";
 import Contact        from "./pages/Contact";
 import Configurator3D from "./pages/Configurator3D";
+import ResetPassword  from "./pages/ResetPassword";
 
 function App() {
+  const navigate = useNavigate();
+
+  /* ── Global auth-state listener ─────────────────────────────────────────
+     Handles three global auth events:
+
+     PASSWORD_RECOVERY — Supabase PKCE reset flow fires SIGNED_IN first then
+       PASSWORD_RECOVERY. Intercepting here at the root routes the user to
+       /reset-password before any page-level session check can redirect them
+       away, preventing the "double tab" effect.
+
+     SIGNED_IN — after a Google OAuth redirect the page re-mounts here. We
+       read the sixsigma_oauth_remember flag stored before the redirect and
+       set the real persistence flags accordingly.
+
+     SIGNED_OUT — clear all persistence flags wherever sign-out was triggered.
+  ────────────────────────────────────────────────────────────────────────── */
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event) => {
+        if (event === "PASSWORD_RECOVERY") {
+          // Replace history entry so the back button doesn't loop
+          navigate("/reset-password", { replace: true });
+        }
+
+        if (event === "SIGNED_IN") {
+          // Only act when returning from a Google OAuth redirect
+          // (the flag is written in handleGoogleSignIn before the redirect)
+          const oauthPending = localStorage.getItem("sixsigma_oauth_remember");
+          if (oauthPending !== null) {
+            sessionStorage.setItem("sixsigma_active", "1");
+            if (oauthPending === "1") {
+              localStorage.setItem("sixsigma_remember", "1");
+            } else {
+              localStorage.removeItem("sixsigma_remember");
+            }
+            localStorage.removeItem("sixsigma_oauth_remember");
+          }
+        }
+
+        if (event === "SIGNED_OUT") {
+          // Wipe all persistence flags so the next visit starts clean
+          sessionStorage.removeItem("sixsigma_active");
+          localStorage.removeItem("sixsigma_remember");
+          localStorage.removeItem("sixsigma_oauth_remember");
+        }
+      }
+    );
+    return () => subscription.unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ── Session Persistence Boot Check ─────────────────────────────────────
+     Supabase stores the session in localStorage by default, so it survives
+     page refreshes AND full browser restarts (including npm run dev reloads).
+     We layer our own persistence preference on top:
+
+     sixsigma_remember  (localStorage)  — user explicitly checked "Stay signed in"
+     sixsigma_active    (sessionStorage) — user is in an active browser session
+                                          (sessionStorage is cleared when the
+                                          browser / tab is fully closed)
+
+     If neither flag exists but Supabase has a stored session → sign out.
+     This means: close the browser without "Stay signed in" → next visit starts
+     fresh, as the user would expect.
+  ────────────────────────────────────────────────────────────────────────── */
+  useEffect(() => {
+    const checkPersistence = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return; // No session stored — nothing to do
+
+      const rememberMe    = localStorage.getItem("sixsigma_remember") === "1";
+      const activeSession = sessionStorage.getItem("sixsigma_active") === "1";
+
+      if (!rememberMe && !activeSession) {
+        // Supabase has a stale session in localStorage but the user never
+        // opted into persistence and this is a new browser session.
+        // Sign them out cleanly so the login page is shown.
+        await supabase.auth.signOut();
+      }
+    };
+    checkPersistence();
+  }, []);
+
   /* ── Phase 5: Diagnostic boot log ──
      Confirms Supabase connection status and active session on every app load.
      Remove this useEffect once the system is fully verified in production. */
@@ -60,6 +144,7 @@ function App() {
       <Route path="/gallery"        element={<Gallery />} />
       <Route path="/contact"        element={<Contact />} />
       <Route path="/configurator-3d" element={<Configurator3D />} />
+      <Route path="/reset-password"  element={<ResetPassword />} />
     </Routes>
   );
 }

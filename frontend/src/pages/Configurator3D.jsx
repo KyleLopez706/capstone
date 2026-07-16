@@ -1,163 +1,176 @@
-import Navbar from "../components/Navbar";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from 'react';
+import Navbar              from '../components/Navbar';
+import ShowroomCanvas      from '../components/configurator/ShowroomCanvas';
+import ConfiguratorLayout  from '../components/configurator/ConfiguratorLayout';
+import useConfiguratorStore from '../store/configuratorStore';
+import { supabase }        from '../supabaseClient';
 
 /* ─────────────────────────────────────────
-   3D CONFIGURATOR PAGE
-   Draft / placeholder page.
+   CONFIGURATOR 3D PAGE
+   Top-level orchestrator for the 3D experience.
+
+   On mount:  fetches ALL structures from Supabase
+              and passes them to the showroom gallery.
+
+   Renders:   <ShowroomCanvas />    (appMode === 'showroom')
+              <ConfiguratorLayout /> (appMode === 'configurator')
 ───────────────────────────────────────── */
+
+/* Fallback structures used if Supabase query fails */
+const FALLBACK_STRUCTURES = [
+  {
+    id:          'fallback-bathroom',
+    name:        'Bathroom Countertop',
+    base_length: 1.2,
+    base_width:  0.6,
+    model_url:
+      'https://hwdtkuwtbuhxzaqnjwoy.supabase.co/storage/v1/object/public/showroom-assets/models/bathroom_countertop.glb',
+  },
+  {
+    id:          'fallback-island',
+    name:        'Island Countertop',
+    base_length: 2.4,
+    base_width:  1.0,
+    model_url:
+      'https://hwdtkuwtbuhxzaqnjwoy.supabase.co/storage/v1/object/public/showroom-assets/models/island_countertop.glb',
+  },
+];
+
+/**
+ * bustCache — appends a ?v=<timestamp> query param to a URL so that
+ * useGLTF (and the browser HTTP cache) treat it as a brand-new asset.
+ * Applied to every model URL so a file replacement in Supabase Storage
+ * is always picked up without a hard browser refresh.
+ */
+const MODEL_CACHE_VERSION = Date.now();
+function bustCache(url) {
+  if (!url) return url;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}v=${MODEL_CACHE_VERSION}`;
+}
+
 export default function Configurator3D() {
-  const navigate = useNavigate();
+  const appMode      = useConfiguratorStore((s) => s.appMode);
+  const setStructure = useConfiguratorStore((s) => s.setStructure);
+  const setAppMode   = useConfiguratorStore((s) => s.setAppMode);
+
+  // All available structures fetched from Supabase
+  const [structures, setStructures] = useState([]);
+  const [loading,    setLoading]    = useState(true);
+
+  /* ── Fetch ALL structures from Supabase on first render ── */
+  useEffect(() => {
+    const fetchStructures = async () => {
+      // No name filter — retrieve every row in the structures table (AGENTS.md §A)
+      const { data, error } = await supabase
+        .from('structures')
+        .select('id, name, base_length, base_width, model_url')
+        .order('name');
+
+      if (error) {
+        // Network failure or RLS denial — degrade gracefully (AGENTS.md §D)
+        console.warn('[Configurator3D] Structures fetch failed:', error.message);
+        const fallbacks = FALLBACK_STRUCTURES.map((s) => ({
+          ...s, model_url: bustCache(s.model_url),
+        }));
+        setStructures(fallbacks);
+        fallbacks.forEach((s) => ShowroomCanvas.preload(s.model_url));
+      } else if (data?.length) {
+        // Bust cache on every model URL so replaced GLBs are always re-fetched
+        const busted = data.map((s) => ({ ...s, model_url: bustCache(s.model_url) }));
+        setStructures(busted);
+        // Pre-cache all GLBs immediately (AGENTS.md §C)
+        busted.forEach((s) => { if (s.model_url) ShowroomCanvas.preload(s.model_url); });
+      } else {
+        // Table exists but has no rows — use fallback
+        console.warn('[Configurator3D] No structures found — using fallback. Check RLS or Supabase data.');
+        const fallbacks = FALLBACK_STRUCTURES.map((s) => ({
+          ...s, model_url: bustCache(s.model_url),
+        }));
+        setStructures(fallbacks);
+        fallbacks.forEach((s) => ShowroomCanvas.preload(s.model_url));
+      }
+
+      setLoading(false);
+    };
+
+    fetchStructures();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /**
+   * handleStructureSelect — called when the user clicks a model in the showroom.
+   * Seeds the Zustand store with the chosen structure (dimensions + model URL),
+   * then transitions to configurator mode after a brief delay for visual feel.
+   */
+  const handleStructureSelect = (structure) => {
+    setStructure(structure);
+    setTimeout(() => setAppMode('configurator'), 350);
+  };
 
   return (
-    <div className="min-h-screen w-full" style={{ backgroundColor: "#F9F9FB" }}>
+    <div
+      className="w-full h-screen flex flex-col overflow-hidden"
+      style={{ backgroundColor: '#1a1e22' }}
+    >
       <Navbar />
 
       {/* Spacer for fixed navbar */}
-      <div className="h-16" aria-hidden="true" />
+      <div className="h-16 shrink-0" aria-hidden="true" />
 
-      {/* ── Draft Banner ── */}
-      <section
-        className="w-full min-h-[80vh] flex items-center justify-center px-4"
-        style={{
-          background:
-            "radial-gradient(ellipse at 60% 40%, rgba(197,160,89,0.10) 0%, transparent 60%), linear-gradient(180deg, #F9F9FB 0%, #F0EDE8 100%)",
-        }}
-      >
-        <div className="max-w-2xl w-full text-center">
+      {/* ── Mode Router ── */}
+      {loading ? (
+        /* Loading state while Supabase returns structures */
+        <div className="flex-1 flex items-center justify-center flex-col gap-4">
+          <div
+            className="w-10 h-10 rounded-full border-2 animate-spin"
+            style={{ borderColor: '#C5A059', borderTopColor: 'transparent' }}
+            role="status"
+            aria-label="Loading showroom"
+          />
+          <p className="text-xs tracking-widest uppercase" style={{ color: '#9CA3AF' }}>
+            Loading Showroom…
+          </p>
+        </div>
 
-          {/* Badge */}
-          <span
-            className="inline-block text-xs font-semibold tracking-widest uppercase px-4 py-1.5 rounded-full mb-6"
+      ) : appMode === 'showroom' ? (
+        /* ─────────── SHOWROOM MODE ─────────── */
+        <div className="flex-1 overflow-hidden relative">
+
+          {/* Gradient header overlay */}
+          <div
+            className="absolute top-0 left-0 right-0 z-10 px-6 py-5 pointer-events-none"
             style={{
-              backgroundColor: "rgba(197,160,89,0.12)",
-              color: "#C5A059",
-              border: "1px solid rgba(197,160,89,0.3)",
+              background: 'linear-gradient(to bottom, rgba(26,30,34,0.9) 0%, transparent 100%)',
             }}
           >
-            Coming Soon
-          </span>
-
-          {/* Title */}
-          <h1
-            className="text-4xl sm:text-5xl font-light tracking-tight mb-5"
-            style={{ color: "#232B32" }}
-          >
-            3D Stone{" "}
-            <span
-              className="font-semibold"
-              style={{
-                background: "linear-gradient(135deg, #C5A059 0%, #e8c97a 100%)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
-              }}
+            <p
+              className="text-xs font-semibold tracking-widest uppercase"
+              style={{ color: '#C5A059' }}
             >
-              Configurator
-            </span>
-          </h1>
-
-          {/* Description */}
-          <p
-            className="text-base sm:text-lg leading-relaxed max-w-lg mx-auto mb-10"
-            style={{ color: "#6B7280" }}
-          >
-            Our immersive 3D configurator is currently under development. Soon
-            you will be able to explore, rotate, and customize every premium
-            stone surface in real time — bringing your vision to life before a
-            single slab is cut.
-          </p>
-
-          {/* Divider */}
-          <div
-            className="mx-auto mb-10 w-16 h-px"
-            style={{ backgroundColor: "#C5A059", opacity: 0.5 }}
-          />
-
-          {/* Draft Features Preview */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-12 text-left">
-            {[
-              {
-                icon: "M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z",
-                title: "360° View",
-                desc: "Rotate and inspect every stone surface from any angle.",
-              },
-              {
-                icon: "M9.53 16.122a3 3 0 0 0-5.78 1.128 2.25 2.25 0 0 1-2.4 2.245 4.5 4.5 0 0 0 8.4-2.245c0-.399-.078-.78-.22-1.128Zm0 0a15.998 15.998 0 0 0 3.388-1.62m-5.043-.025a15.994 15.994 0 0 1 1.622-3.395m3.42 3.42a15.995 15.995 0 0 0 4.764-4.648l3.876-5.814a1.151 1.151 0 0 0-1.597-1.597L14.146 6.32a15.996 15.996 0 0 0-4.649 4.763m3.42 3.42a6.776 6.776 0 0 0-3.42-3.42",
-                title: "Real-Time Textures",
-                desc: "Apply and preview granite textures instantly on your model.",
-              },
-              {
-                icon: "M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3",
-                title: "Export & Order",
-                desc: "Save your configuration and request a custom quote instantly.",
-              },
-            ].map((feature) => (
-              <div
-                key={feature.title}
-                className="rounded-xl p-5"
-                style={{
-                  backgroundColor: "#ffffff",
-                  border: "1px solid #E2E8F0",
-                  boxShadow: "0 2px 12px rgba(35,43,50,0.05)",
-                }}
-              >
-                <div
-                  className="w-9 h-9 rounded-lg flex items-center justify-center mb-3"
-                  style={{ backgroundColor: "rgba(197,160,89,0.1)" }}
-                >
-                  <svg
-                    className="w-4 h-4"
-                    style={{ color: "#C5A059" }}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d={feature.icon}
-                    />
-                  </svg>
-                </div>
-                <p
-                  className="text-sm font-semibold mb-1"
-                  style={{ color: "#232B32" }}
-                >
-                  {feature.title}
-                </p>
-                <p className="text-xs leading-relaxed" style={{ color: "#6B7280" }}>
-                  {feature.desc}
-                </p>
-              </div>
-            ))}
+              Six Sigmaphil · 360° Virtual Showroom
+            </p>
+            <h1
+              className="text-xl sm:text-3xl font-light mt-1"
+              style={{ color: '#F9F9FB' }}
+            >
+              Select a Structure to Configure
+            </h1>
+            <p className="text-xs mt-1" style={{ color: '#6B7280' }}>
+              {structures.length} structure{structures.length !== 1 ? 's' : ''} available
+            </p>
           </div>
 
-          {/* Back button */}
-          <button
-            onClick={() => navigate("/")}
-            className="inline-flex items-center gap-2 text-sm font-semibold tracking-wide cursor-pointer transition-colors duration-150"
-            style={{ color: "#C5A059" }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#b08d47")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "#C5A059")}
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M15.75 19.5 8.25 12l7.5-7.5"
-              />
-            </svg>
-            Back to Home
-          </button>
+          <ShowroomCanvas
+            structures={structures}
+            onStructureSelect={handleStructureSelect}
+          />
         </div>
-      </section>
+
+      ) : (
+        /* ─────────── CONFIGURATOR MODE ─────────── */
+        <ConfiguratorLayout />
+      )}
     </div>
   );
 }
