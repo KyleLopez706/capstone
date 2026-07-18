@@ -285,15 +285,6 @@ function CanvasLoader() {
 
 /* ─────────────────────────────────────────
    CONFIGURATOR CANVAS  (Centre Column)
-
-   Lighting: 3-point studio without HDR env.
-   The old Environment preset="studio" loaded a
-   2 MB+ HDR file and converted it to a GPU cube
-   map — this was the primary cause of the WebGL
-   context loss.  Replaced with:
-     • hemisphereLight  — cheap IBL approximation
-     • key spotLight    — warm, hard top light
-     • fill spotLight   — cool, soft side light
 ───────────────────────────────────────── */
 export default function ConfiguratorCanvas({ modelUrl }) {
   return (
@@ -319,30 +310,37 @@ export default function ConfiguratorCanvas({ modelUrl }) {
       }}
     >
       <Suspense fallback={<CanvasLoader />}>
-        {/* ── Softer Directional Lighting ── */}
-        <ambientLight intensity={0.15} />
+        {/* ── High-End PBR Lighting Setup ── */}
+        <ambientLight intensity={0.4} />
 
-        {/* Key directional light — softer, warmer, covers whole model */}
+        {/* Key Light: Bright, casts shadows, angled to catch specular highlights on the granite */}
         <directionalLight
-          position={[2, 5, 3]}
-          intensity={1.2}
+          position={[5, 5, 4]}
+          intensity={1.5}
           castShadow
           shadow-mapSize={[1024, 1024]}
-          shadow-bias={-0.0001}
-          color="#fff5e0"
+          shadow-bias={-0.0002}
+          color="#ffffff"
         />
 
-        {/* Fill directional light — cool, softer shadows on the opposite side */}
+        {/* Fill Light: Soft cool light to fill in the shadows */}
         <directionalLight
-          position={[-3, 4, -2]}
+          position={[-5, 3, -5]}
           intensity={0.6}
-          color="#cce0ff"
+          color="#b0c4de"
+        />
+
+        {/* Rim Light: Separates the model from the dark background */}
+        <directionalLight
+          position={[0, 2, -6]}
+          intensity={0.8}
+          color="#ffffff"
         />
 
         <CountertopWithMaterial modelUrl={modelUrl} />
 
-        {/* IBL for physically-accurate reflections on PBR materials */}
-        <Environment preset="studio" />
+        {/* IBL for rich, realistic reflections on the polished stone (City provides great sharp contrast) */}
+        <Environment preset="city" />
 
         <OrbitControls
           enablePan={false}
