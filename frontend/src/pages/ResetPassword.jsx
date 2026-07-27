@@ -48,23 +48,36 @@ export default function ResetPassword() {
      tokens for a live session — no manual URL parsing needed,
      which prevents the "double tab" flicker. */
   useEffect(() => {
-    // Safety net: if the recovery event never fires (broken/expired
-    // link), transition to "expired" after 6 seconds.
-    const expireTimer = setTimeout(() => {
-      setStage((prev) => (prev === "verifying" ? "expired" : prev));
-    }, 6000);
+    let expireTimer;
+
+    // Check if the user already has a valid session on mount.
+    // This protects against race conditions where the PASSWORD_RECOVERY 
+    // event fired milliseconds before this component mounted.
+    const checkInitialSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setStage("ready");
+      } else {
+        // Only start the timer if no session is active yet
+        expireTimer = setTimeout(() => {
+          setStage((prev) => (prev === "verifying" ? "expired" : prev));
+        }, 6000);
+      }
+    };
+    checkInitialSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event) => {
-        if (event === "PASSWORD_RECOVERY") {
-          clearTimeout(expireTimer);
+      (event, session) => {
+        // If they recover password OR sign in successfully, they can reset
+        if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && session)) {
+          if (expireTimer) clearTimeout(expireTimer);
           setStage("ready");
         }
       }
     );
 
     return () => {
-      clearTimeout(expireTimer);
+      if (expireTimer) clearTimeout(expireTimer);
       subscription.unsubscribe();
     };
   }, []);
