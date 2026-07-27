@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../supabaseClient';
 import useConfiguratorStore from '../../store/configuratorStore';
 
 /* ─────────────────────────────────────────
@@ -22,6 +24,12 @@ export default function DimensionPanel() {
   const dimensions       = useConfiguratorStore((s) => s.dimensions);
   const setDimension     = useConfiguratorStore((s) => s.setDimension);
 
+  const navigate = useNavigate();
+
+  /* Tracks whether we're mid-auth-check to prevent button double-click */
+  const [checkingAuth, setCheckingAuth] = useState(false);
+  const [authMsg, setAuthMsg]           = useState('');
+
   /* Local string state — allows free typing (no numeric coercion per keystroke) */
   const [lenStr, setLenStr] = useState(() => String(dimensions.length ?? 1.2));
   const [widStr, setWidStr] = useState(() => String(dimensions.width  ?? 0.6));
@@ -43,9 +51,11 @@ export default function DimensionPanel() {
     setWidStr(String(clamped));
   };
 
-  /* Live price calculation derived from local strings (real-time feedback) */
-  const localLen    = parseFloat(lenStr) || 0;
-  const localWid    = parseFloat(widStr) || 0;
+  /* Live price calculation derived from local strings (real-time feedback).
+     Math.max(..., 0) ensures a partially-typed negative string (e.g. "-") or
+     a truly negative number can NEVER produce a negative price or area. */
+  const localLen    = Math.max(parseFloat(lenStr) || 0, 0);
+  const localWid    = Math.max(parseFloat(widStr) || 0, 0);
   const area        = localLen * localWid;
   const pricePerSqm = selectedMaterial?.price_per_sqm ?? 0;
   const total       = area * pricePerSqm;
@@ -62,6 +72,7 @@ export default function DimensionPanel() {
   };
 
   return (
+    <>
     <div
       className="h-full flex flex-col"
       style={{ backgroundColor: '#1c2026', borderLeft: '1px solid rgba(226,232,240,0.1)' }}
@@ -120,7 +131,13 @@ export default function DimensionPanel() {
                This prevents the "0-prefix" glitch where parseFloat('') = 0
                would prepend a 0 to whatever the user typed next. */
             value={lenStr}
-            onChange={(e) => setLenStr(e.target.value)}
+            /* Allow digits and at most one decimal point — block all else */
+            onChange={(e) => {
+              const cleaned = e.target.value
+                .replace(/[^0-9.]/g, '')          // strip non-numeric / non-dot chars
+                .replace(/(\..*)\./g, '$1');       // allow only one decimal point
+              setLenStr(cleaned);
+            }}
             onBlur={(e)   => commitLength(e.target.value)}
             /* Commit on Enter key as well for convenience */
             onKeyDown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur(); } }}
@@ -151,7 +168,13 @@ export default function DimensionPanel() {
             min="0.1"
             step="0.1"
             value={widStr}
-            onChange={(e) => setWidStr(e.target.value)}
+            /* Allow digits and at most one decimal point — block all else */
+            onChange={(e) => {
+              const cleaned = e.target.value
+                .replace(/[^0-9.]/g, '')          // strip non-numeric / non-dot chars
+                .replace(/(\..*)\./g, '$1');       // allow only one decimal point
+              setWidStr(cleaned);
+            }}
             onBlur={(e)   => commitWidth(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur(); } }}
             style={inputStyle}
@@ -249,17 +272,71 @@ export default function DimensionPanel() {
           </p>
         </div>
 
+        {/* ── Auth message (shown when user is not signed in) ── */}
+        {authMsg && (
+          <p
+            style={{
+              fontSize: '11px',
+              color: '#F59E0B',
+              textAlign: 'center',
+              padding: '8px',
+              borderRadius: '8px',
+              backgroundColor: 'rgba(245,158,11,0.1)',
+              border: '1px solid rgba(245,158,11,0.25)',
+            }}
+          >
+            {authMsg}
+          </p>
+        )}
+
         {/* Request Quote CTA */}
         <button
           id="request-quote-btn"
-          disabled
-          className="w-full py-3 rounded-xl text-sm font-semibold tracking-widest uppercase opacity-40 cursor-not-allowed"
-          style={{ backgroundColor: '#C5A059', color: '#fff' }}
+          disabled={!selectedMaterial || checkingAuth}
+          onClick={async () => {
+            if (!selectedMaterial || checkingAuth) return;
+            setCheckingAuth(true);
+            setAuthMsg('');
+
+            try {
+              /* Check active Supabase session — user must be signed in */
+              const { data: { session } } = await supabase.auth.getSession();
+              if (!session) {
+                /* Not signed in — store return intent and redirect to login */
+                sessionStorage.setItem("returnTo", "/quotation-request");
+                setAuthMsg('Please sign in to request a quote.');
+                setTimeout(() => navigate('/login'), 1500);
+                return;
+              }
+              /* Signed in — navigate to quotation page (store state persists in-memory) */
+              navigate('/quotation-request');
+            } catch (err) {
+              console.error('[DimensionPanel] Auth check error:', err.message);
+              setAuthMsg('Something went wrong. Please try again.');
+            } finally {
+              setCheckingAuth(false);
+            }
+          }}
+          className="w-full py-3 rounded-xl text-sm font-semibold tracking-widest uppercase"
+          style={{
+            backgroundColor:
+              !selectedMaterial || checkingAuth ? 'rgba(197,160,89,0.35)' : '#C5A059',
+            color: '#fff',
+            cursor: !selectedMaterial || checkingAuth ? 'not-allowed' : 'pointer',
+            transition: 'background-color 0.2s',
+          }}
+          onMouseEnter={(e) => {
+            if (selectedMaterial && !checkingAuth) e.currentTarget.style.backgroundColor = '#b08d47';
+          }}
+          onMouseLeave={(e) => {
+            if (selectedMaterial && !checkingAuth) e.currentTarget.style.backgroundColor = '#C5A059';
+          }}
         >
-          Request a Quote
+          {checkingAuth ? 'Checking…' : 'Request a Quote'}
         </button>
 
       </div>
     </div>
+    </>
   );
 }

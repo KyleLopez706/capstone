@@ -3,8 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { inputBase, onFocus, onBlur } from "../components/formConstants";
 import {
-  InputIcon, EyeToggle,
-  Alert, SubmitButton, BackButton,
+  InputIcon,
+  EyeToggle,
+  Alert,
+  SubmitButton,
+  BackButton,
 } from "../components/FormHelpers";
 
 /* ─────────────────────────────────────────
@@ -21,19 +24,19 @@ export default function UserLogin() {
   const [userView, setUserView] = useState("signin");
 
   /* ── Sign-In state ── */
-  const [userEmail,         setUserEmail]         = useState("");
-  const [userPassword,      setUserPassword]      = useState("");
-  const [userShowPw,        setUserShowPw]        = useState(false);
-  const [userSignInError,   setUserSignInError]   = useState("");
+  const [userEmail, setUserEmail] = useState("");
+  const [userPassword, setUserPassword] = useState("");
+  const [userShowPw, setUserShowPw] = useState(false);
+  const [userSignInError, setUserSignInError] = useState("");
   const [userSignInLoading, setUserSignInLoading] = useState(false);
 
   /* ── Sign-Up state ── */
-  const [signUpEmail,    setSignUpEmail]    = useState("");
+  const [signUpEmail, setSignUpEmail] = useState("");
   const [signUpPassword, setSignUpPassword] = useState("");
-  const [signUpShowPw,   setSignUpShowPw]   = useState(false);
-  const [signUpError,    setSignUpError]    = useState("");
-  const [signUpSuccess,  setSignUpSuccess]  = useState("");
-  const [signUpLoading,  setSignUpLoading]  = useState(false);
+  const [signUpShowPw, setSignUpShowPw] = useState(false);
+  const [signUpError, setSignUpError] = useState("");
+  const [signUpSuccess, setSignUpSuccess] = useState("");
+  const [signUpLoading, setSignUpLoading] = useState(false);
 
   /* ── "Stay signed in" / Remember-me preference ──────────────────────────
      false (default) — session-only: clears when browser is fully closed
@@ -42,11 +45,11 @@ export default function UserLogin() {
 
   /* ── Forgot Password state machine ──
      forgotStep: null | "request" | "verify" */
-  const [forgotStep,      setForgotStep]      = useState(null);
-  const [resetEmail,      setResetEmail]      = useState("");
-  const [forgotError,     setForgotError]     = useState("");
-  const [forgotSuccess,   setForgotSuccess]   = useState("");
-  const [forgotLoading,   setForgotLoading]   = useState(false);
+  const [forgotStep, setForgotStep] = useState(null);
+  const [resetEmail, setResetEmail] = useState("");
+  const [forgotError, setForgotError] = useState("");
+  const [forgotSuccess, setForgotSuccess] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   const navigate = useNavigate();
 
@@ -54,6 +57,8 @@ export default function UserLogin() {
      Queries only the 'role' column to keep the query lean (AGENTS.md §A).
      If RLS blocks the query, silently falls back to homepage (AGENTS.md §B). */
   const routeByRole = async (userId) => {
+    const returnTo = sessionStorage.getItem("returnTo");
+
     const { data, error } = await supabase
       .from("profiles")
       .select("role")
@@ -61,16 +66,26 @@ export default function UserLogin() {
       .single();
 
     if (error) {
-      // RLS permission denial or network failure — graceful fallback
+      // RLS permission denial or profile trigger delay
       console.error("Role check failed:", error.message);
-      navigate("/");
+      if (returnTo) {
+        sessionStorage.removeItem("returnTo");
+        navigate(returnTo);
+      } else {
+        navigate("/");
+      }
       return;
     }
 
     if (data?.role === "admin") {
       navigate("/dashboard");
     } else {
-      navigate("/");
+      if (returnTo) {
+        sessionStorage.removeItem("returnTo");
+        navigate(returnTo);
+      } else {
+        navigate("/");
+      }
     }
   };
 
@@ -78,13 +93,23 @@ export default function UserLogin() {
      Exception: do NOT redirect if this is a password-recovery session —
      the global App.jsx interceptor owns that routing to /reset-password. */
   useEffect(() => {
+    // Check initial session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
-      // session.user.aud can be 'recovery' during a password reset flow
       if (session && session.user?.aud !== "recovery") {
         routeByRole(session.user.id);
       }
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    // Also listen for auth state changes (crucial for catching OAuth redirects
+    // if getSession fires before the URL hash is parsed)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session && session.user?.aud !== "recovery") {
+        routeByRole(session.user.id);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ─── User Sign-In via Supabase GoTrue ─── */
@@ -142,8 +167,13 @@ export default function UserLogin() {
 
       if (error) {
         // Supabase rate limit — translate to a human-readable message
-        if (error.message.toLowerCase().includes("rate limit") || error.status === 429) {
-          throw new Error("Too many sign-up attempts. Please wait a few minutes and try again.");
+        if (
+          error.message.toLowerCase().includes("rate limit") ||
+          error.status === 429
+        ) {
+          throw new Error(
+            "Too many sign-up attempts. Please wait a few minutes and try again.",
+          );
         }
         throw new Error(error.message);
       }
@@ -152,7 +182,9 @@ export default function UserLogin() {
          exists to prevent email enumeration attacks. The tell-tale sign is an
          empty identities array on the returned user object. */
       if (data?.user && data.user.identities?.length === 0) {
-        throw new Error("An account with this email already exists. Please sign in instead.");
+        throw new Error(
+          "An account with this email already exists. Please sign in instead.",
+        );
       }
 
       setSignUpSuccess("Account created! You can now sign in.");
@@ -181,7 +213,7 @@ export default function UserLogin() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/`,
+        redirectTo: `${window.location.origin}/login`,
       },
     });
     if (error) {
@@ -251,25 +283,44 @@ export default function UserLogin() {
           onMouseLeave={(e) => (e.currentTarget.style.color = "#9CA3AF")}
           aria-label="Go back to home"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M15.75 19.5 8.25 12l7.5-7.5"
+            />
           </svg>
           Back to Home
         </button>
 
         {/* ── Brand Header ── */}
         <div className="text-center mb-7">
-          <h1 className="text-2xl font-light tracking-widest uppercase" style={{ color: "#232B32" }}>
+          <h1
+            className="text-2xl font-light tracking-widest uppercase"
+            style={{ color: "#232B32" }}
+          >
             Six Sigmaphil
           </h1>
-          <p className="text-xs mt-1 tracking-wide" style={{ color: "#9CA3AF" }}>
+          <p
+            className="text-xs mt-1 tracking-wide"
+            style={{ color: "#9CA3AF" }}
+          >
             Premium Granite &amp; Stone
           </p>
         </div>
 
         {/* ── Sign In / Sign Up tab toggle ── */}
         {!forgotStep && (
-          <div className="flex gap-1 mb-6 border-b" style={{ borderColor: "#E2E8F0" }}>
+          <div
+            className="flex gap-1 mb-6 border-b"
+            style={{ borderColor: "#E2E8F0" }}
+          >
             {[
               { key: "signin", label: "Sign In" },
               { key: "signup", label: "Sign Up" },
@@ -281,7 +332,10 @@ export default function UserLogin() {
                 style={
                   userView === key
                     ? { color: "#C5A059", borderBottom: "2px solid #C5A059" }
-                    : { color: "#9CA3AF", borderBottom: "2px solid transparent" }
+                    : {
+                        color: "#9CA3AF",
+                        borderBottom: "2px solid transparent",
+                      }
                 }
               >
                 {label}
@@ -295,11 +349,17 @@ export default function UserLogin() {
         ════════════════════════════ */}
         {userView === "signin" && !forgotStep && (
           <div>
-            {userSignInError && <Alert type="error" message={userSignInError} />}
+            {userSignInError && (
+              <Alert type="error" message={userSignInError} />
+            )}
             <form onSubmit={handleUserSignIn} className="space-y-4">
               {/* Email */}
               <div>
-                <label htmlFor="user-email" className="block text-xs font-medium tracking-wider uppercase mb-2" style={{ color: "#232B32" }}>
+                <label
+                  htmlFor="user-email"
+                  className="block text-xs font-medium tracking-wider uppercase mb-2"
+                  style={{ color: "#232B32" }}
+                >
                   Email Address
                 </label>
                 <div className="relative">
@@ -322,16 +382,29 @@ export default function UserLogin() {
               {/* Password + Forgot link */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label htmlFor="user-password" className="block text-xs font-medium tracking-wider uppercase" style={{ color: "#232B32" }}>
+                  <label
+                    htmlFor="user-password"
+                    className="block text-xs font-medium tracking-wider uppercase"
+                    style={{ color: "#232B32" }}
+                  >
                     Password
                   </label>
                   <button
                     type="button"
-                    onClick={() => { setForgotStep("request"); setResetEmail(userEmail); setForgotError(""); setForgotSuccess(""); }}
+                    onClick={() => {
+                      setForgotStep("request");
+                      setResetEmail(userEmail);
+                      setForgotError("");
+                      setForgotSuccess("");
+                    }}
                     className="text-xs cursor-pointer transition-colors duration-150"
                     style={{ color: "#9CA3AF" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = "#C5A059")}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = "#9CA3AF")}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.color = "#C5A059")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.color = "#9CA3AF")
+                    }
                   >
                     Forgot Password?
                   </button>
@@ -350,7 +423,10 @@ export default function UserLogin() {
                     onFocus={onFocus}
                     onBlur={onBlur}
                   />
-                  <EyeToggle show={userShowPw} onToggle={() => setUserShowPw(!userShowPw)} />
+                  <EyeToggle
+                    show={userShowPw}
+                    onToggle={() => setUserShowPw(!userShowPw)}
+                  />
                 </div>
               </div>
 
@@ -362,10 +438,10 @@ export default function UserLogin() {
                   role="checkbox"
                   aria-checked={rememberMe}
                   onClick={() => setRememberMe(!rememberMe)}
-                  className="relative flex-shrink-0 w-4 h-4 rounded transition-all duration-150 border cursor-pointer focus:outline-none"
+                  className="relative shrink-0 w-4 h-4 rounded transition-all duration-150 border cursor-pointer focus:outline-none"
                   style={{
                     backgroundColor: rememberMe ? "#C5A059" : "#ffffff",
-                    borderColor:     rememberMe ? "#C5A059" : "#D1D5DB",
+                    borderColor: rememberMe ? "#C5A059" : "#D1D5DB",
                   }}
                 >
                   {rememberMe && (
@@ -392,15 +468,30 @@ export default function UserLogin() {
                 </label>
               </div>
 
-              <SubmitButton loading={userSignInLoading} label="Sign In" loadingLabel="Signing In…" />
+              <SubmitButton
+                loading={userSignInLoading}
+                label="Sign In"
+                loadingLabel="Signing In…"
+              />
             </form>
 
             {/* ── Google Sign-In via Supabase OAuth ── */}
             <div className="mt-5">
               <div className="relative flex items-center gap-3 mb-4">
-                <div className="flex-1 h-px" style={{ backgroundColor: "#E2E8F0" }} />
-                <span className="text-xs tracking-wide" style={{ color: "#9CA3AF" }}>or continue with</span>
-                <div className="flex-1 h-px" style={{ backgroundColor: "#E2E8F0" }} />
+                <div
+                  className="flex-1 h-px"
+                  style={{ backgroundColor: "#E2E8F0" }}
+                />
+                <span
+                  className="text-xs tracking-wide"
+                  style={{ color: "#9CA3AF" }}
+                >
+                  or continue with
+                </span>
+                <div
+                  className="flex-1 h-px"
+                  style={{ backgroundColor: "#E2E8F0" }}
+                />
               </div>
               <button
                 id="google-signin-btn"
@@ -412,28 +503,51 @@ export default function UserLogin() {
                   border: "1px solid #E2E8F0",
                   color: "#232B32",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F9F9FB")}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ffffff")}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.backgroundColor = "#F9F9FB")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.backgroundColor = "#ffffff")
+                }
               >
                 {/* Google SVG icon */}
                 <svg className="w-4 h-4" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                  <path
+                    fill="#4285F4"
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                  />
                 </svg>
                 Continue with Google
               </button>
             </div>
 
-            <p className="text-center text-xs mt-5" style={{ color: "#9CA3AF" }}>
+            <p
+              className="text-center text-xs mt-5"
+              style={{ color: "#9CA3AF" }}
+            >
               Don&apos;t have an account?{" "}
               <button
                 onClick={() => switchUserView("signup")}
                 className="font-semibold cursor-pointer transition-colors duration-150"
                 style={{ color: "#C5A059" }}
-                onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
-                onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.textDecoration = "underline")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.textDecoration = "none")
+                }
               >
                 Create one
               </button>
@@ -447,24 +561,35 @@ export default function UserLogin() {
         {forgotStep === "request" && (
           <div>
             <BackButton
-              onClick={() => { setForgotStep(null); setForgotError(""); setForgotSuccess(""); }}
+              onClick={() => {
+                setForgotStep(null);
+                setForgotError("");
+                setForgotSuccess("");
+              }}
               label="Back to Sign In"
             />
-            <h3 className="text-sm font-semibold tracking-widest uppercase mb-1" style={{ color: "#232B32" }}>
+            <h3
+              className="text-sm font-semibold tracking-widest uppercase mb-1"
+              style={{ color: "#232B32" }}
+            >
               Reset Password
             </h3>
             <p className="text-xs mb-6" style={{ color: "#9CA3AF" }}>
               Enter your email and we&apos;ll send you a secure reset link.
             </p>
 
-            {forgotError   && <Alert type="error"   message={forgotError} />}
+            {forgotError && <Alert type="error" message={forgotError} />}
             {forgotSuccess && <Alert type="success" message={forgotSuccess} />}
 
             {/* Only show the form if no success message yet */}
             {!forgotSuccess && (
               <form onSubmit={handleForgotRequest} className="space-y-4">
                 <div>
-                  <label htmlFor="reset-email" className="block text-xs font-medium tracking-wider uppercase mb-2" style={{ color: "#232B32" }}>
+                  <label
+                    htmlFor="reset-email"
+                    className="block text-xs font-medium tracking-wider uppercase mb-2"
+                    style={{ color: "#232B32" }}
+                  >
                     Email Address
                   </label>
                   <div className="relative">
@@ -483,7 +608,11 @@ export default function UserLogin() {
                     />
                   </div>
                 </div>
-                <SubmitButton loading={forgotLoading} label="Send Reset Link" loadingLabel="Sending…" />
+                <SubmitButton
+                  loading={forgotLoading}
+                  label="Send Reset Link"
+                  loadingLabel="Sending…"
+                />
               </form>
             )}
           </div>
@@ -494,12 +623,16 @@ export default function UserLogin() {
         ════════════════════════════ */}
         {userView === "signup" && (
           <div>
-            {signUpError   && <Alert type="error"   message={signUpError} />}
+            {signUpError && <Alert type="error" message={signUpError} />}
             {signUpSuccess && <Alert type="success" message={signUpSuccess} />}
             <form onSubmit={handleUserSignUp} className="space-y-4">
               {/* Email */}
               <div>
-                <label htmlFor="signup-email" className="block text-xs font-medium tracking-wider uppercase mb-2" style={{ color: "#232B32" }}>
+                <label
+                  htmlFor="signup-email"
+                  className="block text-xs font-medium tracking-wider uppercase mb-2"
+                  style={{ color: "#232B32" }}
+                >
                   Email Address
                 </label>
                 <div className="relative">
@@ -521,7 +654,11 @@ export default function UserLogin() {
 
               {/* Password */}
               <div>
-                <label htmlFor="signup-password" className="block text-xs font-medium tracking-wider uppercase mb-2" style={{ color: "#232B32" }}>
+                <label
+                  htmlFor="signup-password"
+                  className="block text-xs font-medium tracking-wider uppercase mb-2"
+                  style={{ color: "#232B32" }}
+                >
                   Password
                 </label>
                 <div className="relative">
@@ -538,21 +675,35 @@ export default function UserLogin() {
                     onFocus={onFocus}
                     onBlur={onBlur}
                   />
-                  <EyeToggle show={signUpShowPw} onToggle={() => setSignUpShowPw(!signUpShowPw)} />
+                  <EyeToggle
+                    show={signUpShowPw}
+                    onToggle={() => setSignUpShowPw(!signUpShowPw)}
+                  />
                 </div>
               </div>
 
-              <SubmitButton loading={signUpLoading} label="Create Account" loadingLabel="Creating Account…" />
+              <SubmitButton
+                loading={signUpLoading}
+                label="Create Account"
+                loadingLabel="Creating Account…"
+              />
             </form>
 
-            <p className="text-center text-xs mt-5" style={{ color: "#9CA3AF" }}>
+            <p
+              className="text-center text-xs mt-5"
+              style={{ color: "#9CA3AF" }}
+            >
               Already have an account?{" "}
               <button
                 onClick={() => switchUserView("signin")}
                 className="font-semibold cursor-pointer transition-colors duration-150"
                 style={{ color: "#C5A059" }}
-                onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
-                onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.textDecoration = "underline")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.textDecoration = "none")
+                }
               >
                 Sign in
               </button>
@@ -561,7 +712,10 @@ export default function UserLogin() {
         )}
 
         {/* ── Footer ── */}
-        <p className="text-center text-xs mt-7 tracking-wide" style={{ color: "#9CA3AF" }}>
+        <p
+          className="text-center text-xs mt-7 tracking-wide"
+          style={{ color: "#9CA3AF" }}
+        >
           Secured access · Six Sigmaphil Corp.
         </p>
       </div>

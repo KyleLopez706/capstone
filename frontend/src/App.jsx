@@ -10,6 +10,9 @@ import Gallery        from "./pages/Gallery";
 import Contact        from "./pages/Contact";
 import Configurator3D from "./pages/Configurator3D";
 import ResetPassword  from "./pages/ResetPassword";
+import QuotationRequest from "./pages/QuotationRequest";
+import Analytics      from "./pages/Analytics";
+import AdminLayout    from "./components/AdminLayout";
 
 function App() {
   const navigate = useNavigate();
@@ -76,6 +79,10 @@ function App() {
      If neither flag exists but Supabase has a stored session → sign out.
      This means: close the browser without "Stay signed in" → next visit starts
      fresh, as the user would expect.
+
+     Admin redirect: if a valid session exists AND the profile role is "admin",
+     immediately route them to /dashboard so they never land on the user-facing
+     home page after a dev-server restart or tab reopen.
   ────────────────────────────────────────────────────────────────────────── */
   useEffect(() => {
     const checkPersistence = async () => {
@@ -90,9 +97,27 @@ function App() {
         // opted into persistence and this is a new browser session.
         // Sign them out cleanly so the login page is shown.
         await supabase.auth.signOut();
+        return;
+      }
+
+      // Valid persisted session — check if the user is an admin and redirect
+      // them away from the home page back to the dashboard automatically.
+      // Skip this check if they are already on the dashboard or a protected route.
+      const isOnAdminRoute = window.location.pathname === "/dashboard";
+      if (!isOnAdminRoute) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", session.user.id)
+          .single();
+
+        if (profile?.role === "admin") {
+          navigate("/dashboard", { replace: true });
+        }
       }
     };
     checkPersistence();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ── Phase 5: Diagnostic boot log ──
@@ -136,15 +161,20 @@ function App() {
 
   return (
     <Routes>
-      <Route path="/"               element={<Home />} />
-      <Route path="/login"          element={<UserLogin />} />
-      <Route path="/dashboard"      element={<Dashboard />} />
-      <Route path="/about"          element={<About />} />
-      <Route path="/services"       element={<Services />} />
-      <Route path="/gallery"        element={<Gallery />} />
-      <Route path="/contact"        element={<Contact />} />
-      <Route path="/configurator-3d" element={<Configurator3D />} />
-      <Route path="/reset-password"  element={<ResetPassword />} />
+      <Route path="/"                  element={<Home />} />
+      <Route path="/login"             element={<UserLogin />} />
+      <Route path="/about"             element={<About />} />
+      <Route path="/services"          element={<Services />} />
+      <Route path="/gallery"           element={<Gallery />} />
+      <Route path="/contact"           element={<Contact />} />
+      <Route path="/configurator-3d"   element={<Configurator3D />} />
+      <Route path="/reset-password"    element={<ResetPassword />} />
+      <Route path="/quotation-request" element={<QuotationRequest />} />
+
+      <Route element={<AdminLayout />}>
+        <Route path="/dashboard"         element={<Dashboard />} />
+        <Route path="/analytics"         element={<Analytics />} />
+      </Route>
     </Routes>
   );
 }
