@@ -185,6 +185,7 @@ export default function QuotationRequest() {
   };
 
   /* ── PDF generation ── */
+  // eslint-disable-next-line no-unused-vars
   const handleDownloadPDF = () => {
     const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const margin = 20;
@@ -510,28 +511,6 @@ export default function QuotationRequest() {
               </p>
             </div>
 
-            {/* PDF Download */}
-            <button
-              id="download-pdf-btn"
-              onClick={handleDownloadPDF}
-              style={{
-                marginTop: '20px', width: '100%', padding: '13px',
-                borderRadius: '10px', border: '2px solid #C5A059',
-                backgroundColor: 'transparent', color: '#C5A059',
-                fontWeight: 700, fontSize: '13px', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                transition: 'all 0.18s', letterSpacing: '0.04em', textTransform: 'uppercase',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#C5A059'; e.currentTarget.style.color = '#fff'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#C5A059'; }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              Download PDF Quote
-            </button>
           </div>
 
           {/* ────────── RIGHT: Customer Info Form ────────── */}
@@ -570,23 +549,7 @@ export default function QuotationRequest() {
                   has been submitted. Our team will contact you within 1&ndash;2 business days.
                 </p>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '24px' }}>
-                  <button
-                    id="download-pdf-success-btn"
-                    onClick={handleDownloadPDF}
-                    style={{
-                      padding: '13px', borderRadius: '10px', border: '2px solid #C5A059',
-                      backgroundColor: 'transparent', color: '#C5A059',
-                      fontWeight: 700, fontSize: '14px', cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                      transition: 'all 0.18s',
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#C5A059'; e.currentTarget.style.color = '#fff'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#C5A059'; }}
-                  >
-                    Download PDF Quote
-                  </button>
-                </div>
+                {/* PDF generation temporarily removed as requested */}
               </div>
             ) : (
               /* ── Form ── */
