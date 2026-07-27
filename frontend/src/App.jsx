@@ -35,6 +35,8 @@ function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event) => {
         if (event === "PASSWORD_RECOVERY") {
+          // Set active session so they aren't signed out by checkPersistence
+          sessionStorage.setItem("sixsigma_active", "1");
           // Replace history entry so the back button doesn't loop
           navigate("/reset-password", { replace: true });
         }
@@ -91,8 +93,9 @@ function App() {
 
       const rememberMe    = localStorage.getItem("sixsigma_remember") === "1";
       const activeSession = sessionStorage.getItem("sixsigma_active") === "1";
+      const isResetRoute  = window.location.pathname === "/reset-password";
 
-      if (!rememberMe && !activeSession) {
+      if (!rememberMe && !activeSession && !isResetRoute) {
         // Supabase has a stale session in localStorage but the user never
         // opted into persistence and this is a new browser session.
         // Sign them out cleanly so the login page is shown.
