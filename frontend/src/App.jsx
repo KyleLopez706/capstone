@@ -1,18 +1,18 @@
 import { Routes, Route, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import { supabase } from "./supabaseClient";
-import Home           from "./pages/Home";
-import UserLogin      from "./pages/UserLogin";
-import Dashboard      from "./pages/Dashboard";
-import About          from "./pages/About";
-import Services       from "./pages/Services";
-import Gallery        from "./pages/Gallery";
-import Contact        from "./pages/Contact";
+import Home from "./pages/Home";
+import UserLogin from "./pages/UserLogin";
+import Dashboard from "./pages/Dashboard";
+import About from "./pages/About";
+import Services from "./pages/Services";
+import Gallery from "./pages/Gallery";
+import Contact from "./pages/Contact";
 import Configurator3D from "./pages/Configurator3D";
-import ResetPassword  from "./pages/ResetPassword";
+import ResetPassword from "./pages/ResetPassword";
 import QuotationRequest from "./pages/QuotationRequest";
-import Analytics      from "./pages/Analytics";
-import AdminLayout    from "./components/AdminLayout";
+import Analytics from "./pages/Analytics";
+import AdminLayout from "./components/AdminLayout";
 
 function App() {
   const navigate = useNavigate();
@@ -32,40 +32,40 @@ function App() {
      SIGNED_OUT — clear all persistence flags wherever sign-out was triggered.
   ────────────────────────────────────────────────────────────────────────── */
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event) => {
-        if (event === "PASSWORD_RECOVERY") {
-          // Set active session so they aren't signed out by checkPersistence
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        // Set active session so they aren't signed out by checkPersistence
+        sessionStorage.setItem("sixsigma_active", "1");
+        // Replace history entry so the back button doesn't loop
+        navigate("/reset-password", { replace: true });
+      }
+
+      if (event === "SIGNED_IN") {
+        // Only act when returning from a Google OAuth redirect
+        // (the flag is written in handleGoogleSignIn before the redirect)
+        const oauthPending = localStorage.getItem("sixsigma_oauth_remember");
+        if (oauthPending !== null) {
           sessionStorage.setItem("sixsigma_active", "1");
-          // Replace history entry so the back button doesn't loop
-          navigate("/reset-password", { replace: true });
-        }
-
-        if (event === "SIGNED_IN") {
-          // Only act when returning from a Google OAuth redirect
-          // (the flag is written in handleGoogleSignIn before the redirect)
-          const oauthPending = localStorage.getItem("sixsigma_oauth_remember");
-          if (oauthPending !== null) {
-            sessionStorage.setItem("sixsigma_active", "1");
-            if (oauthPending === "1") {
-              localStorage.setItem("sixsigma_remember", "1");
-            } else {
-              localStorage.removeItem("sixsigma_remember");
-            }
-            localStorage.removeItem("sixsigma_oauth_remember");
+          if (oauthPending === "1") {
+            localStorage.setItem("sixsigma_remember", "1");
+          } else {
+            localStorage.removeItem("sixsigma_remember");
           }
-        }
-
-        if (event === "SIGNED_OUT") {
-          // Wipe all persistence flags so the next visit starts clean
-          sessionStorage.removeItem("sixsigma_active");
-          localStorage.removeItem("sixsigma_remember");
           localStorage.removeItem("sixsigma_oauth_remember");
         }
       }
-    );
+
+      if (event === "SIGNED_OUT") {
+        // Wipe all persistence flags so the next visit starts clean
+        sessionStorage.removeItem("sixsigma_active");
+        localStorage.removeItem("sixsigma_remember");
+        localStorage.removeItem("sixsigma_oauth_remember");
+      }
+    });
     return () => subscription.unsubscribe();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ── Session Persistence Boot Check ─────────────────────────────────────
@@ -88,12 +88,14 @@ function App() {
   ────────────────────────────────────────────────────────────────────────── */
   useEffect(() => {
     const checkPersistence = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) return; // No session stored — nothing to do
 
-      const rememberMe    = localStorage.getItem("sixsigma_remember") === "1";
+      const rememberMe = localStorage.getItem("sixsigma_remember") === "1";
       const activeSession = sessionStorage.getItem("sixsigma_active") === "1";
-      const isResetRoute  = window.location.pathname === "/reset-password";
+      const isResetRoute = window.location.pathname === "/reset-password";
 
       if (!rememberMe && !activeSession && !isResetRoute) {
         // Supabase has a stale session in localStorage but the user never
@@ -120,7 +122,7 @@ function App() {
       }
     };
     checkPersistence();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ── Phase 5: Diagnostic boot log ──
@@ -131,7 +133,10 @@ function App() {
       console.group("🔷 SIX SIGMAPHIL — Supabase Boot Diagnostic");
 
       // 1. Check active session
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
       if (sessionError) {
         console.error("❌ Session Error:", sessionError.message);
       } else if (session) {
@@ -150,9 +155,15 @@ function App() {
 
       if (profilesError) {
         // RLS may block this if unauthenticated — that is expected and correct
-        console.warn("⚠️  Profiles query:", profilesError.message, "(RLS may be active — this is expected)");
+        console.warn(
+          "⚠️  Profiles query:",
+          profilesError.message,
+          "(RLS may be active — this is expected)",
+        );
       } else {
-        console.log("✅ Supabase connection confirmed. Profiles table accessible.");
+        console.log(
+          "✅ Supabase connection confirmed. Profiles table accessible.",
+        );
         console.log("   Sample record:", profiles);
       }
 
@@ -164,19 +175,19 @@ function App() {
 
   return (
     <Routes>
-      <Route path="/"                  element={<Home />} />
-      <Route path="/login"             element={<UserLogin />} />
-      <Route path="/about"             element={<About />} />
-      <Route path="/services"          element={<Services />} />
-      <Route path="/gallery"           element={<Gallery />} />
-      <Route path="/contact"           element={<Contact />} />
-      <Route path="/configurator-3d"   element={<Configurator3D />} />
-      <Route path="/reset-password"    element={<ResetPassword />} />
+      <Route path="/" element={<Home />} />
+      <Route path="/login" element={<UserLogin />} />
+      <Route path="/about" element={<About />} />
+      <Route path="/services" element={<Services />} />
+      <Route path="/gallery" element={<Gallery />} />
+      <Route path="/contact" element={<Contact />} />
+      <Route path="/configurator-3d" element={<Configurator3D />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/quotation-request" element={<QuotationRequest />} />
 
       <Route element={<AdminLayout />}>
-        <Route path="/dashboard"         element={<Dashboard />} />
-        <Route path="/analytics"         element={<Analytics />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/analytics" element={<Analytics />} />
       </Route>
     </Routes>
   );

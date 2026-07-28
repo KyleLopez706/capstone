@@ -19,5 +19,8 @@
   "bugs": {
     "url": "https://github.com/KyleLopez706/capstone/issues"
   },
-  "homepage": "https://github.com/KyleLopez706/capstone#readme"
+  "homepage": "https://github.com/KyleLopez706/capstone#readme",
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1"
+  }
 }
