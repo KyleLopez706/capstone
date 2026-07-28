@@ -171,10 +171,10 @@ function TextureApplicator({ material, targetNodes }) {
       t.generateMipmaps = false;
       t.minFilter = THREE.LinearFilter;
 
-      // Apply RepeatWrapping for unwrapped models
-      t.wrapS = THREE.RepeatWrapping;
-      t.wrapT = THREE.RepeatWrapping;
-      t.repeat.set(3, 1.5); // Ensure realistic granite pattern scale
+      // No repeat tiling — let texture fill UVs once to avoid seam lines
+      t.wrapS = THREE.ClampToEdgeWrapping;
+      t.wrapT = THREE.ClampToEdgeWrapping;
+      t.repeat.set(1, 1);
 
       t.needsUpdate = true;
     });
