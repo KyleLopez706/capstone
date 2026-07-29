@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
-import Navbar              from '../components/Navbar';
-import ShowroomCanvas      from '../components/configurator/ShowroomCanvas';
-import ConfiguratorLayout  from '../components/configurator/ConfiguratorLayout';
-import useConfiguratorStore from '../store/configuratorStore';
-import { supabase }        from '../supabaseClient';
+import { useTexture }         from '@react-three/drei';
+import Navbar                 from '../components/Navbar';
+import ShowroomCanvas         from '../components/configurator/ShowroomCanvas';
+import ConfiguratorLayout     from '../components/configurator/ConfiguratorLayout';
+import useConfiguratorStore   from '../store/configuratorStore';
+import { supabase }           from '../supabaseClient';
 
 /* ─────────────────────────────────────────
    CONFIGURATOR 3D PAGE
    Top-level orchestrator for the 3D experience.
 
-   On mount:  fetches ALL structures from Supabase
-              and passes them to the showroom gallery.
+   On mount:  fetches ALL structures AND materials from Supabase
+              in parallel, then immediately preloads every PBR
+              texture so they are cached before the user clicks.
 
    Renders:   <ShowroomCanvas />    (appMode === 'showroom')
               <ConfiguratorLayout /> (appMode === 'configurator')
@@ -37,16 +39,47 @@ const FALLBACK_STRUCTURES = [
 ];
 
 /**
- * bustCache — appends a ?v=<timestamp> query param to a URL so that
- * useGLTF (and the browser HTTP cache) treat it as a brand-new asset.
- * Applied to every model URL so a file replacement in Supabase Storage
- * is always picked up without a hard browser refresh.
+ * MODEL_VERSION — a stable version string appended to every model URL.
+ *
+ * WHY NOT Date.now()?
+ * Using Date.now() generates a unique query string on every page load
+ * (e.g. ?v=1722222222222).  The Supabase Storage CDN treats each unique
+ * URL as a distinct asset, so NO visitor ever gets a cache hit — every
+ * visit re-downloads the full .glb file from origin.  That is the primary
+ * reason cached egress was at 159%.
+ *
+ * HOW TO BUST THE CACHE INTENTIONALLY:
+ * When you replace a .glb file in Supabase Storage, increment this number
+ * (e.g. '1' → '2').  All users will then fetch the new file once, after
+ * which it is cached again.  Never use Date.now() here.
  */
-const MODEL_CACHE_VERSION = Date.now();
-function bustCache(url) {
+const MODEL_VERSION = '1';
+function addCacheVersion(url) {
   if (!url) return url;
   const separator = url.includes('?') ? '&' : '?';
-  return `${url}${separator}v=${MODEL_CACHE_VERSION}`;
+  return `${url}${separator}v=${MODEL_VERSION}`;
+}
+
+/**
+ * preloadMaterialTextures — fires useTexture.preload() for every PBR
+ * texture URL in the materials list so the Three.js loader downloads
+ * them into its cache NOW, while the user is still in the showroom.
+ *
+ * When the user eventually clicks a model and MaterialPanel mounts,
+ * useTexture() finds the files already in-cache and returns instantly
+ * instead of triggering fresh 3–8 s network downloads.
+ *
+ * useTexture.preload is a static method on the drei hook — it is safe
+ * to call outside a React/Canvas context; it simply queues the URLs
+ * with THREE.DefaultLoadingManager.  GPU upload still happens on first
+ * render, but that is ~100 ms vs. the previous 8–11 s download wait.
+ */
+function preloadMaterialTextures(materials = []) {
+  materials.forEach((mat) => {
+    if (mat.color_url)     useTexture.preload(mat.color_url);
+    if (mat.normal_url)    useTexture.preload(mat.normal_url);
+    if (mat.roughness_url) useTexture.preload(mat.roughness_url);
+  });
 }
 
 export default function Configurator3D() {
@@ -58,53 +91,88 @@ export default function Configurator3D() {
   const [structures, setStructures] = useState([]);
   const [loading,    setLoading]    = useState(true);
 
-  /* ── Fetch ALL structures from Supabase on first render ── */
+  /* ── Fetch structures AND materials in parallel on first render ──────────
+     Using Promise.all means both API calls go out simultaneously instead
+     of sequentially.  The materials list is only used here for texture
+     preloading; the actual panel UI still fetches it independently so it
+     remains self-contained and resilient to this call failing.
+  ────────────────────────────────────────────────────────────────────────── */
   useEffect(() => {
-    const fetchStructures = async () => {
-      // No name filter — retrieve every row in the structures table (AGENTS.md §A)
-      const { data, error } = await supabase
-        .from('structures')
-        .select('id, name, base_length, base_width, model_url')
-        .order('name');
+    const boot = async () => {
+      /* Fire both fetches at the same time — parallel, not sequential */
+      const [structuresResult, materialsResult] = await Promise.all([
+        supabase
+          .from('structures')
+          .select('id, name, base_length, base_width, model_url')
+          .order('name'),
+        supabase
+          .from('materials')
+          .select('id, color_url, normal_url, roughness_url')
+          .limit(32), // upper-bound guard; matches MaterialPanel's limit
+      ]);
 
-      if (error) {
-        // Network failure or RLS denial — degrade gracefully (AGENTS.md §D)
-        console.warn('[Configurator3D] Structures fetch failed:', error.message);
+      /* ── Handle structures ── */
+      if (structuresResult.error) {
+        console.warn('[Configurator3D] Structures fetch failed:', structuresResult.error.message);
         const fallbacks = FALLBACK_STRUCTURES.map((s) => ({
-          ...s, model_url: bustCache(s.model_url),
+          ...s, model_url: addCacheVersion(s.model_url),
         }));
         setStructures(fallbacks);
-        fallbacks.forEach((s) => ShowroomCanvas.preload(s.model_url));
-      } else if (data?.length) {
-        // Bust cache on every model URL so replaced GLBs are always re-fetched
-        const busted = data.map((s) => ({ ...s, model_url: bustCache(s.model_url) }));
-        setStructures(busted);
-        // Pre-cache all GLBs immediately (AGENTS.md §C)
-        busted.forEach((s) => { if (s.model_url) ShowroomCanvas.preload(s.model_url); });
+        if (fallbacks[0]?.model_url) ShowroomCanvas.preload(fallbacks[0].model_url);
+      } else if (structuresResult.data?.length) {
+        const versioned = structuresResult.data.map((s) => ({
+          ...s, model_url: addCacheVersion(s.model_url),
+        }));
+        setStructures(versioned);
+        // Only preload the first GLB eagerly to avoid N × GLB egress on cold load.
+        // The carousel renders all models inside <Suspense> so remaining GLBs
+        // stream in on-demand as the user scrolls to them.
+        if (versioned[0]?.model_url) ShowroomCanvas.preload(versioned[0].model_url);
       } else {
-        // Table exists but has no rows — use fallback
-        console.warn('[Configurator3D] No structures found — using fallback. Check RLS or Supabase data.');
+        console.warn('[Configurator3D] No structures found — using fallback.');
         const fallbacks = FALLBACK_STRUCTURES.map((s) => ({
-          ...s, model_url: bustCache(s.model_url),
+          ...s, model_url: addCacheVersion(s.model_url),
         }));
         setStructures(fallbacks);
-        fallbacks.forEach((s) => ShowroomCanvas.preload(s.model_url));
+        if (fallbacks[0]?.model_url) ShowroomCanvas.preload(fallbacks[0].model_url);
+      }
+
+      /* ── Eagerly preload ALL PBR textures while the user browses ────────
+         This is the primary fix for the 11-second first-click delay.
+         The downloads start NOW (showroom load time), so by the time the
+         user clicks a model, the texture files are already in browser
+         cache / THREE.js cache.  MaterialPanel's own preload call becomes
+         a fast no-op against the already-populated cache.
+      ─────────────────────────────────────────────────────────────────── */
+      if (!materialsResult.error && materialsResult.data?.length) {
+        preloadMaterialTextures(materialsResult.data);
+      }
+      // A materials fetch failure is non-fatal here — we log it silently and
+      // let MaterialPanel handle its own retry UI.  The textures just won't
+      // be pre-cached, falling back to the original on-demand load.
+      else if (materialsResult.error) {
+        console.warn('[Configurator3D] Material preload fetch failed (non-fatal):', materialsResult.error.message);
       }
 
       setLoading(false);
     };
 
-    fetchStructures();
+    boot();
   }, []);
 
   /**
    * handleStructureSelect — called when the user clicks a model in the showroom.
    * Seeds the Zustand store with the chosen structure (dimensions + model URL),
-   * then transitions to configurator mode after a brief delay for visual feel.
+   * then immediately transitions to configurator mode.
+   *
+   * WHY NO setTimeout?
+   * The previous 350 ms delay added artificial latency on top of an already
+   * slow first-load.  Zustand setState is synchronous, so the store is fully
+   * updated before the mode switch.  The transition is now instant.
    */
   const handleStructureSelect = (structure) => {
     setStructure(structure);
-    setTimeout(() => setAppMode('configurator'), 350);
+    setAppMode('configurator'); // immediate — no artificial 350 ms wait
   };
 
   return (
@@ -135,31 +203,6 @@ export default function Configurator3D() {
       ) : appMode === 'showroom' ? (
         /* ─────────── SHOWROOM MODE ─────────── */
         <div className="flex-1 overflow-hidden relative">
-
-          {/* Gradient header overlay */}
-          <div
-            className="absolute top-0 left-0 right-0 z-10 px-6 py-5 pointer-events-none"
-            style={{
-              background: 'linear-gradient(to bottom, rgba(26,30,34,0.9) 0%, transparent 100%)',
-            }}
-          >
-            <p
-              className="text-xs font-semibold tracking-widest uppercase"
-              style={{ color: '#C5A059' }}
-            >
-              Six Sigmaphil · 360° Virtual Showroom
-            </p>
-            <h1
-              className="text-xl sm:text-3xl font-light mt-1"
-              style={{ color: '#F9F9FB' }}
-            >
-              Select a Structure to Configure
-            </h1>
-            <p className="text-xs mt-1" style={{ color: '#6B7280' }}>
-              {structures.length} structure{structures.length !== 1 ? 's' : ''} available
-            </p>
-          </div>
-
           <ShowroomCanvas
             structures={structures}
             onStructureSelect={handleStructureSelect}

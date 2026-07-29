@@ -10,7 +10,18 @@ import { persist, createJSONStorage } from 'zustand/middleware';
  *  - active structure loaded from Supabase
  *  - active material selection
  *  - user-input dimensions for live pricing
+ *
+ * Security / Functional notes:
+ *  - setDimension clamps values to [0.01, 20] metres to prevent
+ *    nonsensical or adversarial dimension inputs reaching pricing.
+ *  - resetConfigurator returns the store to its factory state, used
+ *    on sign-out or when the user navigates away from the configurator.
  */
+
+/* Safe bounds for user-supplied dimensions (metres) */
+const DIM_MIN = 0.01;
+const DIM_MAX = 20;
+
 const useConfiguratorStore = create(
   persist(
     (set) => ({
@@ -41,16 +52,31 @@ const useConfiguratorStore = create(
 
       setMaterial: (material) => set({ selectedMaterial: material }),
 
+      // Clamp dimension to [DIM_MIN, DIM_MAX] before storing —
+      // prevents pricing engine from receiving 0, negative, or
+      // excessively large values from user input.
       setDimension: (key, value) =>
-        set((state) => ({
-          dimensions: { ...state.dimensions, [key]: parseFloat(value) || 0 },
-        })),
+        set((state) => {
+          const raw     = parseFloat(value);
+          const clamped = isNaN(raw) ? DIM_MIN : Math.min(DIM_MAX, Math.max(DIM_MIN, raw));
+          return { dimensions: { ...state.dimensions, [key]: clamped } };
+        }),
+
+      // Full reset — call on sign-out or page exit to clear persisted state
+      resetConfigurator: () =>
+        set({
+          appMode:           'showroom',
+          selectedStructure: null,
+          selectedMaterial:  null,
+          dimensions:        { length: 1.2, width: 0.6 },
+        }),
     }),
     {
-      name: 'sixsigma-configurator',
+      name:    'sixsigma-configurator',
       storage: createJSONStorage(() => sessionStorage),
     }
   )
 );
 
 export default useConfiguratorStore;
+

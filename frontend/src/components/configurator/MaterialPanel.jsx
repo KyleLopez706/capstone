@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTexture } from '@react-three/drei';
 import { supabase } from '../../supabaseClient';
 import useConfiguratorStore from '../../store/configuratorStore';
 
@@ -123,7 +124,6 @@ export default function MaterialPanel() {
 
       if (error) {
         console.error('Materials fetch failed:', error.message);
-        // RLS denial or network failure — show sanitised fallback (AGENTS.md §D)
         setFetchError('Unable to load materials. Please try again.');
       } else {
         setMaterials(data ?? []);
@@ -131,6 +131,14 @@ export default function MaterialPanel() {
         if (data?.length > 0 && !selectedMaterial) {
           setMaterial(data[0]);
         }
+        // Background-preload all color textures immediately after the list
+        // arrives so they are already in the THREE.js cache by the time the
+        // user clicks a swatch. First-load switches become near-instant.
+        data?.forEach((mat) => {
+          if (mat.color_url)     useTexture.preload(mat.color_url);
+          if (mat.normal_url)    useTexture.preload(mat.normal_url);
+          if (mat.roughness_url) useTexture.preload(mat.roughness_url);
+        });
       }
       setLoading(false);
     };
@@ -143,7 +151,9 @@ export default function MaterialPanel() {
     if (locked) return; // Rate-limit guard (AGENTS.md §A)
     setLocked(true);
     setMaterial(material);
-    lockTimer.current = setTimeout(() => setLocked(false), 500);
+    // 150ms is enough to block accidental double-clicks without adding
+    // perceptible latency to intentional swatch browsing.
+    lockTimer.current = setTimeout(() => setLocked(false), 150);
   };
 
   return (

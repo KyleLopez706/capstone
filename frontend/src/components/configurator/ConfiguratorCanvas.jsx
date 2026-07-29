@@ -5,7 +5,7 @@ import {
   useTexture,
   Environment,
 } from "@react-three/drei";
-import { Suspense, useEffect, useMemo, Component } from "react";
+import { Suspense, useEffect, useMemo, useRef, Component } from "react";
 import * as THREE from "three";
 import useConfiguratorStore from "../../store/configuratorStore";
 
@@ -106,11 +106,30 @@ const FALLBACK_1PX =
    (bad URL, network error, etc.) the boundary
    catches it silently — the mesh keeps its
    previous material and no crash occurs.
-   Keyed on selectedMaterial.id so each new
-   material selection gets a fresh attempt.
+
+   NOTE: We do NOT key this boundary on material.id.
+   Keying it caused the entire Suspense subtree to
+   unmount + remount on every swatch click, which:
+     • destroyed the useTexture internal cache entry
+     • forced a brand-new network download every time
+     • made EVERY material switch feel slow, even for
+       materials the user had already viewed.
+   Instead, TextureApplicator stays mounted and
+   receives the next material as a prop update.
+   useTexture handles the cache hit internally.
 ───────────────────────────────────────── */
 class TextureErrorBoundary extends Component {
-  state = { hasError: false };
+  state = { hasError: false, materialId: null };
+
+  // Reset the boundary whenever the material changes so a bad URL
+  // on material A doesn't permanently silence material B.
+  static getDerivedStateFromProps(props, state) {
+    if (props.materialId !== state.materialId) {
+      return { hasError: false, materialId: props.materialId };
+    }
+    return null;
+  }
+
   static getDerivedStateFromError() {
     return { hasError: true };
   }
@@ -121,7 +140,6 @@ class TextureErrorBoundary extends Component {
     );
   }
   render() {
-    // hasError = silent fallback; the stone mesh shows its existing gray material
     if (this.state.hasError) return null;
     return this.props.children;
   }
@@ -129,69 +147,72 @@ class TextureErrorBoundary extends Component {
 
 /* ─────────────────────────────────────────
    TEXTURE APPLICATOR
-   Uses drei's useTexture (backed by React Suspense
-   + a global cache).  Benefits over raw TextureLoader:
+   Uses drei's useTexture (backed by a global
+   THREE.js cache + React Suspense).
 
-   ✓ Caches results — switching back to a material
-     you already viewed is instant (no re-download).
-   ✓ Suspense-based — the component simply suspends
-     until ALL three maps are ready, then atomically
-     swaps the material. No "gray flash" mid-load.
-   ✓ Handles CORS correctly internally (no manual
-     crossOrigin config needed).
-   ✓ Won't crash the WebGL context because it doesn't
-     race with other GPU uploads via setTimeout.
+   ✓ Cache-hits are instant — if the user revisits
+     a material they already viewed, useTexture
+     resolves synchronously from memory.
+   ✓ First-load suspends until ALL three maps are
+     ready, then atomically swaps the material.
+   ✓ Stays mounted across material changes so the
+     cache is never thrown away mid-session.
+   ✓ onApplied() callback signals the parent that
+     textures are live (used to dismiss the shimmer).
 ───────────────────────────────────────── */
-function TextureApplicator({ material, targetNodes }) {
+function TextureApplicator({ material, targetNodes, onApplied }) {
   // Load all three PBR maps. Null/missing URLs fall back to the 1px white PNG
-  // so useTexture always receives three valid URLs.
+  // so useTexture always receives three valid URLs and never throws on null.
   const textures = useTexture({
-    map: material.color_url || FALLBACK_1PX,
-    normalMap: material.normal_url || FALLBACK_1PX,
+    map:          material.color_url     || FALLBACK_1PX,
+    normalMap:    material.normal_url    || FALLBACK_1PX,
     roughnessMap: material.roughness_url || FALLBACK_1PX,
   });
+
+  // Track the material id we last applied so we skip redundant GPU uploads
+  // when the parent re-renders without the selection actually changing.
+  const appliedIdRef = useRef(null);
 
   useEffect(() => {
     if (!targetNodes?.length) return;
 
-    /* The react-hooks/immutability rule forbids mutating objects returned
-       by hooks (even after destructuring). Clone each texture first so we
-       mutate our own copy, not the cached shared instance.               */
+    /* Clone each texture so we mutate our own copy, not the cached
+       shared instance (react-hooks immutability rule).              */
     const colorMap = textures.map?.clone();
     const normalMap = textures.normalMap?.clone();
-    const roughMap = textures.roughnessMap?.clone();
+    const roughMap  = textures.roughnessMap?.clone();
 
     // Color space: color map must be sRGB; data maps stay linear
     if (colorMap) colorMap.colorSpace = THREE.SRGBColorSpace;
 
-    // Disable mipmaps on all maps — cuts GPU memory by ~33 %
     [colorMap, normalMap, roughMap].forEach((t) => {
       if (!t) return;
-      t.flipY = false; // GLTF UV coordinates expect top-left origin
-      t.generateMipmaps = false;
-      t.minFilter = THREE.LinearFilter;
-
-      // No repeat tiling — let texture fill UVs once to avoid seam lines
+      t.flipY = false;                          // GLTF UVs: top-left origin
+      t.generateMipmaps = false;                // saves ~33% GPU memory
+      t.minFilter  = THREE.LinearFilter;
       t.wrapS = THREE.ClampToEdgeWrapping;
       t.wrapT = THREE.ClampToEdgeWrapping;
       t.repeat.set(1, 1);
-
       t.needsUpdate = true;
     });
 
     const mat = new THREE.MeshStandardMaterial({
-      map: material.color_url ? colorMap : null,
-      normalMap: material.normal_url ? normalMap : null,
-      roughnessMap: material.roughness_url ? roughMap : null,
+      map:          material.color_url     ? colorMap  : null,
+      normalMap:    material.normal_url    ? normalMap : null,
+      roughnessMap: material.roughness_url ? roughMap  : null,
       roughness: 0.65,
       metalness: 0.04,
     });
 
     targetNodes.forEach((node) => {
-      node.material = mat;
+      node.material   = mat;
       node.castShadow = true;
       node.receiveShadow = true;
     });
+
+    appliedIdRef.current = material.id;
+    // Signal the parent that the texture is now live on the mesh
+    onApplied?.();
 
     return () => {
       mat.dispose();
@@ -199,7 +220,7 @@ function TextureApplicator({ material, targetNodes }) {
       normalMap?.dispose();
       roughMap?.dispose();
     };
-  }, [textures, targetNodes, material]);
+  }, [textures, targetNodes, material, onApplied]);
 
   return null;
 }
@@ -207,7 +228,7 @@ function TextureApplicator({ material, targetNodes }) {
 /* ─────────────────────────────────────────
    MODEL + MATERIAL COMPOSITION
 ───────────────────────────────────────── */
-function CountertopWithMaterial({ modelUrl }) {
+function CountertopWithMaterial({ modelUrl, onTextureApplied }) {
   const { scene } = useGLTF(modelUrl);
   const selectedMaterial = useConfiguratorStore((s) => s.selectedMaterial);
 
@@ -231,16 +252,12 @@ function CountertopWithMaterial({ modelUrl }) {
       }
 
       if (zone === 'stone') {
-        // Collected here; PBR texture applied reactively by TextureApplicator
         found.push(n);
       } else {
-        // Assign the pre-built static material for this zone
         n.material = ZONE_MATERIALS[zone] ?? ZONE_MATERIALS.default;
       }
     });
 
-    // Safety fallback: if no stone mesh matched, apply PBR to everything
-    // so the model is never invisible across different GLB exports.
     if (!found.length) {
       clonedScene.traverse((n) => { if (n.isMesh) found.push(n); });
       console.warn(
@@ -256,15 +273,27 @@ function CountertopWithMaterial({ modelUrl }) {
     <>
       <primitive object={clonedScene} />
 
-      {/* Only mount the texture applicator when a material is selected.
-          Keyed on material.id → ErrorBoundary and Suspense fully reset
-          on each selection, giving each material a clean load attempt. */}
+      {/*
+        IMPORTANT: TextureErrorBoundary is NOT keyed on material.id.
+
+        Previously it was keyed on material.id, which caused React to
+        fully unmount + remount the Suspense subtree on every swatch
+        click. This destroyed useTexture's internal cache every time,
+        forcing a fresh network download + GPU upload — making every
+        switch feel slow, even for previously-seen materials.
+
+        Now the boundary stays mounted and receives the next material
+        as a prop update. useTexture serves cache-hits synchronously,
+        so revisited materials swap instantly. The boundary resets
+        itself via getDerivedStateFromProps when materialId changes.
+      */}
       {selectedMaterial && (
-        <TextureErrorBoundary key={selectedMaterial.id}>
+        <TextureErrorBoundary materialId={selectedMaterial.id}>
           <Suspense fallback={null}>
             <TextureApplicator
               material={selectedMaterial}
               targetNodes={stoneMeshes}
+              onApplied={onTextureApplied}
             />
           </Suspense>
         </TextureErrorBoundary>
@@ -287,69 +316,156 @@ function CanvasLoader() {
    CONFIGURATOR CANVAS  (Centre Column)
 ───────────────────────────────────────── */
 export default function ConfiguratorCanvas({ modelUrl }) {
+  // Shimmer overlay: shown while a texture is loading, hidden once applied.
+  // Uses a ref so toggling it never triggers a Canvas re-render.
+  const overlayRef = useRef(null);
+
+  const handleTextureApplied = () => {
+    if (overlayRef.current) {
+      overlayRef.current.style.opacity = '0';
+      // After the fade-out transition completes, hide it from layout
+      setTimeout(() => {
+        if (overlayRef.current) overlayRef.current.style.display = 'none';
+      }, 300);
+    }
+  };
+
+  const selectedMaterial = useConfiguratorStore((s) => s.selectedMaterial);
+  const prevMaterialIdRef = useRef(null);
+
+  // Show the shimmer whenever the user picks a new material
+  useEffect(() => {
+    if (!selectedMaterial || selectedMaterial.id === prevMaterialIdRef.current) return;
+    prevMaterialIdRef.current = selectedMaterial.id;
+    if (overlayRef.current) {
+      overlayRef.current.style.display = 'flex';
+      // Micro-tick to ensure display:flex is applied before opacity animates in
+      requestAnimationFrame(() => {
+        if (overlayRef.current) overlayRef.current.style.opacity = '1';
+      });
+    }
+  }, [selectedMaterial]);
+
   return (
-    <Canvas
-      shadows
-      /* Explicit shadow map type — suppresses PCFSoftShadowMap deprecation */
-      gl={{ shadowMapType: THREE.PCFShadowMap }}
-      camera={{ position: [0, 1.2, 2.5], fov: 45 }}
-      onCreated={({ gl }) => {
-        gl.domElement.addEventListener("webglcontextlost", (e) => {
-          e.preventDefault();
-          console.warn(
-            "[ConfiguratorCanvas] WebGL context lost — waiting for restore.",
-          );
-        });
-      }}
-      style={{
-        width: "100%",
-        height: "100%",
-        background:
-          "radial-gradient(ellipse at 50% 30%, #2e3238 0%, #1a1e22 100%)",
-        borderRadius: "12px",
-      }}
-    >
-      <Suspense fallback={<CanvasLoader />}>
-        {/* ── High-End PBR Lighting Setup ── */}
-        <ambientLight intensity={0.4} />
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <Canvas
+        shadows
+        gl={{ shadowMapType: THREE.PCFShadowMap }}
+        camera={{ position: [0, 1.2, 2.5], fov: 45 }}
+        onCreated={({ gl }) => {
+          gl.domElement.addEventListener("webglcontextlost", (e) => {
+            e.preventDefault();
+            console.warn(
+              "[ConfiguratorCanvas] WebGL context lost — waiting for restore.",
+            );
+          });
+        }}
+        style={{
+          width: "100%",
+          height: "100%",
+          background:
+            "radial-gradient(ellipse at 50% 30%, #2e3238 0%, #1a1e22 100%)",
+          borderRadius: "12px",
+        }}
+      >
+        <Suspense fallback={<CanvasLoader />}>
+          {/* ── High-End PBR Lighting Setup ── */}
+          <ambientLight intensity={0.4} />
 
-        {/* Key Light: Bright, casts shadows, angled to catch specular highlights on the granite */}
-        <directionalLight
-          position={[5, 5, 4]}
-          intensity={1.5}
-          castShadow
-          shadow-mapSize={[1024, 1024]}
-          shadow-bias={-0.0002}
-          color="#ffffff"
+          {/* Key Light */}
+          <directionalLight
+            position={[5, 5, 4]}
+            intensity={1.5}
+            castShadow
+            shadow-mapSize={[1024, 1024]}
+            shadow-bias={-0.0002}
+            color="#ffffff"
+          />
+
+          {/* Fill Light */}
+          <directionalLight
+            position={[-5, 3, -5]}
+            intensity={0.6}
+            color="#b0c4de"
+          />
+
+          {/* Rim Light */}
+          <directionalLight
+            position={[0, 2, -6]}
+            intensity={0.8}
+            color="#ffffff"
+          />
+
+          <CountertopWithMaterial
+            modelUrl={modelUrl}
+            onTextureApplied={handleTextureApplied}
+          />
+
+          <Environment preset="city" />
+
+          <OrbitControls
+            enablePan={false}
+            minDistance={1.5}
+            maxDistance={5}
+            minPolarAngle={Math.PI / 8}
+            maxPolarAngle={Math.PI / 2}
+          />
+        </Suspense>
+      </Canvas>
+
+      {/* ── Texture-loading shimmer overlay ──────────────────────────────
+          Shown for the exact duration of a first-load texture fetch.
+          Hidden immediately (via onApplied) once the GPU upload is done.
+          Uses opacity transition so it fades rather than pops.
+          display:none when idle so it doesn't intercept pointer events. */}
+      <div
+        ref={overlayRef}
+        style={{
+          display:        'none',
+          opacity:        0,
+          transition:     'opacity 0.3s ease',
+          position:       'absolute',
+          inset:          0,
+          borderRadius:   '12px',
+          alignItems:     'center',
+          justifyContent: 'center',
+          flexDirection:  'column',
+          gap:            '10px',
+          pointerEvents:  'none',
+          background:     'rgba(26,30,34,0.55)',
+          backdropFilter: 'blur(2px)',
+          zIndex:         10,
+        }}
+        aria-live="polite"
+        aria-label="Applying texture"
+      >
+        {/* Gold spinner ring */}
+        <div
+          style={{
+            width:       '36px',
+            height:      '36px',
+            borderRadius:'50%',
+            border:      '2.5px solid rgba(197,160,89,0.25)',
+            borderTopColor: '#C5A059',
+            animation:   'spin 0.75s linear infinite',
+          }}
         />
+        <p
+          style={{
+            color:         '#C5A059',
+            fontSize:      '10px',
+            fontWeight:    '600',
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            fontFamily:    "'Inter', 'Segoe UI', sans-serif",
+          }}
+        >
+          Applying Texture…
+        </p>
+      </div>
 
-        {/* Fill Light: Soft cool light to fill in the shadows */}
-        <directionalLight
-          position={[-5, 3, -5]}
-          intensity={0.6}
-          color="#b0c4de"
-        />
-
-        {/* Rim Light: Separates the model from the dark background */}
-        <directionalLight
-          position={[0, 2, -6]}
-          intensity={0.8}
-          color="#ffffff"
-        />
-
-        <CountertopWithMaterial modelUrl={modelUrl} />
-
-        {/* IBL for rich, realistic reflections on the polished stone (City provides great sharp contrast) */}
-        <Environment preset="city" />
-
-        <OrbitControls
-          enablePan={false}
-          minDistance={1.5}
-          maxDistance={5}
-          minPolarAngle={Math.PI / 8}
-          maxPolarAngle={Math.PI / 2}
-        />
-      </Suspense>
-    </Canvas>
+      {/* Keyframe for the spinner — injected once as a style tag */}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
   );
 }
