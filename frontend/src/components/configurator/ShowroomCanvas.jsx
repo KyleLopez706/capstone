@@ -92,7 +92,7 @@ function SafeModelFallback() {
    • 3-tier display stand with gold accent rings
 ───────────────────────────────────────── */
 const ShowroomModel = memo(function ShowroomModel({ structure, position }) {
-  const { scene } = useGLTF(structure.model_url);
+  const { scene } = useGLTF(structure.model_url, true);
   const spinRef   = useRef();
 
   /* Apply zone materials once the scene graph is available */
@@ -522,5 +522,5 @@ export default function ShowroomCanvas({ structures, onStructureSelect }) {
 
 /* Pre-cache GLBs as soon as their URLs are known (AGENTS.md §C) */
 ShowroomCanvas.preload = (url) => {
-  if (isSafeModelUrl(url)) useGLTF.preload(url);
+  if (isSafeModelUrl(url)) useGLTF.preload(url, true);
 };

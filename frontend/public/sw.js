@@ -23,7 +23,7 @@
  *   (Matches MODEL_VERSION in Configurator3D.jsx — keep them in sync.)
  */
 
-const CACHE_VERSION   = 'sixsigma-assets-v1';
+const CACHE_VERSION   = 'sixsigma-assets-v2';
 const STORAGE_PATTERN = /https:\/\/[a-z0-9]+\.supabase\.co\/storage\/v1\/object\/public\//;
 
 /* ── Install: activate immediately, no waiting for old tabs to close ── */

@@ -229,7 +229,7 @@ function TextureApplicator({ material, targetNodes, onApplied }) {
    MODEL + MATERIAL COMPOSITION
 ───────────────────────────────────────── */
 function CountertopWithMaterial({ modelUrl, onTextureApplied }) {
-  const { scene } = useGLTF(modelUrl);
+  const { scene } = useGLTF(modelUrl, true);
   const selectedMaterial = useConfiguratorStore((s) => s.selectedMaterial);
 
   // Clone so we don't mutate the shared cached GLTF

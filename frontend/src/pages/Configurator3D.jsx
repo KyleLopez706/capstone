@@ -53,7 +53,7 @@ const FALLBACK_STRUCTURES = [
  * (e.g. '1' → '2').  All users will then fetch the new file once, after
  * which it is cached again.  Never use Date.now() here.
  */
-const MODEL_VERSION = '1';
+const MODEL_VERSION = '2';
 function addCacheVersion(url) {
   if (!url) return url;
   const separator = url.includes('?') ? '&' : '?';
@@ -139,16 +139,26 @@ export default function Configurator3D() {
         if (fallbacks[0]?.model_url) ShowroomCanvas.preload(fallbacks[0].model_url);
       }
 
-      /* ── Eagerly preload ONLY the default PBR material ────────
-         Preloading all 48 textures at once jams the browser network queue
-         and delays the 3D models from loading. We only preload the first
-         material so the configurator opens instantly on click. The rest
-         will lazy-load when the user browses the MaterialPanel.
+      /* ── Smart Staggered Preloading (Post-Compression) ──────────────
+         Because the textures are now highly compressed .webp files, we CAN
+         preload all of them without crashing the network.
+         However, to ensure the 3D models load absolutely first, we preload
+         the first material instantly, and delay the rest by 2 seconds.
+         This gives a buttery smooth 0ms texture swap experience!
       ─────────────────────────────────────────────────────────────────── */
       if (!materialsResult.error && materialsResult.data?.length) {
         setMaterials(materialsResult.data);
         setMaterial(materialsResult.data[0]); // Auto-select first material
+        
+        // 1. Instantly preload the default material
         preloadMaterialTextures([materialsResult.data[0]]);
+        
+        // 2. Quietly preload the rest in the background after 2 seconds
+        //    (so they don't compete with the .glb model downloads)
+        setTimeout(() => {
+          const remainingMaterials = materialsResult.data.slice(1);
+          preloadMaterialTextures(remainingMaterials);
+        }, 2000);
       }
       // A materials fetch failure is non-fatal here — we log it silently.
       else if (materialsResult.error) {
