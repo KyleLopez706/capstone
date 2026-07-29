@@ -33,6 +33,7 @@ const useConfiguratorStore = create(
 
       /* ── Active material from Supabase materials table ── */
       selectedMaterial: null, // { id, name, price_per_sqm, color_url, normal_url, roughness_url }
+      materials: [],          // Shared list of all materials fetched on boot
 
       /* ── User-input dimensions in metres ── */
       dimensions: { length: 1.2, width: 0.6 },
@@ -50,6 +51,7 @@ const useConfiguratorStore = create(
           },
         }),
 
+      setMaterials: (materials) => set({ materials }),
       setMaterial: (material) => set({ selectedMaterial: material }),
 
       // Clamp dimension to [DIM_MIN, DIM_MAX] before storing —
@@ -68,6 +70,7 @@ const useConfiguratorStore = create(
           appMode:           'showroom',
           selectedStructure: null,
           selectedMaterial:  null,
+          materials:         [],
           dimensions:        { length: 1.2, width: 0.6 },
         }),
     }),

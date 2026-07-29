@@ -100,52 +100,13 @@ function SwatchSkeleton() {
 }
 
 export default function MaterialPanel() {
-  const [materials,   setMaterials]   = useState([]);
-  const [loading,     setLoading]     = useState(true);
-  const [fetchError,  setFetchError]  = useState('');
-
+  const materials        = useConfiguratorStore((s) => s.materials);
   const selectedMaterial = useConfiguratorStore((s) => s.selectedMaterial);
   const setMaterial      = useConfiguratorStore((s) => s.setMaterial);
 
   // Rate-limit state — prevents click spam on texture CDN (AGENTS.md §A)
   const [locked, setLocked] = useState(false);
   const lockTimer = useRef(null);
-
-  useEffect(() => {
-    const fetchMaterials = async () => {
-      setLoading(true);
-      setFetchError('');
-
-      // Lean query: only the columns this component actually needs (AGENTS.md §A)
-      const { data, error } = await supabase
-        .from('materials')
-        .select('id, name, price_per_sqm, color_url, normal_url, roughness_url')
-        .limit(16);
-
-      if (error) {
-        console.error('Materials fetch failed:', error.message);
-        setFetchError('Unable to load materials. Please try again.');
-      } else {
-        setMaterials(data ?? []);
-        // Auto-select the first material so the canvas isn't empty
-        if (data?.length > 0 && !selectedMaterial) {
-          setMaterial(data[0]);
-        }
-        // Background-preload all color textures immediately after the list
-        // arrives so they are already in the THREE.js cache by the time the
-        // user clicks a swatch. First-load switches become near-instant.
-        data?.forEach((mat) => {
-          if (mat.color_url)     useTexture.preload(mat.color_url);
-          if (mat.normal_url)    useTexture.preload(mat.normal_url);
-          if (mat.roughness_url) useTexture.preload(mat.roughness_url);
-        });
-      }
-      setLoading(false);
-    };
-
-    fetchMaterials();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const handleSelect = (material) => {
     if (locked) return; // Rate-limit guard (AGENTS.md §A)
@@ -179,26 +140,16 @@ export default function MaterialPanel() {
 
       {/* Scrollable Swatch Grid */}
       <div className="flex-1 overflow-y-auto p-3">
-        {fetchError && (
-          <p className="text-xs text-center py-6" style={{ color: '#EF4444' }}>
-            {fetchError}
-          </p>
-        )}
-
         <div className="grid grid-cols-2 gap-2">
-          {loading
-            ? Array.from({ length: 8 }).map((_, i) => (
-                <SwatchSkeleton key={`skeleton-${i}`} />
-              ))
-            : materials.map((mat) => (
-                <MaterialSwatch
-                  key={mat.id}
-                  material={mat}
-                  isSelected={selectedMaterial?.id === mat.id}
-                  onSelect={handleSelect}
-                  isLocked={locked}
-                />
-              ))}
+          {materials.map((mat) => (
+            <MaterialSwatch
+              key={mat.id}
+              material={mat}
+              isSelected={selectedMaterial?.id === mat.id}
+              onSelect={handleSelect}
+              isLocked={locked}
+            />
+          ))}
         </div>
       </div>
     </div>

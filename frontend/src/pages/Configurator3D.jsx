@@ -86,6 +86,8 @@ export default function Configurator3D() {
   const appMode      = useConfiguratorStore((s) => s.appMode);
   const setStructure = useConfiguratorStore((s) => s.setStructure);
   const setAppMode   = useConfiguratorStore((s) => s.setAppMode);
+  const setMaterials = useConfiguratorStore((s) => s.setMaterials);
+  const setMaterial  = useConfiguratorStore((s) => s.setMaterial);
 
   // All available structures fetched from Supabase
   const [structures, setStructures] = useState([]);
@@ -137,19 +139,18 @@ export default function Configurator3D() {
         if (fallbacks[0]?.model_url) ShowroomCanvas.preload(fallbacks[0].model_url);
       }
 
-      /* ── Eagerly preload ALL PBR textures while the user browses ────────
-         This is the primary fix for the 11-second first-click delay.
-         The downloads start NOW (showroom load time), so by the time the
-         user clicks a model, the texture files are already in browser
-         cache / THREE.js cache.  MaterialPanel's own preload call becomes
-         a fast no-op against the already-populated cache.
+      /* ── Eagerly preload ONLY the default PBR material ────────
+         Preloading all 48 textures at once jams the browser network queue
+         and delays the 3D models from loading. We only preload the first
+         material so the configurator opens instantly on click. The rest
+         will lazy-load when the user browses the MaterialPanel.
       ─────────────────────────────────────────────────────────────────── */
       if (!materialsResult.error && materialsResult.data?.length) {
-        preloadMaterialTextures(materialsResult.data);
+        setMaterials(materialsResult.data);
+        setMaterial(materialsResult.data[0]); // Auto-select first material
+        preloadMaterialTextures([materialsResult.data[0]]);
       }
-      // A materials fetch failure is non-fatal here — we log it silently and
-      // let MaterialPanel handle its own retry UI.  The textures just won't
-      // be pre-cached, falling back to the original on-demand load.
+      // A materials fetch failure is non-fatal here — we log it silently.
       else if (materialsResult.error) {
         console.warn('[Configurator3D] Material preload fetch failed (non-fatal):', materialsResult.error.message);
       }
@@ -158,7 +159,7 @@ export default function Configurator3D() {
     };
 
     boot();
-  }, []);
+  }, [setMaterial, setMaterials]);
 
   /**
    * handleStructureSelect — called when the user clicks a model in the showroom.
