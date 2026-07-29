@@ -109,7 +109,7 @@ export default function Configurator3D() {
           .order('name'),
         supabase
           .from('materials')
-          .select('id, color_url, normal_url, roughness_url')
+          .select('id, name, price_per_sqm, color_url, normal_url, roughness_url')
           .limit(32), // upper-bound guard; matches MaterialPanel's limit
       ]);
 
