@@ -139,26 +139,21 @@ export default function Configurator3D() {
         if (fallbacks[0]?.model_url) ShowroomCanvas.preload(fallbacks[0].model_url);
       }
 
-      /* ── Smart Staggered Preloading (Post-Compression) ──────────────
-         Because the textures are now highly compressed .webp files, we CAN
-         preload all of them without crashing the network.
-         However, to ensure the 3D models load absolutely first, we preload
-         the first material instantly, and delay the rest by 2 seconds.
-         This gives a buttery smooth 0ms texture swap experience!
+      /* ── Strict Minimal Preloading ────────────────────────────────────
+         To guarantee the absolute fastest showroom load times (no network jams),
+         we ONLY preload the default material here. 
+         
+         The remaining materials will gracefully lazy-load on-demand when the 
+         user opens the Material Panel. Because they are now tiny .webp files,
+         the on-demand loading is extremely fast and won't crash the browser's 
+         download queue.
       ─────────────────────────────────────────────────────────────────── */
       if (!materialsResult.error && materialsResult.data?.length) {
         setMaterials(materialsResult.data);
         setMaterial(materialsResult.data[0]); // Auto-select first material
         
-        // 1. Instantly preload the default material
+        // ONLY preload the default material
         preloadMaterialTextures([materialsResult.data[0]]);
-        
-        // 2. Quietly preload the rest in the background after 2 seconds
-        //    (so they don't compete with the .glb model downloads)
-        setTimeout(() => {
-          const remainingMaterials = materialsResult.data.slice(1);
-          preloadMaterialTextures(remainingMaterials);
-        }, 2000);
       }
       // A materials fetch failure is non-fatal here — we log it silently.
       else if (materialsResult.error) {
