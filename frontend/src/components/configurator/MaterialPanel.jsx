@@ -46,9 +46,9 @@ function MaterialSwatch({ material, isSelected, onSelect, isLocked }) {
         )}
       </div>
 
-      {/* Name + price label */}
+      {/* Name label */}
       <div
-        className="px-2 py-1.5 text-center"
+        className="px-2 py-2 text-center"
         style={{
           backgroundColor: isSelected
             ? 'rgba(197,160,89,0.18)'
@@ -60,9 +60,6 @@ function MaterialSwatch({ material, isSelected, onSelect, isLocked }) {
           style={{ color: isSelected ? '#C5A059' : '#F9F9FB' }}
         >
           {material.name}
-        </p>
-        <p className="text-xs mt-0.5" style={{ color: '#6B7280' }}>
-          ₱{material.price_per_sqm?.toLocaleString()}/sqm
         </p>
       </div>
 
