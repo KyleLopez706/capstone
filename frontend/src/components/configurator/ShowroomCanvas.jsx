@@ -6,6 +6,7 @@ import {
 } from '@react-three/drei';
 import { Suspense, useState, useEffect, useRef, useCallback, memo } from 'react';
 import * as THREE from 'three';
+import useConfiguratorStore from '../../store/configuratorStore';
 
 /* ─────────────────────────────────────────
    SHOWROOM CANVAS — Carousel Edition
@@ -211,8 +212,15 @@ function CanvasLoader() {
    SHOWROOM CANVAS  (exported component)
 ───────────────────────────────────────── */
 export default function ShowroomCanvas({ structures, onStructureSelect }) {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isDragging,   setIsDragging]   = useState(false);
+  const selectedStructure = useConfiguratorStore((s) => s.selectedStructure);
+
+  const [currentIndex, setCurrentIndex] = useState(() => {
+    if (!selectedStructure || !structures?.length) return 0;
+    const idx = structures.findIndex(s => s.id === selectedStructure.id);
+    return idx !== -1 ? idx : 0;
+  });
+  
+  const [isDragging, setIsDragging] = useState(false);
 
   /* Clamp index whenever the structures list changes */
   useEffect(() => {
