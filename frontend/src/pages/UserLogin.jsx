@@ -9,6 +9,11 @@ import {
   SubmitButton,
   BackButton,
 } from "../components/FormHelpers";
+import DeviceVerificationModal from "../components/DeviceVerificationModal";
+import {
+  runSecurityChecks,
+  refreshDeviceSession,
+} from "../utils/securityChecks";
 
 /* ─────────────────────────────────────────
    USER LOGIN PAGE
@@ -43,6 +48,11 @@ export default function UserLogin() {
      true            — persists across browser restarts (localStorage)      */
   const [rememberMe, setRememberMe] = useState(false);
 
+  /* ── Security 2FA state ──────────────────────────────────────────────────
+     pendingVerification: holds { user, fingerprint, deviceLabel, reason }
+     while DeviceVerificationModal is showing.                              */
+  const [pendingVerification, setPendingVerification] = useState(null);
+
   /* ── Forgot Password state machine ──
      forgotStep: null | "request" | "verify" */
   const [forgotStep, setForgotStep] = useState(null);
@@ -52,6 +62,40 @@ export default function UserLogin() {
   const [forgotLoading, setForgotLoading] = useState(false);
 
   const navigate = useNavigate();
+
+  /* ── checkAndRoute ─────────────────────────────────────────────────────
+     Central post-sign-in dispatcher. Runs all security checks BEFORE
+     calling routeByRole. If a security check fails (new device, unusual
+     timezone), shows the DeviceVerificationModal instead of navigating.
+
+     Called by:
+       - handleUserSignIn (email/password sign-in)
+       - onAuthStateChange SIGNED_IN (Google OAuth redirect)
+  ─────────────────────────────────────────────────────────────────────── */
+  const checkAndRoute = async (user) => {
+    try {
+      const security = await runSecurityChecks(user);
+
+      if (security.needsVerification) {
+        // Block navigation and show the OTP verification modal
+        setPendingVerification({
+          user,
+          fingerprint:  security.fingerprint,
+          deviceLabel:  security.deviceLabel,
+          reason:       security.reason,
+        });
+        return; // Do NOT navigate until OTP is verified
+      }
+
+      // Known device — refresh last_seen silently and continue
+      await refreshDeviceSession(user.id, security.fingerprint);
+      await routeByRole(user.id);
+    } catch (err) {
+      // Security check threw unexpectedly — fail open, route normally
+      console.error('[UserLogin] checkAndRoute error — failing open:', err);
+      await routeByRole(user.id);
+    }
+  };
 
   /* ── Role-based routing helper ──
      Queries only the 'role' column to keep the query lean (AGENTS.md §A).
@@ -104,7 +148,8 @@ export default function UserLogin() {
     // if getSession fires before the URL hash is parsed)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session && session.user?.aud !== "recovery") {
-        routeByRole(session.user.id);
+        // Run security checks before routing (covers Google OAuth redirects)
+        checkAndRoute(session.user);
       }
     });
 
@@ -125,7 +170,7 @@ export default function UserLogin() {
 
       if (error) throw new Error(error.message);
 
-      // Write persistence flags BEFORE navigating so the boot check in
+      // Write persistence flags BEFORE security check so the boot check in
       // App.jsx doesn't race and sign the user out immediately.
       sessionStorage.setItem("sixsigma_active", "1");
       if (rememberMe) {
@@ -134,7 +179,8 @@ export default function UserLogin() {
         localStorage.removeItem("sixsigma_remember");
       }
 
-      await routeByRole(data.user.id);
+      // Run security checks before routing
+      await checkAndRoute(data.user);
     } catch (err) {
       setUserSignInError(err.message);
     } finally {
@@ -265,10 +311,31 @@ export default function UserLogin() {
      RENDER
   ───────────────────────────────────────── */
   return (
-    <div
-      className="min-h-screen w-full flex items-center justify-center px-4 sm:px-6 py-6 md:py-12"
-      style={{ backgroundColor: "#F9F9FB" }}
-    >
+    <>
+      {/* ── Device Verification Modal (2FA) ── */}
+      {pendingVerification && (
+        <DeviceVerificationModal
+          user={pendingVerification.user}
+          fingerprint={pendingVerification.fingerprint}
+          deviceLabel={pendingVerification.deviceLabel}
+          reason={pendingVerification.reason}
+          onVerified={async () => {
+            // OTP verified + device saved — proceed to the app
+            setPendingVerification(null);
+            await routeByRole(pendingVerification.user.id);
+          }}
+          onCancel={async () => {
+            // User cancelled — sign them out cleanly
+            setPendingVerification(null);
+            await supabase.auth.signOut();
+          }}
+        />
+      )}
+
+      <div
+        className="min-h-screen w-full flex items-center justify-center px-4 sm:px-6 py-6 md:py-12"
+        style={{ backgroundColor: "#F9F9FB" }}
+      >
       <div
         className="w-full max-w-md lg:max-w-lg rounded-2xl shadow-xl p-6 sm:p-8 md:p-10 relative"
         style={{ backgroundColor: "#ffffff", border: "1px solid #E2E8F0" }}
@@ -720,5 +787,6 @@ export default function UserLogin() {
         </p>
       </div>
     </div>
+    </>
   );
 }
