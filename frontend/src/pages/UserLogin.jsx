@@ -226,23 +226,39 @@ export default function UserLogin() {
   /* ─── Forgot Password: send reset email via Supabase ─── */
   const handleForgotRequest = async (e) => {
     e.preventDefault();
-    setForgotError("");
-    setForgotSuccess("");
+    setForgotError('');
+    setForgotSuccess('');
 
     if (!resetEmail) {
-      setForgotError("Please enter your email address.");
+      setForgotError('Please enter your email address.');
       return;
     }
 
     setForgotLoading(true);
     try {
+      // ── Pre-check: verify the email is actually registered ──────────────
+      // Supabase's resetPasswordForEmail() intentionally sends a reset email
+      // even for non-existent addresses (anti-enumeration). We use a secure
+      // SECURITY DEFINER RPC function to check existence BEFORE calling it,
+      // so unregistered emails never receive a reset link.
+      const { data: isRegistered, error: checkError } = await supabase
+        .rpc('email_is_registered', { lookup_email: resetEmail });
+
+      if (checkError) throw new Error(checkError.message);
+
+      if (!isRegistered) {
+        setForgotError('No account found with this email address. Please sign up first.');
+        return;
+      }
+
+      // Email is confirmed registered — safe to send the reset link
       const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
 
       if (error) throw new Error(error.message);
 
-      setForgotSuccess("Password reset email sent! Check your inbox.");
+      setForgotSuccess('Password reset email sent! Check your inbox.');
     } catch (err) {
       setForgotError(err.message);
     } finally {
