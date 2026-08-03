@@ -65,7 +65,15 @@ function StatCard({ label, value, accent, isLoading }) {
   );
 }
 
-/* ── Detail modal ── */
+/* ── Modal Row component ── */
+const Row = ({ label, value }) => (
+  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #F3F4F6' }}>
+    <span style={{ fontSize: '13px', color: '#6B7280' }}>{label}</span>
+    <span style={{ fontSize: '13px', fontWeight: 600, color: '#232B32', textAlign: 'right', maxWidth: '60%' }}>{value ?? '\u2014'}</span>
+  </div>
+);
+
+/* ── Detail Modal ── */
 function DetailModal({ request, onClose, onStatusChange }) {
   const [status, setStatus] = useState(request.status);
   const [saving, setSaving] = useState(false);
@@ -95,12 +103,6 @@ function DetailModal({ request, onClose, onStatusChange }) {
     }
   };
 
-  const Row = ({ label, value }) => (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #F3F4F6' }}>
-      <span style={{ fontSize: '13px', color: '#6B7280' }}>{label}</span>
-      <span style={{ fontSize: '13px', fontWeight: 600, color: '#232B32', textAlign: 'right', maxWidth: '60%' }}>{value ?? '\u2014'}</span>
-    </div>
-  );
 
   return (
     <div
