@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "../supabaseClient";
+import { useNavigate } from "react-router-dom";
 
 /* ─────────────────────────────────────────
    DASHBOARD PAGE — Admin Only
@@ -68,10 +69,16 @@ function StatCard({ label, value, accent, isLoading }) {
 function DetailModal({ request, onClose, onStatusChange }) {
   const [status, setStatus] = useState(request.status);
   const [saving, setSaving] = useState(false);
+  const navigate = useNavigate();
 
-  const fmt = (n) => `\u20b1${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 0 })}`;
+  const fmt = (n) => `₱${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 0 })}`;
 
   const handleStatusSave = async (newStatus) => {
+    if (newStatus === 'approved') {
+      navigate(`/admin/quotation/${request.id}`);
+      return;
+    }
+
     setSaving(true);
     try {
       const { error } = await supabase
@@ -132,20 +139,36 @@ function DetailModal({ request, onClose, onStatusChange }) {
           {/* Status control */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
             <StatusBadge status={status} />
-            <select
-              value={status}
-              disabled={saving}
-              onChange={(e) => handleStatusSave(e.target.value)}
-              style={{
-                padding: '7px 12px', borderRadius: '8px', border: '1.5px solid #E2E8F0',
-                fontSize: '12px', fontWeight: 600, color: '#232B32', backgroundColor: '#F9F9FB',
-                cursor: saving ? 'not-allowed' : 'pointer', outline: 'none',
-              }}
-            >
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="in-review">In Review</option>
-            </select>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {status === 'approved' && (
+                <button
+                  onClick={() => navigate(`/admin/quotation/${request.id}`)}
+                  style={{
+                    padding: '7px 12px', borderRadius: '8px', border: 'none',
+                    fontSize: '12px', fontWeight: 600, color: '#FFF', backgroundColor: '#C5A059',
+                    cursor: 'pointer', outline: 'none', boxShadow: '0 4px 12px rgba(197,160,89,0.3)'
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#B38D4A'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#C5A059'; }}
+                >
+                  Edit & Resend Quote
+                </button>
+              )}
+              <select
+                value={status}
+                disabled={saving}
+                onChange={(e) => handleStatusSave(e.target.value)}
+                style={{
+                  padding: '7px 12px', borderRadius: '8px', border: '1.5px solid #E2E8F0',
+                  fontSize: '12px', fontWeight: 600, color: '#232B32', backgroundColor: '#F9F9FB',
+                  cursor: saving ? 'not-allowed' : 'pointer', outline: 'none',
+                }}
+              >
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="in-review">In Review</option>
+              </select>
+            </div>
           </div>
 
           {/* Customer */}
@@ -160,9 +183,9 @@ function DetailModal({ request, onClose, onStatusChange }) {
           <p style={{ fontSize: '11px', fontWeight: 700, color: '#6B7280', letterSpacing: '0.06em', textTransform: 'uppercase', marginTop: '20px', marginBottom: '8px' }}>Configuration</p>
           <Row label="Product Type" value={request.product_type} />
           <Row label="Design"       value={request.design} />
-          <Row label="Dimensions"   value={`${request.length}m \u00d7 ${request.width}m`} />
-          <Row label="Area"         value={`${Number(request.area).toFixed(2)} m\u00b2`} />
-          <Row label="Rate / m\u00b2"    value={fmt(request.rate_per_sqm)} />
+          <Row label="Dimensions"   value={`${request.length}m × ${request.width}m`} />
+          <Row label="Area"         value={`${Number(request.area).toFixed(2)} sqm`} />
+          <Row label="Rate per sqm"    value={fmt(request.rate_per_sqm)} />
 
           {/* Costs */}
           <p style={{ fontSize: '11px', fontWeight: 700, color: '#6B7280', letterSpacing: '0.06em', textTransform: 'uppercase', marginTop: '20px', marginBottom: '8px' }}>Cost Breakdown</p>
@@ -186,6 +209,8 @@ function DetailModal({ request, onClose, onStatusChange }) {
    MAIN DASHBOARD COMPONENT
 ══════════════════════════════════════════════ */
 export default function Dashboard() {
+  const navigate = useNavigate();
+
   /* ── Quotation data ── */
   const [requests, setRequests]         = useState([]);
   const [dataLoading, setDataLoading]   = useState(true);
@@ -230,6 +255,11 @@ export default function Dashboard() {
 
   /* ── Status update directly from table dropdown ── */
   const handleInlineStatusChange = async (id, newStatus) => {
+    if (newStatus === 'approved') {
+      navigate(`/admin/quotation/${id}`);
+      return;
+    }
+
     // Optimistic update
     setRequests((prev) => prev.map((r) => r.id === id ? { ...r, status: newStatus } : r));
     try {
@@ -272,7 +302,7 @@ export default function Dashboard() {
     });
   }, [requests, searchQuery, statusFilter]);
 
-  const fmt = (n) => `\u20b1${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 0 })}`;
+  const fmt = (n) => `₱${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 0 })}`;
 
   return (
     <div className="p-4 md:p-8" style={{ backgroundColor: '#F9F9FB', minHeight: '100vh' }}>
@@ -370,7 +400,7 @@ export default function Dashboard() {
             <table className="w-full text-sm" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
-                  {['Request ID', 'Customer', 'Product', 'Design', 'Area (m\u00b2)', 'Price', 'Status', 'Date', 'Actions'].map((col) => (
+                  {['Request ID', 'Customer', 'Product', 'Design', 'Area (sqm)', 'Price', 'Status', 'Date', 'Actions'].map((col) => (
                     <th
                       key={col}
                       className="text-left text-xs font-semibold tracking-widest uppercase px-5 py-3"
