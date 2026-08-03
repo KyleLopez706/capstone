@@ -227,11 +227,11 @@ export default function UserLogin() {
   /* ─── Forgot Password: send reset email via Supabase ─── */
   const handleForgotRequest = async (e) => {
     e.preventDefault();
-    setForgotError("");
-    setForgotSuccess("");
+    setForgotError('');
+    setForgotSuccess('');
 
     if (!resetEmail) {
-      setForgotError("Please enter your email address.");
+      setForgotError('Please enter your email address.');
       return;
     }
 
@@ -260,7 +260,7 @@ export default function UserLogin() {
 
       if (error) throw new Error(error.message);
 
-      setForgotSuccess("Password reset email sent! Check your inbox.");
+      setForgotSuccess('Password reset email sent! Check your inbox.');
     } catch (err) {
       setForgotError(friendlyAuthError(err.message));
     } finally {
