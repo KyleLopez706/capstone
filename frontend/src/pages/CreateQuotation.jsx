@@ -3,6 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import emailjs from '@emailjs/browser';
 import { jsPDF } from "jspdf";
+import { useToast, ToastNotification } from "../utils/toast";
+
 
 /* ── Compute default valid-until date (30 days from now) ── */
 function getDefaultValidUntil() {
@@ -35,6 +37,8 @@ export default function CreateQuotation() {
   const [request, setRequest] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const { toast, showToast, dismissToast } = useToast();
+
 
   // Editable Cost Fields
   const [costs, setCosts] = useState({
@@ -318,12 +322,12 @@ export default function CreateQuotation() {
         
       if (error) throw error;
 
-      alert("Quotation successfully sent and approved!");
-      navigate('/dashboard');
+      showToast('Quotation successfully sent and approved! Redirecting...', 'success');
+      setTimeout(() => navigate('/dashboard'), 2000);
 
     } catch (err) {
       console.error("Failed to send quotation:", err);
-      alert("Failed to send quotation. Please check the console.");
+      showToast(err.message || 'Failed to send quotation. Please try again.', 'error');
     } finally {
       setSaving(false);
     }
@@ -341,6 +345,9 @@ export default function CreateQuotation() {
 
   return (
     <div className="min-h-screen py-10 px-4 md:px-8 bg-[#F9F9FB]">
+      {/* Toast Notification */}
+      <ToastNotification toast={toast} onDismiss={dismissToast} />
+
       <div className="max-w-4xl mx-auto space-y-6">
         
         {/* Header */}

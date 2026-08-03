@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
+import { useToast, ToastNotification } from "../utils/toast";
 
 /* ─────────────────────────────────────────
    DASHBOARD PAGE — Admin Only
@@ -216,7 +217,6 @@ export default function Dashboard() {
   /* ── Quotation data ── */
   const [requests, setRequests]         = useState([]);
   const [dataLoading, setDataLoading]   = useState(true);
-  const [dataError, setDataError]       = useState('');
 
   /* ── Search & filter ── */
   const [searchQuery, setSearchQuery]   = useState('');
@@ -225,12 +225,13 @@ export default function Dashboard() {
   /* ── Detail modal ── */
   const [viewRequest, setViewRequest]   = useState(null);
 
+  const { toast, showToast, dismissToast } = useToast();
+
   /* ── Fetch quotation requests ── */
   useEffect(() => {
 
     const fetchRequests = async () => {
       setDataLoading(true);
-      setDataError('');
 
       const { data, error } = await supabase
         .from('quotation_requests')
@@ -239,7 +240,7 @@ export default function Dashboard() {
 
       if (error) {
         console.error('[Dashboard] Fetch error:', error.message);
-        setDataError('Unable to load quotation requests. Please try again.');
+        showToast('Unable to load quotation requests. Please try again.', 'error');
       } else {
         setRequests(data ?? []);
       }
@@ -308,6 +309,7 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 md:p-8" style={{ backgroundColor: '#F9F9FB', minHeight: '100vh' }}>
+      <ToastNotification toast={toast} onDismiss={dismissToast} />
       <div className="max-w-7xl mx-auto space-y-6">
 
         {/* ── Stat Cards ── */}
@@ -390,12 +392,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Error state */}
-          {dataError && (
-            <div className="px-6 py-4" style={{ backgroundColor: '#FEF2F2', borderBottom: '1px solid #FECACA' }}>
-              <p style={{ fontSize: '13px', color: '#DC2626' }}>{dataError}</p>
-            </div>
-          )}
 
           {/* Table */}
           <div className="overflow-x-auto w-full">

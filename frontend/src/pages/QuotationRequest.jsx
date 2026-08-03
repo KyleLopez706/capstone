@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
 import { supabase } from '../supabaseClient';
 import useConfiguratorStore from '../store/configuratorStore';
+import { useToast, ToastNotification } from '../utils/toast';
 
 /* ─────────────────────────────────────────────────────────────
    QUOTATION REQUEST PAGE
@@ -137,7 +138,7 @@ export default function QuotationRequest() {
   const [errors, setErrors]         = useState({});
   const [isLoading, setIsLoading]   = useState(false);
   const [submitted, setSubmitted]   = useState(false);
-  const [submitError, setSubmitError] = useState('');
+  const { toast, showToast, dismissToast } = useToast();
 
   /* ── Guard: verify session on mount; redirect to /login if unauthenticated ── */
   const [verifying, setVerifying] = useState(true);
@@ -345,7 +346,6 @@ export default function QuotationRequest() {
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
 
     setIsLoading(true);
-    setSubmitError('');
 
     try {
       const { error } = await supabase.from('quotation_requests').insert([{
@@ -371,7 +371,7 @@ export default function QuotationRequest() {
       setSubmitted(true);
     } catch (err) {
       console.error('[QuotationRequest] Submit error:', err.message);
-      setSubmitError('Failed to send your request. Please try again or contact us directly.');
+      showToast('Failed to send your request. Please try again or contact us directly.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -402,6 +402,7 @@ export default function QuotationRequest() {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#F9F9FB' }}>
+      <ToastNotification toast={toast} onDismiss={dismissToast} />
 
       {/* ── Page Header ── */}
       <div
@@ -590,16 +591,6 @@ export default function QuotationRequest() {
                   placeholder="Any special requirements or questions\u2026"  rows={2}
                 />
 
-                {submitError && (
-                  <div
-                    style={{
-                      marginBottom: '14px', padding: '12px', borderRadius: '8px',
-                      backgroundColor: '#FEF2F2', border: '1px solid #FECACA',
-                    }}
-                  >
-                    <p style={{ fontSize: '13px', color: '#DC2626' }}>{submitError}</p>
-                  </div>
-                )}
 
                 <p style={{ fontSize: '12px', color: '#9CA3AF', marginBottom: '14px' }}>
                   Reference ID: <strong style={{ color: '#232B32', fontFamily: 'monospace' }}>{requestId}</strong>

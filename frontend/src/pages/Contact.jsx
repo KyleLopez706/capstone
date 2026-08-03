@@ -1,26 +1,26 @@
 import { useState } from "react";
 import Navbar from "../components/Navbar";
+import { useToast, ToastNotification } from "../utils/toast";
 
 export default function Contact() {
   const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const { toast, showToast, dismissToast } = useToast();
 
   const handleChange = (e) =>
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    setError("");
 
     // Basic validation
     if (!form.name.trim() || !form.email.trim() || !form.message.trim()) {
-      setError("Please fill in all required fields.");
+      showToast("Please fill in all required fields.", "error");
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      setError("Please enter a valid email address.");
+      showToast("Please enter a valid email address.", "error");
       return;
     }
 
@@ -34,6 +34,7 @@ export default function Contact() {
 
   return (
     <div className="min-h-screen w-full" style={{ backgroundColor: "#F9F9FB" }}>
+      <ToastNotification toast={toast} onDismiss={dismissToast} />
       <Navbar />
 
       {/* Spacer for fixed navbar */}
@@ -194,19 +195,6 @@ export default function Contact() {
                       Send Us a Message
                     </h3>
 
-                    {/* Error */}
-                    {error && (
-                      <p
-                        className="text-sm px-4 py-3 rounded-lg"
-                        style={{
-                          backgroundColor: "#FEF2F2",
-                          color: "#DC2626",
-                          border: "1px solid #FECACA",
-                        }}
-                      >
-                        {error}
-                      </p>
-                    )}
 
                     {/* Name + Email row */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">

@@ -6,10 +6,10 @@ import { inputBase, onFocus, onBlur } from "../components/formConstants";
 import {
   InputIcon,
   EyeToggle,
-  Alert,
   SubmitButton,
   BackButton,
 } from "../components/FormHelpers";
+import { useToast, ToastNotification } from "../utils/toast";
 
 /* ─────────────────────────────────────────
    USER LOGIN PAGE
@@ -28,15 +28,14 @@ export default function UserLogin() {
   const [userEmail, setUserEmail] = useState("");
   const [userPassword, setUserPassword] = useState("");
   const [userShowPw, setUserShowPw] = useState(false);
-  const [userSignInError, setUserSignInError] = useState("");
+
   const [userSignInLoading, setUserSignInLoading] = useState(false);
 
   /* ── Sign-Up state ── */
   const [signUpEmail, setSignUpEmail] = useState("");
   const [signUpPassword, setSignUpPassword] = useState("");
   const [signUpShowPw, setSignUpShowPw] = useState(false);
-  const [signUpError, setSignUpError] = useState("");
-  const [signUpSuccess, setSignUpSuccess] = useState("");
+
   const [signUpLoading, setSignUpLoading] = useState(false);
 
   /* ── "Stay signed in" / Remember-me preference ──────────────────────────
@@ -48,11 +47,11 @@ export default function UserLogin() {
      forgotStep: null | "request" | "verify" */
   const [forgotStep, setForgotStep] = useState(null);
   const [resetEmail, setResetEmail] = useState("");
-  const [forgotError, setForgotError] = useState("");
-  const [forgotSuccess, setForgotSuccess] = useState("");
+
   const [forgotLoading, setForgotLoading] = useState(false);
 
   const navigate = useNavigate();
+  const { toast, showToast, dismissToast } = useToast();
 
   /* ── Role-based routing helper ──
      Queries only the 'role' column to keep the query lean (AGENTS.md §A).
@@ -116,7 +115,7 @@ export default function UserLogin() {
   /* ─── User Sign-In via Supabase GoTrue ─── */
   const handleUserSignIn = async (e) => {
     e.preventDefault();
-    setUserSignInError("");
+
     setUserSignInLoading(true); // Disable button immediately (rate-limit protection)
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -137,7 +136,7 @@ export default function UserLogin() {
 
       await routeByRole(data.user.id);
     } catch (err) {
-      setUserSignInError(friendlyAuthError(err.message));
+      showToast(friendlyAuthError(err.message), 'error');
     } finally {
       setUserSignInLoading(false);
     }
@@ -146,16 +145,15 @@ export default function UserLogin() {
   /* ─── User Sign-Up via Supabase GoTrue ─── */
   const handleUserSignUp = async (e) => {
     e.preventDefault();
-    setSignUpError("");
-    setSignUpSuccess("");
+
 
     // Basic client-side validation before hitting the API
     if (!signUpEmail || !signUpPassword) {
-      setSignUpError("Email and password are required.");
+      showToast('Email and password are required.', 'error');
       return;
     }
     if (signUpPassword.length < 6) {
-      setSignUpError("Password must be at least 6 characters.");
+      showToast('Password must be at least 6 characters.', 'error');
       return;
     }
 
@@ -188,16 +186,15 @@ export default function UserLogin() {
         );
       }
 
-      setSignUpSuccess("Account created! You can now sign in.");
+      showToast('Account created! You can now sign in.', 'success');
       setSignUpEmail("");
       setSignUpPassword("");
       // Switch to Sign In tab after a short pause
       setTimeout(() => {
-        setSignUpSuccess("");
         switchUserView("signin");
       }, 2500);
     } catch (err) {
-      setSignUpError(friendlyAuthError(err.message));
+      showToast(friendlyAuthError(err.message), 'error');
     } finally {
       setSignUpLoading(false);
     }
@@ -219,7 +216,7 @@ export default function UserLogin() {
     });
     if (error) {
       localStorage.removeItem("sixsigma_oauth_remember"); // Clean up if redirect fails
-      setUserSignInError("Google sign-in failed. Please try again.");
+      showToast('Google sign-in failed. Please try again.', 'error');
       console.error("Google OAuth error:", error.message);
     }
   };
@@ -227,11 +224,10 @@ export default function UserLogin() {
   /* ─── Forgot Password: send reset email via Supabase ─── */
   const handleForgotRequest = async (e) => {
     e.preventDefault();
-    setForgotError('');
-    setForgotSuccess('');
+
 
     if (!resetEmail) {
-      setForgotError('Please enter your email address.');
+      showToast('Please enter your email address.', 'error');
       return;
     }
 
@@ -249,7 +245,7 @@ export default function UserLogin() {
       if (checkError) throw new Error(checkError.message);
 
       if (!emailExists) {
-        setForgotError("No account found with this email address. Please sign up first.");
+        showToast('No account found with this email address. Please sign up first.', 'error');
         return;
       }
 
@@ -260,9 +256,9 @@ export default function UserLogin() {
 
       if (error) throw new Error(error.message);
 
-      setForgotSuccess('Password reset email sent! Check your inbox.');
+      showToast('Password reset email sent! Check your inbox.', 'success');
     } catch (err) {
-      setForgotError(friendlyAuthError(err.message));
+      showToast(friendlyAuthError(err.message), 'error');
     } finally {
       setForgotLoading(false);
     }
@@ -272,12 +268,7 @@ export default function UserLogin() {
   /* ─── Clear stale errors when switching tabs ─── */
   const switchUserView = (v) => {
     setUserView(v);
-    setUserSignInError("");
-    setSignUpError("");
-    setSignUpSuccess("");
     setForgotStep(null);
-    setForgotError("");
-    setForgotSuccess("");
   };
 
   /* ─────────────────────────────────────────
@@ -288,6 +279,7 @@ export default function UserLogin() {
       className="min-h-screen w-full flex items-center justify-center px-4 sm:px-6 py-6 md:py-12"
       style={{ backgroundColor: "#F9F9FB" }}
     >
+      <ToastNotification toast={toast} onDismiss={dismissToast} />
       <div
         className="w-full max-w-md lg:max-w-lg rounded-2xl shadow-xl p-6 sm:p-8 md:p-10 relative"
         style={{ backgroundColor: "#ffffff", border: "1px solid #E2E8F0" }}
@@ -368,9 +360,6 @@ export default function UserLogin() {
         ════════════════════════════ */}
         {userView === "signin" && !forgotStep && (
           <div>
-            {userSignInError && (
-              <Alert type="error" message={userSignInError} />
-            )}
             <form onSubmit={handleUserSignIn} className="space-y-4">
               {/* Email */}
               <div>
@@ -413,8 +402,6 @@ export default function UserLogin() {
                     onClick={() => {
                       setForgotStep("request");
                       setResetEmail(userEmail);
-                      setForgotError("");
-                      setForgotSuccess("");
                     }}
                     className="text-xs cursor-pointer transition-colors duration-150"
                     style={{ color: "#9CA3AF" }}
@@ -582,8 +569,6 @@ export default function UserLogin() {
             <BackButton
               onClick={() => {
                 setForgotStep(null);
-                setForgotError("");
-                setForgotSuccess("");
               }}
               label="Back to Sign In"
             />
@@ -597,11 +582,10 @@ export default function UserLogin() {
               Enter your email and we&apos;ll send you a secure reset link.
             </p>
 
-            {forgotError && <Alert type="error" message={forgotError} />}
-            {forgotSuccess && <Alert type="success" message={forgotSuccess} />}
 
-            {/* Only show the form if no success message yet */}
-            {!forgotSuccess && (
+
+            {/* Only show the form after sending */}
+            {(
               <form onSubmit={handleForgotRequest} className="space-y-4">
                 <div>
                   <label
@@ -642,8 +626,6 @@ export default function UserLogin() {
         ════════════════════════════ */}
         {userView === "signup" && (
           <div>
-            {signUpError && <Alert type="error" message={signUpError} />}
-            {signUpSuccess && <Alert type="success" message={signUpSuccess} />}
             <form onSubmit={handleUserSignUp} className="space-y-4">
               {/* Email */}
               <div>

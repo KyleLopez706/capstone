@@ -6,9 +6,9 @@ import { inputBase, onFocus, onBlur } from "../components/formConstants";
 import {
   InputIcon,
   EyeToggle,
-  Alert,
   SubmitButton,
 } from "../components/FormHelpers";
+import { useToast, ToastNotification } from "../utils/toast";
 
 /* ─────────────────────────────────────────
    RESET PASSWORD PAGE
@@ -39,8 +39,10 @@ export default function ResetPassword() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPw,          setShowPw]          = useState(false);
   const [showConfirmPw,   setShowConfirmPw]   = useState(false);
-  const [error,           setError]           = useState("");
+
   const [loading,         setLoading]         = useState(false);
+
+  const { toast, showToast, dismissToast } = useToast();
 
   const navigate = useNavigate();
 
@@ -86,15 +88,14 @@ export default function ResetPassword() {
   /* ── Handle new-password submission ── */
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
 
     // Client-side validation
     if (newPassword.length < 6) {
-      setError("Password must be at least 6 characters.");
+      showToast("Password must be at least 6 characters.", "error");
       return;
     }
     if (newPassword !== confirmPassword) {
-      setError("Passwords do not match.");
+      showToast("Passwords do not match.", "error");
       return;
     }
 
@@ -114,7 +115,7 @@ export default function ResetPassword() {
       // Redirect to login after a short pause
       setTimeout(() => navigate("/login"), 2500);
     } catch (err) {
-      setError(friendlyAuthError(err.message));
+      showToast(friendlyAuthError(err.message), "error");
     } finally {
       setLoading(false);
     }
@@ -132,6 +133,7 @@ export default function ResetPassword() {
         className="w-full max-w-md lg:max-w-lg rounded-2xl shadow-xl p-6 sm:p-8 md:p-10 relative"
         style={{ backgroundColor: "#ffffff", border: "1px solid #E2E8F0" }}
       >
+        <ToastNotification toast={toast} onDismiss={dismissToast} />
         {/* ── Brand Header ── */}
         <div className="text-center mb-8">
           {/* Gold lock icon */}
@@ -223,7 +225,7 @@ export default function ResetPassword() {
               </p>
             </div>
 
-            {error && <Alert type="error" message={error} />}
+
 
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* New Password */}
