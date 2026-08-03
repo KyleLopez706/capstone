@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
+import { friendlyAuthError } from "../utils/authErrors";
 import { inputBase, onFocus, onBlur } from "../components/formConstants";
 import {
   InputIcon,
@@ -113,7 +114,7 @@ export default function ResetPassword() {
       // Redirect to login after a short pause
       setTimeout(() => navigate("/login"), 2500);
     } catch (err) {
-      setError(err.message);
+      setError(friendlyAuthError(err.message));
     } finally {
       setLoading(false);
     }

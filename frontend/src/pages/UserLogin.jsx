@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
+import { friendlyAuthError } from "../utils/authErrors";
 import { inputBase, onFocus, onBlur } from "../components/formConstants";
 import {
   InputIcon,
@@ -136,7 +137,7 @@ export default function UserLogin() {
 
       await routeByRole(data.user.id);
     } catch (err) {
-      setUserSignInError(err.message);
+      setUserSignInError(friendlyAuthError(err.message));
     } finally {
       setUserSignInLoading(false);
     }
@@ -175,7 +176,7 @@ export default function UserLogin() {
             "Too many sign-up attempts. Please wait a few minutes and try again.",
           );
         }
-        throw new Error(error.message);
+        throw new Error(friendlyAuthError(error.message));
       }
 
       /* Supabase intentionally returns a fake "success" when the email already
@@ -196,7 +197,7 @@ export default function UserLogin() {
         switchUserView("signin");
       }, 2500);
     } catch (err) {
-      setSignUpError(err.message);
+      setSignUpError(friendlyAuthError(err.message));
     } finally {
       setSignUpLoading(false);
     }
@@ -261,7 +262,7 @@ export default function UserLogin() {
 
       setForgotSuccess("Password reset email sent! Check your inbox.");
     } catch (err) {
-      setForgotError(err.message);
+      setForgotError(friendlyAuthError(err.message));
     } finally {
       setForgotLoading(false);
     }
