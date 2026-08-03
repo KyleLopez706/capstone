@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
+import { friendlyAuthError } from "../utils/authErrors";
 import { inputBase, onFocus, onBlur } from "../components/formConstants";
 import {
   InputIcon,
@@ -136,7 +137,7 @@ export default function UserLogin() {
 
       await routeByRole(data.user.id);
     } catch (err) {
-      setUserSignInError(err.message);
+      setUserSignInError(friendlyAuthError(err.message));
     } finally {
       setUserSignInLoading(false);
     }
@@ -175,7 +176,7 @@ export default function UserLogin() {
             "Too many sign-up attempts. Please wait a few minutes and try again.",
           );
         }
-        throw new Error(error.message);
+        throw new Error(friendlyAuthError(error.message));
       }
 
       /* Supabase intentionally returns a fake "success" when the email already
@@ -196,7 +197,7 @@ export default function UserLogin() {
         switchUserView("signin");
       }, 2500);
     } catch (err) {
-      setSignUpError(err.message);
+      setSignUpError(friendlyAuthError(err.message));
     } finally {
       setSignUpLoading(false);
     }
@@ -236,22 +237,23 @@ export default function UserLogin() {
 
     setForgotLoading(true);
     try {
-      // ── Pre-check: verify the email is actually registered ──────────────
-      // Supabase's resetPasswordForEmail() intentionally sends a reset email
-      // even for non-existent addresses (anti-enumeration). We use a secure
-      // SECURITY DEFINER RPC function to check existence BEFORE calling it,
-      // so unregistered emails never receive a reset link.
-      const { data: isRegistered, error: checkError } = await supabase
-        .rpc('email_is_registered', { lookup_email: resetEmail });
+      /* ── Step 1: Verify the email belongs to an existing account ──────────
+         We call a SECURITY DEFINER Postgres function that checks auth.users.
+         This prevents reset emails from being sent to addresses that have
+         never registered — the user gets a clear, friendly error instead.
+         The check happens server-side so auth.users is never exposed publicly.
+      ────────────────────────────────────────────────────────────────────── */
+      const { data: emailExists, error: checkError } = await supabase
+        .rpc('check_email_exists', { email_input: resetEmail });
 
       if (checkError) throw new Error(checkError.message);
 
-      if (!isRegistered) {
-        setForgotError('No account found with this email address. Please sign up first.');
+      if (!emailExists) {
+        setForgotError("No account found with this email address. Please sign up first.");
         return;
       }
 
-      // Email is confirmed registered — safe to send the reset link
+      /* ── Step 2: Email confirmed — safe to send the reset link ── */
       const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
@@ -260,11 +262,12 @@ export default function UserLogin() {
 
       setForgotSuccess('Password reset email sent! Check your inbox.');
     } catch (err) {
-      setForgotError(err.message);
+      setForgotError(friendlyAuthError(err.message));
     } finally {
       setForgotLoading(false);
     }
   };
+
 
   /* ─── Clear stale errors when switching tabs ─── */
   const switchUserView = (v) => {
