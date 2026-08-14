@@ -470,25 +470,29 @@ export default function ShowroomCanvas({ structures, onStructureSelect }) {
         <button
           aria-label={`Previous: ${structures[currentIndex - 1]?.name ?? 'previous model'}`}
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => navigate(-1)}
+          onPointerUp={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); navigate(-1); }}
           style={{
             position:       'absolute',
-            left:           '14px',
+            left:           '16px',
             top:            '50%',
             transform:      'translateY(-50%)',
-            background:     'rgba(197,160,89,0.08)',
-            border:         '1px solid rgba(197,160,89,0.25)',
+            background:     'rgba(197,160,89,0.15)',
+            border:         '1px solid rgba(197,160,89,0.5)',
             borderRadius:   '50%',
-            width:          '38px',
-            height:         '38px',
+            width:          '50px',
+            height:         '50px',
             display:        'flex',
             alignItems:     'center',
             justifyContent: 'center',
             cursor:         'pointer',
-            color:          'rgba(197,160,89,0.7)',
-            fontSize:       '16px',
+            color:          '#C5A059',
+            fontSize:       '26px',
             lineHeight:     1,
-            backdropFilter: 'blur(4px)',
+            backdropFilter: 'blur(6px)',
+            boxShadow:      '0 4px 12px rgba(0,0,0,0.4)',
             transition:     'all 0.2s ease',
             zIndex:         20,
           }}
@@ -500,25 +504,29 @@ export default function ShowroomCanvas({ structures, onStructureSelect }) {
         <button
           aria-label={`Next: ${structures[currentIndex + 1]?.name ?? 'next model'}`}
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => navigate(+1)}
+          onPointerUp={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); navigate(+1); }}
           style={{
             position:       'absolute',
-            right:          '14px',
+            right:          '16px',
             top:            '50%',
             transform:      'translateY(-50%)',
-            background:     'rgba(197,160,89,0.08)',
-            border:         '1px solid rgba(197,160,89,0.25)',
+            background:     'rgba(197,160,89,0.15)',
+            border:         '1px solid rgba(197,160,89,0.5)',
             borderRadius:   '50%',
-            width:          '38px',
-            height:         '38px',
+            width:          '50px',
+            height:         '50px',
             display:        'flex',
             alignItems:     'center',
             justifyContent: 'center',
             cursor:         'pointer',
-            color:          'rgba(197,160,89,0.7)',
-            fontSize:       '16px',
+            color:          '#C5A059',
+            fontSize:       '26px',
             lineHeight:     1,
-            backdropFilter: 'blur(4px)',
+            backdropFilter: 'blur(6px)',
+            boxShadow:      '0 4px 12px rgba(0,0,0,0.4)',
             transition:     'all 0.2s ease',
             zIndex:         20,
           }}

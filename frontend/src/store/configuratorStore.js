@@ -12,15 +12,19 @@ import { persist, createJSONStorage } from 'zustand/middleware';
  *  - user-input dimensions for live pricing
  *
  * Security / Functional notes:
- *  - setDimension clamps values to [0.01, 20] metres to prevent
- *    nonsensical or adversarial dimension inputs reaching pricing.
+ *  - setDimension clamps values to [0.3, 5] metres to prevent
+ *    nonsensical or adversarial dimension inputs reaching pricing
+ *    and to keep 3D model scaling within a visually pleasing range.
  *  - resetConfigurator returns the store to its factory state, used
  *    on sign-out or when the user navigates away from the configurator.
  */
 
-/* Safe bounds for user-supplied dimensions (metres) */
-const DIM_MIN = 0.01;
-const DIM_MAX = 20;
+/* Safe bounds for user-supplied dimensions (metres).
+   Tightened to [0.3, 5] so the 3D model never scales to an absurdly
+   small or large size that would break camera framing. This range
+   covers realistic countertop sizes (small vanity to large island). */
+const DIM_MIN = 0.3;
+const DIM_MAX = 5;
 
 const useConfiguratorStore = create(
   persist(
@@ -34,6 +38,10 @@ const useConfiguratorStore = create(
       /* ── Active material from Supabase materials table ── */
       selectedMaterial: null, // { id, name, price_per_sqm, color_url, normal_url, roughness_url }
       materials: [],          // Shared list of all materials fetched on boot
+
+      /* ── Active cabinet material from Supabase cabinet_materials table ── */
+      selectedCabinetMaterial: null,
+      cabinetMaterials: [],
 
       /* ── User-input dimensions in metres ── */
       dimensions: { length: 1.2, width: 0.6 },
@@ -54,6 +62,9 @@ const useConfiguratorStore = create(
       setMaterials: (materials) => set({ materials }),
       setMaterial: (material) => set({ selectedMaterial: material }),
 
+      setCabinetMaterials: (cabinetMaterials) => set({ cabinetMaterials }),
+      setCabinetMaterial: (material) => set({ selectedCabinetMaterial: material }),
+
       // Clamp dimension to [DIM_MIN, DIM_MAX] before storing —
       // prevents pricing engine from receiving 0, negative, or
       // excessively large values from user input.
@@ -67,10 +78,12 @@ const useConfiguratorStore = create(
       // Full reset — call on sign-out or page exit to clear persisted state
       resetConfigurator: () =>
         set({
-          appMode:           'showroom',
-          selectedStructure: null,
-          selectedMaterial:  null,
-          materials:         [],
+          appMode:                 'showroom',
+          selectedStructure:       null,
+          selectedMaterial:        null,
+          selectedCabinetMaterial: null,
+          materials:               [],
+          cabinetMaterials:        [],
           dimensions:        { length: 1.2, width: 0.6 },
         }),
     }),

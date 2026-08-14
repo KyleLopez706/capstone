@@ -59,21 +59,16 @@ export default function ConfiguratorLayout() {
         <div className="w-24 hidden sm:block" />
       </div>
 
-      {/* ── 3-Column Layout ── */}
-      {/* On mobile, stack vertically. On desktop, side-by-side. */}
+      {/* ── 3-Column Layout (Responsive) ── */}
+      {/* On mobile: Canvas top, panels scroll below. On desktop: side-by-side. */}
       <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
 
-        {/* LEFT — Material Swatches */}
-        <div className="lg:w-52 shrink-0 overflow-hidden" style={{ minHeight: '160px' }}>
-          <MaterialPanel />
-        </div>
-
-        {/* CENTRE — 3D Preview Canvas */}
+        {/* CENTRE on Desktop / TOP on Mobile — 3D Preview Canvas */}
         <div
-          className="flex-1 flex items-center justify-center p-4"
-          style={{ backgroundColor: '#1a1e22', minHeight: '320px' }}
+          className="order-1 lg:order-2 w-full lg:flex-1 h-[45vh] lg:h-auto shrink-0 flex items-center justify-center p-2 lg:p-4"
+          style={{ backgroundColor: '#1a1e22' }}
         >
-          <div className="w-full h-full" style={{ minHeight: '260px' }}>
+          <div className="w-full h-full">
             {modelUrl ? (
               <ConfiguratorCanvas modelUrl={modelUrl} />
             ) : (
@@ -86,9 +81,19 @@ export default function ConfiguratorLayout() {
           </div>
         </div>
 
-        {/* RIGHT — Dimensions & Pricing */}
-        <div className="lg:w-60 shrink-0 overflow-hidden" style={{ minHeight: '160px' }}>
-          <DimensionPanel />
+        {/* PANELS on Mobile (Scrollable Bottom) / SIDEBARS on Desktop */}
+        <div className="order-2 lg:contents flex-1 overflow-y-auto lg:overflow-hidden flex flex-col bg-[#1c2026]">
+          
+          {/* LEFT on Desktop / 1st Panel on Mobile */}
+          <div className="order-1 lg:order-1 w-full lg:w-52 shrink-0 lg:h-full" style={{ minHeight: '450px' }}>
+            <MaterialPanel />
+          </div>
+
+          {/* RIGHT on Desktop / 2nd Panel on Mobile */}
+          <div className="order-2 lg:order-3 w-full lg:w-60 shrink-0 lg:h-full border-t lg:border-t-0" style={{ minHeight: '400px', borderColor: 'rgba(226,232,240,0.1)' }}>
+            <DimensionPanel />
+          </div>
+
         </div>
 
       </div>

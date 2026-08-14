@@ -88,6 +88,8 @@ export default function Configurator3D() {
   const setAppMode   = useConfiguratorStore((s) => s.setAppMode);
   const setMaterials = useConfiguratorStore((s) => s.setMaterials);
   const setMaterial  = useConfiguratorStore((s) => s.setMaterial);
+  const setCabinetMaterials = useConfiguratorStore((s) => s.setCabinetMaterials);
+  const setCabinetMaterial  = useConfiguratorStore((s) => s.setCabinetMaterial);
 
   // All available structures fetched from Supabase
   const [structures, setStructures] = useState([]);
@@ -101,8 +103,8 @@ export default function Configurator3D() {
   ────────────────────────────────────────────────────────────────────────── */
   useEffect(() => {
     const boot = async () => {
-      /* Fire both fetches at the same time — parallel, not sequential */
-      const [structuresResult, materialsResult] = await Promise.all([
+      /* Fire all fetches at the same time — parallel, not sequential */
+      const [structuresResult, materialsResult, cabinetMaterialsResult] = await Promise.all([
         supabase
           .from('structures')
           .select('id, name, base_length, base_width, model_url')
@@ -111,6 +113,10 @@ export default function Configurator3D() {
           .from('materials')
           .select('id, name, price_per_sqm, color_url, normal_url, roughness_url')
           .limit(32), // upper-bound guard; matches MaterialPanel's limit
+        supabase
+          .from('cabinet_materials')
+          .select('id, name, color_url')
+          .order('name'),
       ]);
 
       /* ── Handle structures ── */
@@ -160,11 +166,28 @@ export default function Configurator3D() {
         console.warn('[Configurator3D] Material preload fetch failed (non-fatal):', materialsResult.error.message);
       }
 
+      /* ── Cabinet Materials ── */
+      if (!cabinetMaterialsResult.error && cabinetMaterialsResult.data?.length) {
+        setCabinetMaterials(cabinetMaterialsResult.data);
+        
+        // Find Walnut Wood, fallback to first item if not found
+        const defaultCab = cabinetMaterialsResult.data.find(c => c.name.toLowerCase().includes('walnut')) 
+                        || cabinetMaterialsResult.data[0];
+        setCabinetMaterial(defaultCab);
+        
+        // ONLY preload the default cabinet material to prevent egress spikes
+        if (defaultCab.color_url) {
+          useTexture.preload(defaultCab.color_url);
+        }
+      } else if (cabinetMaterialsResult.error) {
+        console.warn('[Configurator3D] Cabinet materials fetch failed:', cabinetMaterialsResult.error.message);
+      }
+
       setLoading(false);
     };
 
     boot();
-  }, [setMaterial, setMaterials]);
+  }, [setMaterial, setMaterials, setCabinetMaterial, setCabinetMaterials]);
 
   /**
    * handleStructureSelect — called when the user clicks a model in the showroom.

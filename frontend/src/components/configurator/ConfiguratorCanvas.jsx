@@ -160,7 +160,7 @@ class TextureErrorBoundary extends Component {
    ✓ onApplied() callback signals the parent that
      textures are live (used to dismiss the shimmer).
 ───────────────────────────────────────── */
-function TextureApplicator({ material, targetNodes, onApplied }) {
+function TextureApplicator({ material, targetNodes, onApplied, scaleFactors }) {
   // Load all three PBR maps. Null/missing URLs fall back to the 1px white PNG
   // so useTexture always receives three valid URLs and never throws on null.
   const textures = useTexture({
@@ -185,14 +185,23 @@ function TextureApplicator({ material, targetNodes, onApplied }) {
     // Color space: color map must be sRGB; data maps stay linear
     if (colorMap) colorMap.colorSpace = THREE.SRGBColorSpace;
 
+    /* Scale-aware texture tiling:
+       When the model stretches (e.g. 2× length), UVs still map 0→1 over
+       the stretched surface. To prevent the granite pattern from stretching,
+       we tile the texture proportionally via repeat. RepeatWrapping ensures
+       the pattern tiles seamlessly rather than clamping at the edges.
+       Mipmaps are re-enabled for clean rendering at varied repeat counts. */
+    const repeatX = scaleFactors?.x ?? 1;
+    const repeatZ = scaleFactors?.z ?? 1;
+
     [colorMap, normalMap, roughMap].forEach((t) => {
       if (!t) return;
       t.flipY = false;                          // GLTF UVs: top-left origin
-      t.generateMipmaps = false;                // saves ~33% GPU memory
-      t.minFilter  = THREE.LinearFilter;
-      t.wrapS = THREE.ClampToEdgeWrapping;
-      t.wrapT = THREE.ClampToEdgeWrapping;
-      t.repeat.set(1, 1);
+      t.generateMipmaps = true;                 // needed for clean tiling at varied densities
+      t.minFilter  = THREE.LinearMipmapLinearFilter;
+      t.wrapS = THREE.RepeatWrapping;
+      t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(repeatX, repeatZ);
       t.needsUpdate = true;
     });
 
@@ -220,7 +229,54 @@ function TextureApplicator({ material, targetNodes, onApplied }) {
       normalMap?.dispose();
       roughMap?.dispose();
     };
-  }, [textures, targetNodes, material, onApplied]);
+  }, [textures, targetNodes, material, onApplied, scaleFactors]);
+
+  return null;
+}
+
+/* ─────────────────────────────────────────
+   CABINET TEXTURE APPLICATOR
+   Similar to TextureApplicator but handles cabinet
+   PBR maps (currently just color maps).
+───────────────────────────────────────── */
+function CabinetTextureApplicator({ material, targetNodes, scaleFactors }) {
+  const textures = useTexture({ map: material.color_url || FALLBACK_1PX });
+
+  useEffect(() => {
+    if (!targetNodes?.length) return;
+
+    const colorMap = textures.map?.clone();
+    if (colorMap) colorMap.colorSpace = THREE.SRGBColorSpace;
+
+    const repeatX = scaleFactors?.x ?? 1;
+    const repeatZ = scaleFactors?.z ?? 1;
+
+    if (colorMap) {
+      colorMap.flipY = false;
+      colorMap.generateMipmaps = true;
+      colorMap.minFilter = THREE.LinearMipmapLinearFilter;
+      colorMap.wrapS = THREE.RepeatWrapping;
+      colorMap.wrapT = THREE.RepeatWrapping;
+      colorMap.repeat.set(repeatX, repeatZ);
+      colorMap.needsUpdate = true;
+    }
+
+    const mat = new THREE.MeshStandardMaterial({
+      map: material.color_url ? colorMap : null,
+      roughness: 0.75,
+      metalness: 0.05,
+      color: material.color_url ? '#FFFFFF' : '#543D2B',
+    });
+
+    targetNodes.forEach((node) => {
+      node.material = mat;
+    });
+
+    return () => {
+      mat.dispose();
+      colorMap?.dispose();
+    };
+  }, [textures, targetNodes, material, scaleFactors]);
 
   return null;
 }
@@ -230,16 +286,35 @@ function TextureApplicator({ material, targetNodes, onApplied }) {
 ───────────────────────────────────────── */
 function CountertopWithMaterial({ modelUrl, onTextureApplied }) {
   const { scene } = useGLTF(modelUrl, true);
-  const selectedMaterial = useConfiguratorStore((s) => s.selectedMaterial);
+  const selectedMaterial  = useConfiguratorStore((s) => s.selectedMaterial);
+  const selectedCabinetMaterial = useConfiguratorStore((s) => s.selectedCabinetMaterial);
+  const dimensions        = useConfiguratorStore((s) => s.dimensions);
+  const selectedStructure = useConfiguratorStore((s) => s.selectedStructure);
+
+  /* ── Derive non-uniform scale factors ──
+     The model's GLB geometry represents the structure's base dimensions.
+     When the user inputs larger/smaller dimensions, we scale the scene
+     proportionally so 1 meter in the input = 1 visual meter in the viewport.
+     Height (Y) stays constant — only length (X) and width (Z) change. */
+  const baseLen = selectedStructure?.base_length || dimensions.length;
+  const baseWid = selectedStructure?.base_width  || dimensions.width;
+  const scaleX  = dimensions.length / baseLen;
+  const scaleZ  = dimensions.width  / baseWid;
+
+  // Memoised scale factors object — stable reference when values haven't changed.
+  // Prevents unnecessary re-runs of the TextureApplicator effect.
+  const scaleFactors = useMemo(() => ({ x: scaleX, z: scaleZ }), [scaleX, scaleZ]);
 
   // Clone so we don't mutate the shared cached GLTF
   const clonedScene = useMemo(() => scene.clone(true), [scene]);
 
   // Traverse the cloned scene once:
-  //   • stone (granite_slab) meshes are collected for TextureApplicator
+  //   • stone meshes are collected for TextureApplicator
+  //   • cabinet meshes are collected for CabinetTextureApplicator
   //   • all other meshes receive a static zone material immediately
-  const stoneMeshes = useMemo(() => {
-    const found = [];
+  const { stoneMeshes, cabinetMeshes } = useMemo(() => {
+    const s = [];
+    const c = [];
 
     clonedScene.traverse((n) => {
       if (!n.isMesh) return;
@@ -252,26 +327,28 @@ function CountertopWithMaterial({ modelUrl, onTextureApplied }) {
       }
 
       if (zone === 'stone') {
-        found.push(n);
+        s.push(n);
+      } else if (zone === 'cabinet') {
+        c.push(n);
       } else {
         n.material = ZONE_MATERIALS[zone] ?? ZONE_MATERIALS.default;
       }
     });
 
-    if (!found.length) {
-      clonedScene.traverse((n) => { if (n.isMesh) found.push(n); });
+    if (!s.length) {
+      clonedScene.traverse((n) => { if (n.isMesh) s.push(n); });
       console.warn(
         '[Configurator] No stone mesh matched — PBR applied to all meshes. '
         + 'Add the correct Blender name to EXACT_ZONE_MAP in ConfiguratorCanvas.jsx.',
       );
     }
 
-    return found;
+    return { stoneMeshes: s, cabinetMeshes: c };
   }, [clonedScene]);
 
   return (
     <>
-      <primitive object={clonedScene} />
+      <primitive object={clonedScene} scale={[scaleX, 1, scaleZ]} />
 
       {/*
         IMPORTANT: TextureErrorBoundary is NOT keyed on material.id.
@@ -294,6 +371,19 @@ function CountertopWithMaterial({ modelUrl, onTextureApplied }) {
               material={selectedMaterial}
               targetNodes={stoneMeshes}
               onApplied={onTextureApplied}
+              scaleFactors={scaleFactors}
+            />
+          </Suspense>
+        </TextureErrorBoundary>
+      )}
+
+      {selectedCabinetMaterial && (
+        <TextureErrorBoundary materialId={selectedCabinetMaterial.id}>
+          <Suspense fallback={null}>
+            <CabinetTextureApplicator
+              material={selectedCabinetMaterial}
+              targetNodes={cabinetMeshes}
+              scaleFactors={scaleFactors}
             />
           </Suspense>
         </TextureErrorBoundary>
