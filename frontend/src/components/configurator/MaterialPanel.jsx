@@ -104,6 +104,10 @@ export default function MaterialPanel() {
   const cabinetMaterials = useConfiguratorStore((s) => s.cabinetMaterials);
   const selectedCabinetMaterial = useConfiguratorStore((s) => s.selectedCabinetMaterial);
   const setCabinetMaterial = useConfiguratorStore((s) => s.setCabinetMaterial);
+  const selectedStructureName = useConfiguratorStore((s) => s.selectedStructure?.name || '').toLowerCase();
+
+  // Hide cabinet options if the structure is a wall or flooring
+  const hideCabinets = selectedStructureName.includes('wall') || selectedStructureName.includes('floor');
 
   // Rate-limit state — prevents click spam on texture CDN (AGENTS.md §A)
   const [locked, setLocked] = useState(false);
@@ -158,75 +162,77 @@ export default function MaterialPanel() {
         </div>
 
         {/* Cabinet Finish Selection */}
-        <div>
-          <div className="mb-3 px-1">
-            <p className="text-xs font-semibold tracking-widest uppercase" style={{ color: '#C5A059' }}>
-              Cabinet Finish
-            </p>
-            <h2 className="text-sm font-light mt-1" style={{ color: '#F9F9FB' }}>
-              Select Base Color
-            </h2>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-2">
-            {cabinetMaterials.map((mat) => {
-              const isSelected = selectedCabinetMaterial?.id === mat.id;
-              return (
-                <button
-                  key={mat.id}
-                  onClick={() => setCabinetMaterial(mat)}
-                  className="group relative w-full rounded-xl overflow-hidden focus:outline-none flex flex-col items-center"
-                  style={{
-                    border: isSelected ? '2px solid #C5A059' : '2px solid rgba(226,232,240,0.1)',
-                    boxShadow: isSelected ? '0 0 0 3px rgba(197,160,89,0.25)' : 'none',
-                    transform: isSelected ? 'scale(1.03)' : 'scale(1)',
-                    transition: 'all 0.2s ease',
-                    cursor: 'pointer',
-                    backgroundColor: '#232B32',
-                  }}
-                >
-                  <div 
-                    className="w-full h-16" 
-                    style={{ 
-                      backgroundImage: `url(${mat.color_url})`,
-                      backgroundSize: 'cover',
-                      backgroundPosition: 'center'
-                    }} 
-                  />
-                  <div
-                    className="w-full px-2 py-2 text-center"
+        {!hideCabinets && (
+          <div>
+            <div className="mb-3 px-1">
+              <p className="text-xs font-semibold tracking-widest uppercase" style={{ color: '#C5A059' }}>
+                Cabinet Finish
+              </p>
+              <h2 className="text-sm font-light mt-1" style={{ color: '#F9F9FB' }}>
+                Select Base Color
+              </h2>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-2">
+              {cabinetMaterials.map((mat) => {
+                const isSelected = selectedCabinetMaterial?.id === mat.id;
+                return (
+                  <button
+                    key={mat.id}
+                    onClick={() => setCabinetMaterial(mat)}
+                    className="group relative w-full rounded-xl overflow-hidden focus:outline-none flex flex-col items-center"
                     style={{
-                      backgroundColor: isSelected ? 'rgba(197,160,89,0.18)' : 'rgba(28,32,38,0.92)',
+                      border: isSelected ? '2px solid #C5A059' : '2px solid rgba(226,232,240,0.1)',
+                      boxShadow: isSelected ? '0 0 0 3px rgba(197,160,89,0.25)' : 'none',
+                      transform: isSelected ? 'scale(1.03)' : 'scale(1)',
+                      transition: 'all 0.2s ease',
+                      cursor: 'pointer',
+                      backgroundColor: '#232B32',
                     }}
                   >
-                    <p
-                      className="text-xs font-semibold tracking-wide truncate"
-                      style={{ color: isSelected ? '#C5A059' : '#F9F9FB' }}
-                    >
-                      {mat.name}
-                    </p>
-                  </div>
-                  {isSelected && (
+                    <div 
+                      className="w-full h-16" 
+                      style={{ 
+                        backgroundImage: `url(${mat.color_url})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center'
+                      }} 
+                    />
                     <div
-                      className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center shadow-md"
-                      style={{ backgroundColor: '#C5A059' }}
+                      className="w-full px-2 py-2 text-center"
+                      style={{
+                        backgroundColor: isSelected ? 'rgba(197,160,89,0.18)' : 'rgba(28,32,38,0.92)',
+                      }}
                     >
-                      <svg
-                        className="w-3 h-3"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="#fff"
-                        strokeWidth={3}
+                      <p
+                        className="text-xs font-semibold tracking-wide truncate"
+                        style={{ color: isSelected ? '#C5A059' : '#F9F9FB' }}
                       >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
+                        {mat.name}
+                      </p>
                     </div>
-                  )}
-                </button>
-              );
-            })}
+                    {isSelected && (
+                      <div
+                        className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center shadow-md"
+                        style={{ backgroundColor: '#C5A059' }}
+                      >
+                        <svg
+                          className="w-3 h-3"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="#fff"
+                          strokeWidth={3}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
       </div>
     </div>

@@ -236,7 +236,7 @@ export default function QuotationRequest() {
     const configRows = [
       ['Product Type', selectedStructure?.name ?? '\u2014'],
       ['Design',       selectedMaterial?.name  ?? '\u2014'],
-      ['Dimensions',   `${dimensions.length}m \u00d7 ${dimensions.width}m`],
+      ['Dimensions',   `${Number(dimensions.length).toFixed(2)}m \u00d7 ${Number(dimensions.width).toFixed(2)}m`],
       ['Total Area',   `${area.toFixed(2)} m\u00b2`],
       ['Rate per m\u00b2', fmt(ratePerSqm)],
     ];
@@ -486,9 +486,9 @@ export default function QuotationRequest() {
 
             <SummaryRow label="Product Type" value={selectedStructure?.name ?? '\u2014'} />
             <SummaryRow label="Design"        value={selectedMaterial?.name  ?? '\u2014'} />
-            <SummaryRow label="Dimensions"    value={`${dimensions.length}m \u00d7 ${dimensions.width}m`} />
-            <SummaryRow label="Total Area"    value={`${area.toFixed(2)} m\u00b2`} />
-            <SummaryRow label="Rate per m\u00b2"  value={fmt(ratePerSqm)} />
+            <SummaryRow label="Dimensions"    value={`${Number(dimensions.length).toFixed(2)}m \u00d7 ${Number(dimensions.width).toFixed(2)}m`} />
+            <SummaryRow label="Total Area"    value={`${area.toFixed(2)} m²`} />
+            <SummaryRow label="Rate per m²"  value={fmt(ratePerSqm)} />
 
             {/* Cost breakdown */}
             <div style={{ marginTop: '18px' }}>
@@ -588,7 +588,7 @@ export default function QuotationRequest() {
                   id="quote-notes"  label="Additional Notes"  type="textarea"
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  placeholder="Any special requirements or questions\u2026"  rows={2}
+                  placeholder="Any special requirements or questions…"  rows={2}
                 />
 
 
@@ -626,10 +626,6 @@ export default function QuotationRequest() {
                     </>
                   ) : 'Submit Request'}
                 </button>
-
-                <p style={{ textAlign: 'center', fontSize: '12px', color: '#9CA3AF', marginTop: '12px' }}>
-                  By submitting, you agree to our terms and privacy policy.
-                </p>
               </form>
             )}
           </div>

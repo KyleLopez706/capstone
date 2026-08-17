@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import useConfiguratorStore from '../../store/configuratorStore';
+import { evaluateDesignQuality } from '../../utils/AIQualityEngine';
 
 /* ─────────────────────────────────────────
    DIMENSION & PRICING PANEL  (Right Column)
@@ -22,18 +23,62 @@ import useConfiguratorStore from '../../store/configuratorStore';
    the store.
 ───────────────────────────────────────── */
 
-/* Must match the bounds in configuratorStore.js */
-const DIM_MIN  = 0.3;
-const DIM_MAX  = 5;
 const STEP     = 0.1;
 
 export default function DimensionPanel() {
   const selectedMaterial  = useConfiguratorStore((s) => s.selectedMaterial);
+  const selectedCabinetMaterial = useConfiguratorStore((s) => s.selectedCabinetMaterial);
   const dimensions        = useConfiguratorStore((s) => s.dimensions);
   const setDimension      = useConfiguratorStore((s) => s.setDimension);
   const selectedStructure = useConfiguratorStore((s) => s.selectedStructure);
 
+  const [aiScore, setAiScore] = useState(null);
+
+  // Helper to guess the hex color based on the material name since it's not in the DB yet
+  const getHexForMaterial = useCallback((name) => {
+    if (!name) return '#808080';
+    const n = name.toLowerCase();
+    if (n.includes('black') || n.includes('galaxy')) return '#1A1A1A';
+    if (n.includes('white') || n.includes('ivory') || n.includes('cream')) return '#F5F5F5';
+    if (n.includes('grey') || n.includes('gray')) return '#888888';
+    if (n.includes('brown') || n.includes('tan')) return '#8B5A2B';
+    if (n.includes('red') || n.includes('rose')) return '#8B2323';
+    if (n.includes('blue') || n.includes('pearl')) return '#4B535D';
+    if (n.includes('green')) return '#2E8B57';
+    if (n.includes('gold')) return '#D4AF37';
+    
+    // Deterministic fallback based on the name string so it always changes!
+    let hash = 0;
+    for (let i = 0; i < n.length; i++) hash = n.charCodeAt(i) + ((hash << 5) - hash);
+    const c = Math.floor(Math.abs((Math.sin(hash) * 16777215) % 16777215)).toString(16);
+    return '#' + '000000'.substring(0, 6 - c.length) + c;
+  }, []);
+
+  useEffect(() => {
+    async function fetchScore() {
+      if (!selectedMaterial) {
+        setAiScore(null);
+        return;
+      }
+      
+      const graniteHex = selectedMaterial.hex_code || getHexForMaterial(selectedMaterial.name);
+      const cabinetHex = selectedCabinetMaterial?.hex_code || getHexForMaterial(selectedCabinetMaterial?.name) || '#F9F9FB';
+
+      const score = await evaluateDesignQuality(graniteHex, cabinetHex);
+      setAiScore(score);
+    }
+    fetchScore();
+  }, [selectedMaterial, selectedCabinetMaterial, getHexForMaterial]);
+
   const navigate = useNavigate();
+
+  /* ── Dynamic Bounds Calculation ──
+     Limits size modifications to a realistic range to prevent 3D distortion.
+     Shrinking is limited to -20%, Growing is limited to +50%. */
+  const baseLen = selectedStructure?.base_length || 1.2;
+  const baseWid = selectedStructure?.base_width  || 0.6;
+  const minLen  = Number((baseLen * 0.8).toFixed(2));
+  const maxLen  = Number((baseLen * 1.5).toFixed(2));
 
   /* Tracks whether we're mid-auth-check to prevent button double-click */
   const [checkingAuth, setCheckingAuth] = useState(false);
@@ -75,31 +120,29 @@ export default function DimensionPanel() {
      during rapid slider drags. The 3D model still feels responsive
      because 300ms is imperceptible during continuous dragging. */
   const lenTimerRef = useRef(null);
-  const widTimerRef = useRef(null);
 
   const handleLengthSlider = useCallback((e) => {
     const val = parseFloat(e.target.value);
     setLenStr(String(val));
+    
+    // In the real world, a vanity or island's depth (width) remains standard
+    // regardless of how long it gets. We keep it locked to the baseline.
+    const baseWid = selectedStructure?.base_width || 0.6;
+    setWidStr(String(baseWid));
+
     clearTimeout(lenTimerRef.current);
     lenTimerRef.current = setTimeout(() => {
       setDimension('length', val);
+      setDimension('width', baseWid);
     }, 300);
-  }, [setDimension]);
+  }, [setDimension, selectedStructure]);
 
-  const handleWidthSlider = useCallback((e) => {
-    const val = parseFloat(e.target.value);
-    setWidStr(String(val));
-    clearTimeout(widTimerRef.current);
-    widTimerRef.current = setTimeout(() => {
-      setDimension('width', val);
-    }, 300);
-  }, [setDimension]);
+  // Width is now auto-scaled based on Length, so we don't need a standalone handler
 
   /* Cleanup debounce timers on unmount */
   useEffect(() => {
     return () => {
       clearTimeout(lenTimerRef.current);
-      clearTimeout(widTimerRef.current);
     };
   }, []);
 
@@ -109,8 +152,18 @@ export default function DimensionPanel() {
   const localLen    = Math.max(parseFloat(lenStr) || 0, 0);
   const localWid    = Math.max(parseFloat(widStr) || 0, 0);
   const area        = localLen * localWid;
-  const pricePerSqm = selectedMaterial?.price_per_sqm ?? 0;
-  const total       = area * pricePerSqm;
+  
+  // Installation rate logic (matches QuotationRequest.jsx)
+  const getInstallRate = (nameStr) => {
+    const name = (nameStr ?? '').toLowerCase();
+    if (name.includes('wall') || name.includes('cladding')) return 2600;
+    return 1300;
+  };
+
+  const pricePerSqm  = selectedMaterial?.price_per_sqm ?? 0;
+  const materialCost = area * pricePerSqm;
+  const installCost  = area * getInstallRate(selectedStructure?.name);
+  const total        = materialCost + installCost;
 
   /* ── Proportional shape indicator ──
      Renders a small rectangle that reflects the current length:width ratio
@@ -285,49 +338,32 @@ export default function DimensionPanel() {
           <input
             id="dim-length-slider"
             type="range"
-            min={DIM_MIN}
-            max={DIM_MAX}
+            min={minLen}
+            max={maxLen}
             step={STEP}
-            value={localLen || DIM_MIN}
+            value={localLen || minLen}
             onChange={handleLengthSlider}
             style={sliderStyle}
             aria-label="Length slider"
           />
           <div className="flex justify-between text-xs mt-0.5" style={{ color: '#6B7280' }}>
-            <span>{DIM_MIN}m</span>
-            <span>{DIM_MAX}m</span>
+            <span>{minLen.toFixed(1)}m</span>
+            <span>{maxLen.toFixed(1)}m</span>
           </div>
         </div>
 
-        {/* ── Width Slider ── */}
+        {/* ── Width (Fixed Standard) ── */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label
-              htmlFor="dim-width-slider"
+            <span
               className="block text-xs font-semibold tracking-wider uppercase"
               style={{ color: '#9CA3AF' }}
             >
-              Width (meters)
-            </label>
+              Width (Standard)
+            </span>
             <span className="text-sm font-semibold" style={{ color: '#F9F9FB' }}>
               {localWid.toFixed(2)}m
             </span>
-          </div>
-          {/* Slider — drags commit to the store with 300ms debounce */}
-          <input
-            id="dim-width-slider"
-            type="range"
-            min={DIM_MIN}
-            max={DIM_MAX}
-            step={STEP}
-            value={localWid || DIM_MIN}
-            onChange={handleWidthSlider}
-            style={sliderStyle}
-            aria-label="Width slider"
-          />
-          <div className="flex justify-between text-xs mt-0.5" style={{ color: '#6B7280' }}>
-            <span>{DIM_MIN}m</span>
-            <span>{DIM_MAX}m</span>
           </div>
         </div>
 
@@ -375,47 +411,51 @@ export default function DimensionPanel() {
           </p>
         </div>
 
-        {/* ── Design Quality Score — PLACEHOLDER ──
-             AI analysis logic is intentionally not implemented yet.
-             This div is reserved for future integration.           */}
+        {/* ── Design Quality Score ── */}
         <div
-          className="rounded-xl p-4"
-          style={{
-            backgroundColor: '#232B32',
-            border: '1px dashed rgba(197,160,89,0.3)',
-          }}
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <div
-              className="w-5 h-5 rounded flex items-center justify-center"
-              style={{ backgroundColor: 'rgba(197,160,89,0.15)' }}
-            >
-              <svg
-                className="w-3 h-3"
+            className="rounded-xl p-4"
+            style={{
+              backgroundColor: '#232B32',
+              border: aiScore ? '1px solid rgba(197,160,89,0.3)' : '1px dashed rgba(197,160,89,0.3)',
+            }}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <p
+                className="text-xs font-semibold tracking-wider uppercase"
                 style={{ color: '#C5A059' }}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z"
-                />
-              </svg>
+                Design Quality Score
+              </p>
             </div>
-            <p
-              className="text-xs font-semibold tracking-wider uppercase"
-              style={{ color: '#C5A059' }}
-            >
-              Design Quality Score
-            </p>
+            {aiScore !== null ? (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-end gap-2">
+                  <span className="text-3xl font-bold leading-none" style={{ color: '#F9F9FB' }}>{aiScore}%</span>
+                  <span className="text-xs font-medium mb-0.5" style={{ color: aiScore >= 70 ? '#10B981' : aiScore >= 50 ? '#F59E0B' : '#EF4444' }}>
+                    {aiScore >= 70 ? 'Excellent Match' : aiScore >= 50 ? 'Fair Match' : 'Poor Match'}
+                  </span>
+                </div>
+                
+                <div 
+                  className="rounded-lg p-3" 
+                  style={{ backgroundColor: 'rgba(0,0,0,0.15)', border: '1px solid rgba(226,232,240,0.05)' }}
+                >
+                  <p className="text-[11px] leading-relaxed" style={{ color: '#9CA3AF' }}>
+                    <span style={{ color: '#E2E8F0', fontWeight: 600 }}>Why this score?</span>{' '}
+                    {aiScore >= 70 
+                      ? "High aesthetic synergy detected. The AI measured optimal lightness separation (Contrast) and strong hue compatibility (Color Harmony) that strongly aligns with premium, top-rated designs in the dataset." 
+                      : aiScore >= 50 
+                      ? "Moderate visual compatibility. The AI measured that while these surfaces are acceptable together, they lack the striking contrast or precise complementary hues found in highly-rated professional designs." 
+                      : "Low visual synergy detected. The AI measured that these surfaces likely clash in hue or suffer from muddy contrast, resulting in an unbalanced aesthetic according to human preference data."}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs" style={{ color: '#6B7280' }}>
+                Select a stone material to view the live AI Design Quality Score.
+              </p>
+            )}
           </div>
-          <p className="text-xs" style={{ color: '#6B7280' }}>
-            AI analysis coming soon — will evaluate material harmony, proportions, and design cohesion.
-          </p>
-        </div>
 
         {/* ── Auth message (shown when user is not signed in) ── */}
         {authMsg && (

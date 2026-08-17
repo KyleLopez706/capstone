@@ -23,8 +23,8 @@ import { persist, createJSONStorage } from 'zustand/middleware';
    Tightened to [0.3, 5] so the 3D model never scales to an absurdly
    small or large size that would break camera framing. This range
    covers realistic countertop sizes (small vanity to large island). */
-const DIM_MIN = 0.3;
-const DIM_MAX = 5;
+// Hardcoded max/mins have been removed. Bounds are now calculated dynamically
+// based on the selected structure's base dimensions to prevent extreme 3D distortion.
 
 const useConfiguratorStore = create(
   persist(
@@ -65,13 +65,23 @@ const useConfiguratorStore = create(
       setCabinetMaterials: (cabinetMaterials) => set({ cabinetMaterials }),
       setCabinetMaterial: (material) => set({ selectedCabinetMaterial: material }),
 
-      // Clamp dimension to [DIM_MIN, DIM_MAX] before storing —
+      // Clamp dimension to their respective minimums and maximums before storing —
       // prevents pricing engine from receiving 0, negative, or
       // excessively large values from user input.
       setDimension: (key, value) =>
         set((state) => {
           const raw     = parseFloat(value);
-          const clamped = isNaN(raw) ? DIM_MIN : Math.min(DIM_MAX, Math.max(DIM_MIN, raw));
+          const baseLen = state.selectedStructure?.base_length || 1.2;
+          const baseWid = state.selectedStructure?.base_width  || 0.6;
+          
+          const minLen  = Number((baseLen * 0.8).toFixed(2)); // Max 20% shrink
+          const maxLen  = Number((baseLen * 1.5).toFixed(2)); // Max 50% grow
+          const minWid  = baseWid;       // Locked to standard
+          const maxWid  = baseWid;       // Locked to standard
+
+          const min     = key === 'length' ? minLen : minWid;
+          const max     = key === 'length' ? maxLen : maxWid;
+          const clamped = isNaN(raw) ? min : Math.min(max, Math.max(min, raw));
           return { dimensions: { ...state.dimensions, [key]: clamped } };
         }),
 

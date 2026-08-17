@@ -225,18 +225,24 @@ export default function CreateQuotation() {
          y += 8;
       };
 
+      const drawCostRow = (label, val) => {
+        if (Number(val) > 0) {
+          drawRow(label, val);
+        }
+      };
+
       const prodStr = (request.product_type || '').toLowerCase();
-      drawRow("Material Cost", costs.material);
-      drawRow("Fabrication Cost", costs.fabrication);
+      drawCostRow("Material Cost", costs.material);
+      drawCostRow("Fabrication Cost", costs.fabrication);
       if (prodStr.includes('wall')) {
-        drawRow("Installation (with Stainless Steel Anchor)", costs.installation);
+        drawCostRow("Installation (with Stainless Steel Anchor)", costs.installation);
       } else {
-        drawRow("Installation Cost", costs.installation);
+        drawCostRow("Installation Cost", costs.installation);
       }
-      drawRow("Edge Polishing", costs.edgePolishing);
-      drawRow("Mitering", costs.mitering);
-      drawRow("Delivery Cost", costs.delivery);
-      drawRow("Mobilization Cost", costs.mobilization);
+      drawCostRow("Edge Polishing", costs.edgePolishing);
+      drawCostRow("Mitering", costs.mitering);
+      drawCostRow("Delivery Cost", costs.delivery);
+      drawCostRow("Mobilization Cost", costs.mobilization);
 
       y += 4;
       doc.setDrawColor(226, 232, 240);
@@ -421,10 +427,6 @@ export default function CreateQuotation() {
             <p className="text-[13px] text-[#6B7280]">Material, labor, and service costs (editable for custom projects)</p>
           </div>
 
-          <div className="bg-[#EFF6FF] text-[#1E40AF] text-[12px] p-4 rounded-lg mb-6 flex gap-2">
-            <span role="img" aria-label="tip">💡</span>
-            <p><strong>Tip:</strong> Costs are automatically calculated based on area and product type. You can customize any value for special projects or custom requirements.</p>
-          </div>
 
           <div className="space-y-2 border border-[#E2E8F0] p-6 rounded-xl">
             <InputRow label="Material Cost" field="material" costs={costs} onChange={handleCostChange} />
