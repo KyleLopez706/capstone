@@ -62,13 +62,22 @@ export default function DimensionPanel() {
       }
       
       const graniteHex = selectedMaterial.hex_code || getHexForMaterial(selectedMaterial.name);
-      const cabinetHex = selectedCabinetMaterial?.hex_code || getHexForMaterial(selectedCabinetMaterial?.name) || '#F9F9FB';
+      
+      // Determine if this structure type actually has cabinets.
+      // Wall cladding and flooring are stone-only — no cabinet pairing exists.
+      // For these, we evaluate the stone against a clean neutral white backdrop.
+      const structName = (selectedStructure?.name ?? '').toLowerCase();
+      const hasCabinets = !structName.includes('wall') && !structName.includes('floor');
+      
+      const cabinetHex = hasCabinets
+        ? (selectedCabinetMaterial?.hex_code || getHexForMaterial(selectedCabinetMaterial?.name) || '#F9F9FB')
+        : '#F9F9FB'; // Neutral white — "How does this stone look in a clean modern room?"
 
       const score = await evaluateDesignQuality(graniteHex, cabinetHex);
       setAiScore(score);
     }
     fetchScore();
-  }, [selectedMaterial, selectedCabinetMaterial, getHexForMaterial]);
+  }, [selectedMaterial, selectedCabinetMaterial, selectedStructure, getHexForMaterial]);
 
   const navigate = useNavigate();
 
