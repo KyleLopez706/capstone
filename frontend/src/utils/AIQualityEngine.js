@@ -126,3 +126,60 @@ export async function evaluateDesignQuality(graniteHex, cabinetHex) {
     // 5. Cap safely between 0 and 100 just in case
     return Math.max(0, Math.min(100, Math.round(averageScore)));
 }
+
+/**
+ * Recommends the best cabinet materials to pair with a given granite.
+ * Runs the AI model against every cabinet option and returns them
+ * sorted by score (highest first).
+ *
+ * @param {string} graniteHex - The hex code of the selected granite
+ * @param {Array} cabinetMaterials - Array of cabinet material objects from Supabase
+ * @param {Function} hexFallback - Fallback function to derive hex from name
+ * @param {number} [topN=3] - How many recommendations to return
+ * @returns {Promise<Array<{id, name, hex, score}>>} - Top N recommendations
+ */
+export async function getRecommendations(graniteHex, cabinetMaterials, hexFallback, topN = 3) {
+    if (!graniteHex || !cabinetMaterials?.length) return [];
+
+    // Score every cabinet material against the selected granite
+    const scored = await Promise.all(
+        cabinetMaterials.map(async (cab) => {
+            const cabHex = cab.hex_code || (hexFallback ? hexFallback(cab.name) : '#808080');
+            const score  = await evaluateDesignQuality(graniteHex, cabHex);
+            return { id: cab.id, name: cab.name, hex: cabHex, score };
+        })
+    );
+
+    // Sort descending by score and return the top N
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, topN);
+}
+
+/**
+ * Recommends the best granite designs to pair with the current cabinet.
+ * Scores every available granite against the selected cabinet hex and
+ * returns them sorted by score, excluding the currently selected granite.
+ *
+ * @param {string} cabinetHex - The hex code of the selected cabinet
+ * @param {Array} materials - Array of granite material objects from Supabase
+ * @param {string} currentMaterialId - ID of the currently selected granite (excluded from results)
+ * @param {Function} hexFallback - Fallback function to derive hex from name
+ * @param {number} [topN=3] - How many recommendations to return
+ * @returns {Promise<Array<{id, name, hex, score}>>} - Top N granite recommendations
+ */
+export async function getGraniteRecommendations(cabinetHex, materials, currentMaterialId, hexFallback, topN = 3) {
+    if (!cabinetHex || !materials?.length) return [];
+
+    const scored = await Promise.all(
+        materials
+            .filter((mat) => mat.id !== currentMaterialId) // Exclude current selection
+            .map(async (mat) => {
+                const matHex = mat.hex_code || (hexFallback ? hexFallback(mat.name) : '#808080');
+                const score  = await evaluateDesignQuality(matHex, cabinetHex);
+                return { id: mat.id, name: mat.name, hex: matHex, color_url: mat.color_url, score };
+            })
+    );
+
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, topN);
+}

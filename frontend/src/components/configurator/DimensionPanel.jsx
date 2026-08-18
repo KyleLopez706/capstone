@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import useConfiguratorStore from '../../store/configuratorStore';
-import { evaluateDesignQuality } from '../../utils/AIQualityEngine';
+import { evaluateDesignQuality, getRecommendations, getGraniteRecommendations } from '../../utils/AIQualityEngine';
 
 /* ─────────────────────────────────────────
    DIMENSION & PRICING PANEL  (Right Column)
@@ -27,12 +27,18 @@ const STEP     = 0.1;
 
 export default function DimensionPanel() {
   const selectedMaterial  = useConfiguratorStore((s) => s.selectedMaterial);
+  const materials         = useConfiguratorStore((s) => s.materials);
+  const setMaterial       = useConfiguratorStore((s) => s.setMaterial);
   const selectedCabinetMaterial = useConfiguratorStore((s) => s.selectedCabinetMaterial);
+  const cabinetMaterials  = useConfiguratorStore((s) => s.cabinetMaterials);
+  const setCabinetMaterial = useConfiguratorStore((s) => s.setCabinetMaterial);
   const dimensions        = useConfiguratorStore((s) => s.dimensions);
   const setDimension      = useConfiguratorStore((s) => s.setDimension);
   const selectedStructure = useConfiguratorStore((s) => s.selectedStructure);
 
   const [aiScore, setAiScore] = useState(null);
+  const [recommendations, setRecommendations] = useState([]);
+  const [graniteRecs, setGraniteRecs] = useState([]);
 
   // Helper to guess the hex color based on the material name since it's not in the DB yet
   const getHexForMaterial = useCallback((name) => {
@@ -75,9 +81,27 @@ export default function DimensionPanel() {
 
       const score = await evaluateDesignQuality(graniteHex, cabinetHex);
       setAiScore(score);
+
+      // Compute AI cabinet recommendations — score every cabinet against this granite
+      // and surface the top 3 best-matching options for the customer.
+      if (hasCabinets && cabinetMaterials?.length) {
+        const recs = await getRecommendations(graniteHex, cabinetMaterials, getHexForMaterial, 3);
+        setRecommendations(recs);
+      } else {
+        setRecommendations([]);
+      }
+
+      // Compute AI granite recommendations — score every granite design against
+      // the current cabinet and recommend the top 3 compatible stone alternatives.
+      if (materials?.length) {
+        const gRecs = await getGraniteRecommendations(cabinetHex, materials, selectedMaterial?.id, getHexForMaterial, 3);
+        setGraniteRecs(gRecs);
+      } else {
+        setGraniteRecs([]);
+      }
     }
     fetchScore();
-  }, [selectedMaterial, selectedCabinetMaterial, selectedStructure, getHexForMaterial]);
+  }, [selectedMaterial, selectedCabinetMaterial, selectedStructure, cabinetMaterials, materials, getHexForMaterial]);
 
   const navigate = useNavigate();
 
@@ -452,10 +476,10 @@ export default function DimensionPanel() {
                   <p className="text-[11px] leading-relaxed" style={{ color: '#9CA3AF' }}>
                     <span style={{ color: '#E2E8F0', fontWeight: 600 }}>Why this score?</span>{' '}
                     {aiScore >= 70 
-                      ? "High aesthetic synergy detected. The AI measured optimal lightness separation (Contrast) and strong hue compatibility (Color Harmony) that strongly aligns with premium, top-rated designs in the dataset." 
+                      ? "Strong contrast and complementary hues — this pairing aligns with top-rated designs." 
                       : aiScore >= 50 
-                      ? "Moderate visual compatibility. The AI measured that while these surfaces are acceptable together, they lack the striking contrast or precise complementary hues found in highly-rated professional designs." 
-                      : "Low visual synergy detected. The AI measured that these surfaces likely clash in hue or suffer from muddy contrast, resulting in an unbalanced aesthetic according to human preference data."}
+                      ? "Acceptable pairing, but lacks the contrast or hue harmony found in premium designs." 
+                      : "These surfaces may clash in tone or hue, creating an unbalanced look."}
                   </p>
                 </div>
               </div>
@@ -465,6 +489,196 @@ export default function DimensionPanel() {
               </p>
             )}
           </div>
+
+        {/* ── AI Recommendations ── */}
+        {recommendations.length > 0 && (
+          <div
+            className="rounded-xl p-4"
+            style={{
+              backgroundColor: '#232B32',
+              border: '1px solid rgba(226,232,240,0.1)',
+            }}
+          >
+            <p
+              className="text-xs font-semibold tracking-wider uppercase mb-3"
+              style={{ color: '#C5A059' }}
+            >
+              Recommended Cabinet Finishes
+            </p>
+            <p className="text-[11px] mb-3" style={{ color: '#6B7280' }}>
+              Top matches for your selected stone.
+            </p>
+            <div className="flex flex-col gap-2">
+              {recommendations.map((rec, idx) => (
+                <button
+                  key={rec.id}
+                  onClick={() => {
+                    // Find the full cabinet material object from the store and apply it
+                    const fullMat = cabinetMaterials.find(c => c.id === rec.id);
+                    if (fullMat) setCabinetMaterial(fullMat);
+                  }}
+                  className="w-full flex items-center gap-3 rounded-lg p-2.5 text-left"
+                  style={{
+                    backgroundColor: selectedCabinetMaterial?.id === rec.id
+                      ? 'rgba(197,160,89,0.12)'
+                      : 'rgba(0,0,0,0.15)',
+                    border: selectedCabinetMaterial?.id === rec.id
+                      ? '1px solid rgba(197,160,89,0.35)'
+                      : '1px solid rgba(226,232,240,0.06)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (selectedCabinetMaterial?.id !== rec.id)
+                      e.currentTarget.style.backgroundColor = 'rgba(197,160,89,0.06)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (selectedCabinetMaterial?.id !== rec.id)
+                      e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.15)';
+                  }}
+                >
+                  {/* Rank badge */}
+                  <span
+                    className="shrink-0 w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold"
+                    style={{
+                      backgroundColor: idx === 0 ? 'rgba(197,160,89,0.2)' : 'rgba(226,232,240,0.08)',
+                      color: idx === 0 ? '#C5A059' : '#6B7280',
+                    }}
+                  >
+                    {idx + 1}
+                  </span>
+
+                  {/* Color swatch */}
+                  <div
+                    className="shrink-0 w-6 h-6 rounded"
+                    style={{
+                      backgroundColor: rec.hex,
+                      border: '1px solid rgba(226,232,240,0.15)',
+                    }}
+                  />
+
+                  {/* Name and score */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate" style={{ color: '#E2E8F0' }}>
+                      {rec.name}
+                    </p>
+                  </div>
+
+                  {/* Score pill */}
+                  <span
+                    className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    style={{
+                      backgroundColor: rec.score >= 70
+                        ? 'rgba(16,185,129,0.12)'
+                        : rec.score >= 50
+                        ? 'rgba(245,158,11,0.12)'
+                        : 'rgba(239,68,68,0.12)',
+                      color: rec.score >= 70 ? '#10B981' : rec.score >= 50 ? '#F59E0B' : '#EF4444',
+                    }}
+                  >
+                    {rec.score}%
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── AI Granite Recommendations ── */}
+        {graniteRecs.length > 0 && (
+          <div
+            className="rounded-xl p-4"
+            style={{
+              backgroundColor: '#232B32',
+              border: '1px solid rgba(226,232,240,0.1)',
+            }}
+          >
+            <p
+              className="text-xs font-semibold tracking-wider uppercase mb-3"
+              style={{ color: '#C5A059' }}
+            >
+              Recommended Stone Designs
+            </p>
+            <p className="text-[11px] mb-3" style={{ color: '#6B7280' }}>
+              Other granite designs that pair well with your current setup.
+            </p>
+            <div className="flex flex-col gap-2">
+              {graniteRecs.map((rec, idx) => (
+                <button
+                  key={rec.id}
+                  onClick={() => {
+                    const fullMat = materials.find(m => m.id === rec.id);
+                    if (fullMat) setMaterial(fullMat);
+                  }}
+                  className="w-full flex items-center gap-3 rounded-lg p-2.5 text-left"
+                  style={{
+                    backgroundColor: 'rgba(0,0,0,0.15)',
+                    border: '1px solid rgba(226,232,240,0.06)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(197,160,89,0.06)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.15)';
+                  }}
+                >
+                  {/* Rank badge */}
+                  <span
+                    className="shrink-0 w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold"
+                    style={{
+                      backgroundColor: idx === 0 ? 'rgba(197,160,89,0.2)' : 'rgba(226,232,240,0.08)',
+                      color: idx === 0 ? '#C5A059' : '#6B7280',
+                    }}
+                  >
+                    {idx + 1}
+                  </span>
+
+                  {/* Granite texture thumbnail */}
+                  <div
+                    className="shrink-0 w-8 h-8 rounded overflow-hidden"
+                    style={{
+                      border: '1px solid rgba(226,232,240,0.15)',
+                      backgroundColor: rec.hex,
+                    }}
+                  >
+                    {rec.color_url && (
+                      <img
+                        src={rec.color_url}
+                        alt={rec.name}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    )}
+                  </div>
+
+                  {/* Name and score */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate" style={{ color: '#E2E8F0' }}>
+                      {rec.name}
+                    </p>
+                  </div>
+
+                  {/* Score pill */}
+                  <span
+                    className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    style={{
+                      backgroundColor: rec.score >= 70
+                        ? 'rgba(16,185,129,0.12)'
+                        : rec.score >= 50
+                        ? 'rgba(245,158,11,0.12)'
+                        : 'rgba(239,68,68,0.12)',
+                      color: rec.score >= 70 ? '#10B981' : rec.score >= 50 ? '#F59E0B' : '#EF4444',
+                    }}
+                  >
+                    {rec.score}%
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── Auth message (shown when user is not signed in) ── */}
         {authMsg && (

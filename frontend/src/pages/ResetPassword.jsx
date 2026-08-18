@@ -115,7 +115,7 @@ export default function ResetPassword() {
       // Redirect to login after a short pause
       setTimeout(() => navigate("/login"), 2500);
     } catch (err) {
-      showToast(friendlyAuthError(err.message), "error");
+      showToast(friendlyAuthError(err), "error");
     } finally {
       setLoading(false);
     }

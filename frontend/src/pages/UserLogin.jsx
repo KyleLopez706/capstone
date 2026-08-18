@@ -32,6 +32,8 @@ export default function UserLogin() {
   const [userSignInLoading, setUserSignInLoading] = useState(false);
 
   /* ── Sign-Up state ── */
+  const [signUpName, setSignUpName] = useState("");
+  const [signUpPhone, setSignUpPhone] = useState("");
   const [signUpEmail, setSignUpEmail] = useState("");
   const [signUpPassword, setSignUpPassword] = useState("");
   const [signUpShowPw, setSignUpShowPw] = useState(false);
@@ -136,7 +138,7 @@ export default function UserLogin() {
 
       await routeByRole(data.user.id);
     } catch (err) {
-      showToast(friendlyAuthError(err.message), 'error');
+      showToast(friendlyAuthError(err), 'error');
     } finally {
       setUserSignInLoading(false);
     }
@@ -148,8 +150,12 @@ export default function UserLogin() {
 
 
     // Basic client-side validation before hitting the API
-    if (!signUpEmail || !signUpPassword) {
-      showToast('Email and password are required.', 'error');
+    if (!signUpName || !signUpEmail || !signUpPassword) {
+      showToast('Name, email, and password are required.', 'error');
+      return;
+    }
+    if (signUpPhone && !/^09\d{9}$/.test(signUpPhone)) {
+      showToast('Please enter a valid Philippine mobile number (e.g., 09171234567).', 'error');
       return;
     }
     if (signUpPassword.length < 6) {
@@ -162,19 +168,16 @@ export default function UserLogin() {
       const { data, error } = await supabase.auth.signUp({
         email: signUpEmail,
         password: signUpPassword,
+        options: {
+          data: {
+            full_name: signUpName,
+            phone_number: signUpPhone,
+          }
+        }
       });
 
       if (error) {
-        // Supabase rate limit — translate to a human-readable message
-        if (
-          error.message.toLowerCase().includes("rate limit") ||
-          error.status === 429
-        ) {
-          throw new Error(
-            "Too many sign-up attempts. Please wait a few minutes and try again.",
-          );
-        }
-        throw new Error(friendlyAuthError(error.message));
+        throw error; // Will be caught and handled centrally by friendlyAuthError in the catch block
       }
 
       /* Supabase intentionally returns a fake "success" when the email already
@@ -194,7 +197,7 @@ export default function UserLogin() {
         switchUserView("signin");
       }, 2500);
     } catch (err) {
-      showToast(friendlyAuthError(err.message), 'error');
+      showToast(friendlyAuthError(err), 'error');
     } finally {
       setSignUpLoading(false);
     }
@@ -258,7 +261,7 @@ export default function UserLogin() {
 
       showToast('Password reset email sent! Check your inbox.', 'success');
     } catch (err) {
-      showToast(friendlyAuthError(err.message), 'error');
+      showToast(friendlyAuthError(err), 'error');
     } finally {
       setForgotLoading(false);
     }
@@ -627,6 +630,63 @@ export default function UserLogin() {
         {userView === "signup" && (
           <div>
             <form onSubmit={handleUserSignUp} className="space-y-4">
+              
+              {/* Full Name */}
+              <div>
+                <label
+                  htmlFor="signup-name"
+                  className="block text-xs font-medium tracking-wider uppercase mb-2"
+                  style={{ color: "#232B32" }}
+                >
+                  Full Name
+                </label>
+                <div className="relative">
+                  <InputIcon icon="user" />
+                  <input
+                    id="signup-name"
+                    type="text"
+                    value={signUpName}
+                    onChange={(e) => setSignUpName(e.target.value.replace(/[^A-Za-z\s\-ñÑ]/g, ''))}
+                    required
+                    placeholder="Juan Dela Cruz"
+                    className="w-full rounded-lg pl-11 pr-4 py-3 text-sm outline-none transition-all duration-200"
+                    style={inputBase}
+                    onFocus={onFocus}
+                    onBlur={onBlur}
+                  />
+                </div>
+              </div>
+
+              {/* Phone Number */}
+              <div>
+                <label
+                  htmlFor="signup-phone"
+                  className="block text-xs font-medium tracking-wider uppercase mb-2"
+                  style={{ color: "#232B32" }}
+                >
+                  Phone Number <span style={{ color: '#9CA3AF', textTransform: 'none', fontWeight: 400 }}>(Optional)</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#9CA3AF]">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                  </div>
+                  <input
+                    id="signup-phone"
+                    type="tel"
+                    value={signUpPhone}
+                    onChange={(e) => setSignUpPhone(e.target.value.replace(/[^0-9]/g, ''))}
+                    maxLength={11}
+                    placeholder="0917 123 4567"
+                    className="w-full rounded-lg pl-11 pr-4 py-3 text-sm outline-none transition-all duration-200"
+                    style={inputBase}
+                    onFocus={onFocus}
+                    onBlur={onBlur}
+                  />
+                </div>
+              </div>
+
               {/* Email */}
               <div>
                 <label

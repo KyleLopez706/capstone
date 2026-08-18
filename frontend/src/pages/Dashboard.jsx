@@ -320,55 +320,55 @@ export default function Dashboard() {
           <StatCard label="In Review"       value={stats.inReview} accent="#1D4ED8"        isLoading={dataLoading} />
         </div>
 
-        {/* ── Search + Filter ── */}
-        <div
-          className="flex flex-col sm:flex-row gap-3"
-          style={{ backgroundColor: '#ffffff', borderRadius: '14px', border: '1px solid #E2E8F0', padding: '16px 20px' }}
-        >
-          {/* Search */}
-          <div style={{ position: 'relative', flex: 1 }}>
-            <svg
-              style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
-              width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            {/* ── Search + Filter ── */}
+            <div
+              className="flex flex-col sm:flex-row gap-3"
+              style={{ backgroundColor: '#ffffff', borderRadius: '14px', border: '1px solid #E2E8F0', padding: '16px 20px' }}
             >
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <input
-              id="dashboard-search"
-              type="text"
-              placeholder="Search by name, email, or request ID\u2026"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                width: '100%', padding: '9px 12px 9px 38px',
-                borderRadius: '8px', border: '1.5px solid #E2E8F0',
-                fontSize: '13px', color: '#232B32', backgroundColor: '#F9F9FB',
-                outline: 'none', boxSizing: 'border-box',
-              }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = '#C5A059'; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = '#E2E8F0'; }}
-            />
-          </div>
+              {/* Search */}
+              <div style={{ position: 'relative', flex: 1 }}>
+                <svg
+                  style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+                  width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                >
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <input
+                  id="dashboard-search"
+                  type="text"
+                  placeholder="Search by name, email, or request ID…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    width: '100%', padding: '9px 12px 9px 38px',
+                    borderRadius: '8px', border: '1.5px solid #E2E8F0',
+                    fontSize: '13px', color: '#232B32', backgroundColor: '#F9F9FB',
+                    outline: 'none', boxSizing: 'border-box',
+                  }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#C5A059'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#E2E8F0'; }}
+                />
+              </div>
 
-          {/* Status filter */}
-          <select
-            id="dashboard-status-filter"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{
-              padding: '9px 14px', borderRadius: '8px', border: '1.5px solid #E2E8F0',
-              fontSize: '13px', fontWeight: 600, color: '#232B32', backgroundColor: '#F9F9FB',
-              cursor: 'pointer', outline: 'none', minWidth: '130px',
-            }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = '#C5A059'; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = '#E2E8F0'; }}
-          >
-            <option value="all">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="in-review">In Review</option>
-          </select>
-        </div>
+              {/* Status filter */}
+              <select
+                id="dashboard-status-filter"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                style={{
+                  padding: '9px 14px', borderRadius: '8px', border: '1.5px solid #E2E8F0',
+                  fontSize: '13px', fontWeight: 600, color: '#232B32', backgroundColor: '#F9F9FB',
+                  cursor: 'pointer', outline: 'none', minWidth: '130px',
+                }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#C5A059'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#E2E8F0'; }}
+              >
+                <option value="all">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="in-review">In Review</option>
+              </select>
+            </div>
 
         {/* ── Quotation Requests Table ── */}
         <div

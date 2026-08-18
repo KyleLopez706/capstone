@@ -29,25 +29,11 @@ const SERVICES = [
     description:
       "Use our interactive 3D configurator to preview exactly how your chosen stone will look in your space — before a single cut is made.",
   },
-  {
-    id: "consultation",
-
-    title: "Design Consultation",
-    description:
-      "One-on-one sessions with our stone specialists. We help you select the perfect material, finish, and profile for your project and budget.",
-  },
-  {
-    id: "fabrication",
-
-    title: "Custom Fabrication",
-    description:
-      "Our state-of-the-art workshop handles complex edge profiles, waterfall edges, book-matching, and intricate inlays with exacting tolerances.",
-  },
 ];
 
 export default function Services() {
   return (
-    <div className="min-h-screen w-full" style={{ backgroundColor: "#F9F9FB" }}>
+    <div className="min-h-screen w-full" style={{ backgroundColor: "#F5F5F5" }}>
       <Navbar />
 
       {/* Spacer for fixed navbar */}
@@ -57,28 +43,29 @@ export default function Services() {
           HERO BANNER
       ════════════════════════════════════════ */}
       <section
-        className="w-full py-20 sm:py-28 lg:py-36 text-center"
+        className="w-full relative py-24 sm:py-32 lg:py-40 text-center overflow-hidden"
         style={{
-          background:
-            "linear-gradient(160deg, #232B32 0%, #2e3a43 60%, #232B32 100%)",
+          background: "linear-gradient(160deg, #1A1F24 0%, #232B32 50%, #1A1F24 100%)",
         }}
       >
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="absolute inset-0 pointer-events-none opacity-20" style={{ backgroundImage: "radial-gradient(circle at 50% 0%, #C5A059 0%, transparent 60%)" }} />
+        
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <p
-            className="text-xs font-semibold tracking-widest uppercase mb-4"
+            className="text-xs font-bold tracking-[0.3em] uppercase mb-6"
             style={{ color: "#C5A059" }}
           >
             What We Offer
           </p>
           <h1
-            className="text-4xl sm:text-5xl lg:text-6xl font-light leading-tight tracking-tight mb-6"
+            className="text-5xl sm:text-6xl lg:text-7xl font-light leading-tight tracking-tight mb-8"
             style={{ color: "#FFFFFF" }}
           >
             Premium{" "}
             <span
               className="font-semibold"
               style={{
-                background: "linear-gradient(135deg, #C5A059 0%, #e8c97a 100%)",
+                background: "linear-gradient(135deg, #DFBE74 0%, #C5A059 50%, #9B7D46 100%)",
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
                 backgroundClip: "text",
@@ -88,7 +75,7 @@ export default function Services() {
             </span>
           </h1>
           <p
-            className="text-base sm:text-lg leading-relaxed max-w-xl mx-auto"
+            className="text-lg sm:text-xl leading-relaxed max-w-2xl mx-auto"
             style={{ color: "#E2E8F0" }}
           >
             From material selection to final installation, Six Sigmaphil offers
@@ -123,39 +110,40 @@ export default function Services() {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 mt-16 max-w-5xl mx-auto">
             {SERVICES.map((svc) => (
               <div
                 key={svc.id}
-                className="group rounded-2xl p-6 flex flex-col gap-4 transition-all duration-300"
+                className="group relative rounded-2xl p-8 flex flex-col gap-6 overflow-hidden transition-all duration-500 cursor-pointer"
                 style={{
-                  backgroundColor: "#FFFFFF",
-                  border: "1px solid #E2E8F0",
-                  boxShadow: "0 4px 20px rgba(35,43,50,0.06)",
+                  background: "linear-gradient(135deg, #232B32 0%, #1A1F24 100%)",
+                  border: "1px solid rgba(197,160,89,0.15)",
+                  boxShadow: "0 10px 30px rgba(35,43,50,0.1)",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-4px)";
-                  e.currentTarget.style.boxShadow =
-                    "0 16px 40px rgba(35,43,50,0.12)";
+                  e.currentTarget.style.transform = "translateY(-8px)";
+                  e.currentTarget.style.boxShadow = "0 20px 40px rgba(197,160,89,0.15)";
+                  e.currentTarget.style.borderColor = "rgba(197,160,89,0.5)";
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow =
-                    "0 4px 20px rgba(35,43,50,0.06)";
+                  e.currentTarget.style.boxShadow = "0 10px 30px rgba(35,43,50,0.1)";
+                  e.currentTarget.style.borderColor = "rgba(197,160,89,0.15)";
                 }}
               >
+                {/* Subtle background glow on hover */}
+                <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-bl from-[#C5A059] to-transparent opacity-0 group-hover:opacity-20 transition-opacity duration-500 rounded-bl-[100px]" />
 
-                {/* Text */}
-                <div>
+                <div className="flex-1 relative z-10">
                   <h3
-                    className="text-lg font-semibold mb-2"
-                    style={{ color: "#232B32" }}
+                    className="text-xl font-bold tracking-wide mb-3 transition-colors duration-300 group-hover:text-[#C5A059]"
+                    style={{ color: "#F9F9FB" }}
                   >
                     {svc.title}
                   </h3>
                   <p
-                    className="text-sm leading-relaxed"
-                    style={{ color: "#6B7280" }}
+                    className="text-sm sm:text-base leading-relaxed"
+                    style={{ color: "#9CA3AF" }}
                   >
                     {svc.description}
                   </p>
@@ -163,6 +151,21 @@ export default function Services() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ════════════════════════════════════════
+          CLOSING STATEMENT
+      ════════════════════════════════════════ */}
+      <section className="w-full relative py-20 sm:py-28 overflow-hidden bg-[#232B32]">
+        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at center, rgba(197,160,89,0.1) 0%, transparent 70%)" }} />
+        <div className="max-w-3xl mx-auto px-4 text-center relative z-10">
+          <h2 className="text-3xl sm:text-4xl font-light tracking-tight mb-6" style={{ color: "#FFFFFF" }}>
+            Uncompromising Excellence
+          </h2>
+          <p className="text-base sm:text-lg leading-relaxed" style={{ color: "#9CA3AF" }}>
+            Our commitment goes beyond simply providing materials. We deliver uncompromising quality, meticulous attention to detail, and a seamless experience that transforms your architectural vision into an enduring masterpiece.
+          </p>
         </div>
       </section>
     </div>

@@ -98,13 +98,25 @@ const ERROR_MAP = [
 ];
 
 /**
- * Translates a raw Supabase / GoTrue error message into a
+ * Translates a raw Supabase / GoTrue error object into a
  * short, user-friendly sentence.
  *
- * @param {string} rawMessage — the error.message from Supabase
+ * @param {Object|string} err — the error object or error.message from Supabase
  * @returns {string} — a clean, readable error for the UI
  */
-export function friendlyAuthError(rawMessage = '') {
+export function friendlyAuthError(err) {
+  // If a raw string is passed (legacy fallback), wrap it
+  if (typeof err === 'string') {
+    err = { message: err };
+  }
+
+  const rawMessage = err?.message || '';
+
+  // Handle rate limits by status code if present
+  if (err?.status === 429) {
+    return 'Too many attempts. Please wait a few minutes and try again.';
+  }
+
   for (const { match, message } of ERROR_MAP) {
     if (match.test(rawMessage)) return message;
   }

@@ -56,7 +56,7 @@ const STONE_DESIGNS = [
 export default function Home() {
   const navigate = useNavigate();
   return (
-    <div className="min-h-screen w-full" style={{ backgroundColor: "#F9F9FB" }}>
+    <div className="min-h-screen w-full" style={{ backgroundColor: "#F5F5F5" }}>
       {/* Shared navbar — handles auth, nav links, and hamburger */}
       <Navbar />
 
@@ -66,33 +66,32 @@ export default function Home() {
       {/* ════════════════════════════════════════
           HERO SECTION
       ════════════════════════════════════════ */}
-      <section className="w-full relative overflow-hidden bg-[#232B32]">
-        {/* Ambient background kitchen image */}
-        <div
-          className="absolute inset-0 z-0 pointer-events-none"
-          style={{ opacity: 0.6 }}
-          aria-hidden="true"
-        >
+      <section 
+        className="w-full relative overflow-hidden flex items-center justify-center min-h-[85vh]"
+        style={{ background: "linear-gradient(135deg, #1A1F24 0%, #232B32 100%)" }}
+      >
+        {/* Ambient background kitchen image with radial gradient overlay for luxury lighting */}
+        <div className="absolute inset-0 z-0 pointer-events-none" aria-hidden="true">
           <img
             src={kitchenImg}
             alt="Premium Granite Kitchen Countertop"
             className="w-full h-full object-cover object-center"
           />
+          <div className="absolute inset-0" style={{ backgroundColor: "rgba(26,31,36,0.7)" }} />
         </div>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-28 lg:py-36 relative z-10">
-          <div className="max-w-3xl mx-auto text-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full mt-16">
+          <div className="max-w-4xl mx-auto text-center flex flex-col items-center">
             {/* Headline */}
             <h1
-              className="text-4xl sm:text-5xl lg:text-6xl font-light leading-tight tracking-tight mb-6"
+              className="text-5xl sm:text-6xl lg:text-7xl font-light leading-[1.1] tracking-tight mb-8"
               style={{ color: "#FFFFFF" }}
             >
               Craft Your Perfect{" "}
               <span
-                className="font-semibold"
+                className="font-semibold block sm:inline mt-2 sm:mt-0"
                 style={{
-                  background:
-                    "linear-gradient(135deg, #C5A059 0%, #e8c97a 100%)",
+                  background: "linear-gradient(135deg, #DFBE74 0%, #C5A059 50%, #9B7D46 100%)",
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
                   backgroundClip: "text",
@@ -105,13 +104,47 @@ export default function Home() {
 
             {/* Subheadline */}
             <p
-              className="text-base sm:text-lg leading-relaxed max-w-xl mx-auto"
+              className="text-lg sm:text-xl leading-relaxed max-w-2xl mb-10"
               style={{ color: "#E2E8F0" }}
             >
-              Six Sigmaphil brings world-class granite and marble to your
-              architecture. Visualize, configure, and order premium stone
-              surfaces.
+              Six Sigmaphil brings world-class granite and marble to your architecture. Visualize, configure, and order premium stone surfaces with photorealistic precision.
             </p>
+
+            {/* Hero CTAs */}
+            <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+              <button
+                onClick={() => navigate("/configurator-3d")}
+                className="inline-flex items-center justify-center px-8 py-4 rounded-full text-sm font-bold tracking-widest uppercase cursor-pointer transition-all duration-300 relative overflow-hidden group"
+                style={{ backgroundColor: "#C5A059", color: "#1A1F24", boxShadow: "0 8px 32px rgba(197,160,89,0.25)" }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.boxShadow = "0 12px 40px rgba(197,160,89,0.4)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 8px 32px rgba(197,160,89,0.25)";
+                }}
+              >
+                <span className="relative z-10">Start Configuring</span>
+                <div className="absolute inset-0 w-full h-full bg-white opacity-0 group-hover:opacity-20 transition-opacity duration-300" />
+              </button>
+              
+              <button
+                onClick={() => navigate("/gallery")}
+                className="inline-flex items-center justify-center px-8 py-4 rounded-full text-sm font-semibold tracking-widest uppercase cursor-pointer transition-all duration-300 border"
+                style={{ backgroundColor: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.15)", color: "#FFFFFF" }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)";
+                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.3)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.03)";
+                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)";
+                }}
+              >
+                View Gallery
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -120,10 +153,16 @@ export default function Home() {
           3D CONFIGURATOR SHOWCASE SECTION
       ════════════════════════════════════════ */}
       <section
-        className="w-full py-20 sm:py-24 lg:py-28"
-        style={{ backgroundColor: "#232B32" }}
+        className="w-full py-24 sm:py-32 relative overflow-hidden"
+        style={{ backgroundColor: "#1A1F24" }}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Highly optimized SVG dot grid for luxury technical aesthetic */}
+        <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='24' height='24' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='2' cy='2' r='1.5' fill='%23ffffff'/%3E%3C/svg%3E\")" }} />
+        
+        {/* Single hardware-accelerated soft radial glow */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-5xl h-[800px] pointer-events-none opacity-40" style={{ background: "radial-gradient(ellipse at top, rgba(197,160,89,0.15) 0%, transparent 70%)" }} />
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           {/* ── Section Label (centered, above image) ── */}
           <div className="text-center mb-12">
             <span
@@ -134,7 +173,7 @@ export default function Home() {
             </span>
             <h2
               className="text-3xl sm:text-4xl lg:text-5xl font-light tracking-tight mb-4"
-              style={{ color: "#F9F9FB" }}
+              style={{ color: "#F5F5F5" }}
             >
               From Stone to{" "}
               <span
@@ -177,6 +216,8 @@ export default function Home() {
                   alt="Black Marquina granite slab"
                   className="w-full h-full object-cover"
                   style={{ maxHeight: "280px" }}
+                  loading="lazy"
+                  decoding="async"
                 />
                 {/* Overlay label */}
                 <div
@@ -194,7 +235,7 @@ export default function Home() {
                   </p>
                   <p
                     className="text-sm font-light"
-                    style={{ color: "#F9F9FB" }}
+                    style={{ color: "#F5F5F5" }}
                   >
                     Black Marquina
                   </p>
@@ -214,6 +255,8 @@ export default function Home() {
                   alt="Black Marquina kitchen countertop"
                   className="w-full h-full object-cover"
                   style={{ maxHeight: "280px" }}
+                  loading="lazy"
+                  decoding="async"
                 />
                 {/* Overlay label */}
                 <div
@@ -231,7 +274,7 @@ export default function Home() {
                   </p>
                   <p
                     className="text-sm font-light"
-                    style={{ color: "#F9F9FB" }}
+                    style={{ color: "#F5F5F5" }}
                   >
                     Kitchen Countertop
                   </p>
@@ -251,7 +294,7 @@ export default function Home() {
               <div>
                 <h3
                   className="text-2xl sm:text-3xl font-light tracking-wide mb-2"
-                  style={{ color: "#F9F9FB" }}
+                  style={{ color: "#F5F5F5" }}
                 >
                   The Allure of{" "}
                   <span
@@ -282,7 +325,7 @@ export default function Home() {
                   Born from the quarries of northern Spain, Black Marquina is
                   nature&apos;s most dramatic masterpiece. Its profound,
                   jet-black canvas is traversed by a delicate network of{" "}
-                  <span style={{ color: "#F9F9FB", fontWeight: 500 }}>
+                  <span style={{ color: "#F5F5F5", fontWeight: 500 }}>
                     ivory-white veining
                   </span>{" "}
                   — a contrast so striking, it commands the entire character of
@@ -312,7 +355,7 @@ export default function Home() {
                       >
                         The countertop image you see is not merely a photograph
                         — it is{" "}
-                        <span style={{ color: "#F9F9FB", fontWeight: 500 }}>
+                        <span style={{ color: "#F5F5F5", fontWeight: 500 }}>
                           transformed into a fully interactive 3D model
                         </span>
                         , rendered with precision and depth to give you an
@@ -356,7 +399,7 @@ export default function Home() {
         className="w-full py-20 sm:py-24 lg:py-32"
         style={{
           background:
-            "linear-gradient(180deg, #F9F9FB 0%, #F0EDE8 50%, #F9F9FB 100%)",
+            "linear-gradient(180deg, #F5F5F5 0%, #F0EDE8 50%, #F5F5F5 100%)",
         }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -410,6 +453,8 @@ export default function Home() {
                     src={stone.image}
                     alt={stone.name}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    loading="lazy"
+                    decoding="async"
                   />
                 </div>
 
@@ -450,6 +495,38 @@ export default function Home() {
       </section>
 
       {/* ════════════════════════════════════════
+          FINAL CTA SECTION
+      ════════════════════════════════════════ */}
+      <section className="w-full relative py-24 sm:py-32 overflow-hidden bg-[#232B32]">
+        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at bottom, rgba(197,160,89,0.15) 0%, transparent 70%)" }} />
+        <div className="max-w-4xl mx-auto px-4 text-center relative z-10">
+          <h2 className="text-4xl sm:text-5xl font-light tracking-tight mb-6" style={{ color: "#FFFFFF" }}>
+            Ready to bring your vision to life?
+          </h2>
+          <p className="text-lg mb-10" style={{ color: "#9CA3AF" }}>
+            Experience our premium stones in full 3D and get a custom quotation instantly.
+          </p>
+          <button
+            onClick={() => navigate("/configurator-3d")}
+            className="inline-flex items-center justify-center px-10 py-5 rounded-full text-sm font-bold tracking-widest uppercase cursor-pointer transition-all duration-300"
+            style={{ backgroundColor: "#FFFFFF", color: "#232B32", boxShadow: "0 10px 40px rgba(0,0,0,0.5)" }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translateY(-4px)";
+              e.currentTarget.style.boxShadow = "0 20px 50px rgba(0,0,0,0.6)";
+              e.currentTarget.style.color = "#C5A059";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "0 10px 40px rgba(0,0,0,0.5)";
+              e.currentTarget.style.color = "#232B32";
+            }}
+          >
+            Launch the 3D Configurator
+          </button>
+        </div>
+      </section>
+
+      {/* ════════════════════════════════════════
           FOOTER
       ════════════════════════════════════════ */}
       <footer
@@ -466,7 +543,7 @@ export default function Home() {
               <div>
                 <p
                   className="text-sm font-light tracking-widest uppercase"
-                  style={{ color: "#F9F9FB" }}
+                  style={{ color: "#F5F5F5" }}
                 >
                   Six Sigmaphil
                 </p>

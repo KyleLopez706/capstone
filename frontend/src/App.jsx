@@ -14,6 +14,7 @@ import QuotationRequest from "./pages/QuotationRequest";
 import Analytics from "./pages/Analytics";
 import AdminLayout from "./components/AdminLayout";
 import CreateQuotation from "./pages/CreateQuotation";
+import AdminMessages from "./pages/AdminMessages";
 
 function App() {
   const navigate = useNavigate();
@@ -141,6 +142,7 @@ function App() {
       <Route element={<AdminLayout />}>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/analytics" element={<Analytics />} />
+        <Route path="/messages" element={<AdminMessages />} />
       </Route>
       <Route path="/admin/quotation/:id" element={<CreateQuotation />} />
     </Routes>

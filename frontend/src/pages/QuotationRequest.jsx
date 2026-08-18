@@ -177,8 +177,8 @@ export default function QuotationRequest() {
     const cleanPhone = form.phone.replace(/[\s-]/g, '');
     if (!cleanPhone) {
       errs.phone = 'Phone number is required.';
-    } else if (!/^(?:\+63|0)9\d{9}$/.test(cleanPhone)) {
-      errs.phone = 'Enter a valid PH number (e.g., +639171234567 or 09171234567).';
+    } else if (!/^09\d{9}$/.test(cleanPhone)) {
+      errs.phone = 'Enter a valid PH number (e.g., 09171234567).';
     }
 
     if (!form.address.trim())  errs.address = 'Installation address is required.';
@@ -562,7 +562,7 @@ export default function QuotationRequest() {
                 <Field
                   id="quote-full-name"  label="Full Name"  required
                   value={form.fullName}
-                  onChange={(e) => { setForm({ ...form, fullName: e.target.value }); setErrors({ ...errors, fullName: '' }); }}
+                  onChange={(e) => { setForm({ ...form, fullName: e.target.value.replace(/[^A-Za-z\s\-ñÑ]/g, '') }); setErrors({ ...errors, fullName: '' }); }}
                   placeholder="Juan dela Cruz"  error={errors.fullName}
                 />
                 <Field
@@ -574,8 +574,8 @@ export default function QuotationRequest() {
                 <Field
                   id="quote-phone"  label="Phone Number"  type="tel"  required
                   value={form.phone}
-                  onChange={(e) => { setForm({ ...form, phone: e.target.value }); setErrors({ ...errors, phone: '' }); }}
-                  placeholder="+63 917 123 4567"  error={errors.phone}
+                  onChange={(e) => { setForm({ ...form, phone: e.target.value.replace(/[^0-9]/g, '').slice(0,11) }); setErrors({ ...errors, phone: '' }); }}
+                  placeholder="09171234567"  error={errors.phone}
                 />
                 <Field
                   id="quote-address"  label="Installation Address"  type="textarea"  required

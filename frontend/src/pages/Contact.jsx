@@ -1,9 +1,10 @@
 import { useState } from "react";
 import Navbar from "../components/Navbar";
 import { useToast, ToastNotification } from "../utils/toast";
-
+import kitchenImg from "../assets/kitchen.png";
+import { supabase } from "../supabaseClient";
 export default function Contact() {
-  const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", subject: "", message: "" });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const { toast, showToast, dismissToast } = useToast();
@@ -11,7 +12,7 @@ export default function Contact() {
   const handleChange = (e) =>
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     // Basic validation
@@ -23,17 +24,36 @@ export default function Contact() {
       showToast("Please enter a valid email address.", "error");
       return;
     }
+    if (form.phone && !/^09\d{9}$/.test(form.phone)) {
+      showToast("Please enter a valid Philippine mobile number (e.g., 09171234567).", "error");
+      return;
+    }
 
-    // Simulate submission (replace with real API call when ready)
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const { error } = await supabase
+        .from('contact_messages')
+        .insert([{
+          full_name: form.name,
+          email: form.email,
+          phone: form.phone,
+          subject: form.subject || "General Inquiry",
+          message: form.message
+        }]);
+
+      if (error) throw error;
+      
       setSubmitted(true);
-    }, 1200);
+    } catch (error) {
+      console.error("Error submitting contact form:", error);
+      showToast("Something went wrong. Please try again.", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen w-full" style={{ backgroundColor: "#F9F9FB" }}>
+    <div className="min-h-screen w-full" style={{ backgroundColor: "#F5F5F5" }}>
       <ToastNotification toast={toast} onDismiss={dismissToast} />
       <Navbar />
 
@@ -44,28 +64,29 @@ export default function Contact() {
           HERO BANNER
       ════════════════════════════════════════ */}
       <section
-        className="w-full py-20 sm:py-28 lg:py-36 text-center"
+        className="w-full relative py-24 sm:py-32 lg:py-40 text-center overflow-hidden"
         style={{
-          background:
-            "linear-gradient(160deg, #232B32 0%, #2e3a43 60%, #232B32 100%)",
+          background: "linear-gradient(160deg, #1A1F24 0%, #232B32 50%, #1A1F24 100%)",
         }}
       >
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="absolute inset-0 pointer-events-none opacity-20" style={{ backgroundImage: "radial-gradient(circle at 50% 0%, #C5A059 0%, transparent 60%)" }} />
+        
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <p
-            className="text-xs font-semibold tracking-widest uppercase mb-4"
+            className="text-xs font-bold tracking-[0.3em] uppercase mb-6"
             style={{ color: "#C5A059" }}
           >
             Get In Touch
           </p>
           <h1
-            className="text-4xl sm:text-5xl lg:text-6xl font-light leading-tight tracking-tight mb-6"
+            className="text-5xl sm:text-6xl lg:text-7xl font-light leading-tight tracking-tight mb-8"
             style={{ color: "#FFFFFF" }}
           >
             Let&apos;s{" "}
             <span
               className="font-semibold"
               style={{
-                background: "linear-gradient(135deg, #C5A059 0%, #e8c97a 100%)",
+                background: "linear-gradient(135deg, #DFBE74 0%, #C5A059 50%, #9B7D46 100%)",
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
                 backgroundClip: "text",
@@ -75,7 +96,7 @@ export default function Contact() {
             </span>
           </h1>
           <p
-            className="text-base sm:text-lg leading-relaxed max-w-xl mx-auto"
+            className="text-lg sm:text-xl leading-relaxed max-w-2xl mx-auto"
             style={{ color: "#E2E8F0" }}
           >
             Have a project in mind? Reach out to our team and we&apos;ll get
@@ -87,71 +108,51 @@ export default function Contact() {
       {/* ════════════════════════════════════════
           CONTACT SECTION
       ════════════════════════════════════════ */}
-      <section className="w-full py-20 sm:py-24">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 lg:gap-16">
-
-            {/* ── Left: contact info ── */}
-            <div className="lg:col-span-2 flex flex-col gap-8">
-              <div>
+      <section className="w-full py-20 sm:py-24 relative overflow-hidden">
+        
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-0 overflow-hidden rounded-3xl" style={{ boxShadow: "0 20px 60px rgba(35,43,50,0.08)" }}>
+            
+            {/* ── Left: Image & Contact Info ── */}
+            <div className="lg:col-span-2 relative p-10 sm:p-14 flex flex-col justify-between overflow-hidden">
+              <div className="absolute inset-0 z-0">
+                <img src={kitchenImg} alt="Showroom" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(26,31,36,0.95) 0%, rgba(35,43,50,0.85) 100%)" }} />
+              </div>
+              
+              <div className="relative z-10">
                 <h2
-                  className="text-2xl sm:text-3xl font-bold tracking-tight mb-4"
-                  style={{ color: "#232B32" }}
+                  className="text-3xl sm:text-4xl font-light tracking-tight mb-12"
+                  style={{ color: "#FFFFFF" }}
                 >
                   Contact Information
                 </h2>
-                <p className="text-sm leading-relaxed" style={{ color: "#6B7280" }}>
-                  Visit our showroom, call us, or drop us an email. We are happy
-                  to answer questions about materials, pricing, and timelines.
-                </p>
-              </div>
 
-              {/* Info cards */}
-              {[
-                {
-                  label: "Address",
-                  value: "123 Stone Ave, Makati City, Metro Manila, Philippines",
-                },
-                {
-                  label: "Phone",
-                  value: "+63 2 8123 4567",
-                },
-                {
-                  label: "Email",
-                  value: "hello@sixsigmaphil.com",
-                },
-                {
-                  label: "Hours",
-                  value: "Mon – Sat: 8:00 AM – 6:00 PM",
-                },
-              ].map((item) => (
-                <div key={item.label} className="flex items-start gap-4">
-
-                  <div>
-                    <p
-                      className="text-xs font-semibold tracking-wider uppercase mb-0.5"
-                      style={{ color: "#C5A059" }}
-                    >
-                      {item.label}
-                    </p>
-                    <p className="text-sm" style={{ color: "#232B32" }}>
-                      {item.value}
-                    </p>
-                  </div>
+                <div className="flex flex-col gap-8">
+                  {[
+                    { label: "Phone", value: "0919 585 9959" },
+                    { label: "Email", value: "rolkoh@yahoo.com.ph" },
+                    { label: "Facebook Page", value: "facebook.com/sixsigmaphil" },
+                    { label: "Viber", value: "0919 585 9959" },
+                  ].map((item) => (
+                    <div key={item.label} className="flex flex-col">
+                      <p
+                        className="text-xs font-bold tracking-[0.2em] uppercase mb-1"
+                        style={{ color: "#C5A059" }}
+                      >
+                        {item.label}
+                      </p>
+                      <p className="text-sm" style={{ color: "#FFFFFF" }}>
+                        {item.value}
+                      </p>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
             </div>
 
             {/* ── Right: contact form ── */}
-            <div className="lg:col-span-3">
-              <div
-                className="rounded-2xl p-8 sm:p-10"
-                style={{
-                  backgroundColor: "#FFFFFF",
-                  border: "1px solid #E2E8F0",
-                  boxShadow: "0 4px 24px rgba(35,43,50,0.07)",
-                }}
-              >
+            <div className="lg:col-span-3 p-10 sm:p-14 flex flex-col justify-center" style={{ backgroundColor: "#FFFFFF" }}>
                 {submitted ? (
                   /* Success state */
                   <div className="flex flex-col items-center justify-center py-12 text-center gap-4">
@@ -196,7 +197,7 @@ export default function Contact() {
                     </h3>
 
 
-                    {/* Name + Email row */}
+                    {/* Name, Phone, Email row */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                       <div className="flex flex-col gap-1.5">
                         <label
@@ -211,11 +212,11 @@ export default function Contact() {
                           name="name"
                           type="text"
                           value={form.name}
-                          onChange={handleChange}
+                          onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value.replace(/[^A-Za-z\s\-ñÑ]/g, '') }))}
                           placeholder="Juan dela Cruz"
                           className="w-full rounded-lg py-2.5 px-4 text-sm outline-none transition-all duration-200"
                           style={{
-                            backgroundColor: "#F9F9FB",
+                            backgroundColor: "#F5F5F5",
                             border: "1px solid #E2E8F0",
                             color: "#232B32",
                           }}
@@ -228,6 +229,36 @@ export default function Contact() {
                         />
                       </div>
                       <div className="flex flex-col gap-1.5">
+                        <label
+                          htmlFor="contact-phone"
+                          className="text-xs font-semibold tracking-wide"
+                          style={{ color: "#232B32" }}
+                        >
+                          Phone Number
+                        </label>
+                        <input
+                          id="contact-phone"
+                          name="phone"
+                          type="tel"
+                          value={form.phone}
+                          onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value.replace(/[^0-9]/g, '') }))}
+                          maxLength={11}
+                          placeholder="0917 123 4567"
+                          className="w-full rounded-lg py-2.5 px-4 text-sm outline-none transition-all duration-200"
+                          style={{
+                            backgroundColor: "#F5F5F5",
+                            border: "1px solid #E2E8F0",
+                            color: "#232B32",
+                          }}
+                          onFocus={(e) =>
+                            (e.currentTarget.style.borderColor = "#C5A059")
+                          }
+                          onBlur={(e) =>
+                            (e.currentTarget.style.borderColor = "#E2E8F0")
+                          }
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5 sm:col-span-2">
                         <label
                           htmlFor="contact-email"
                           className="text-xs font-semibold tracking-wide"
@@ -244,7 +275,7 @@ export default function Contact() {
                           placeholder="you@example.com"
                           className="w-full rounded-lg py-2.5 px-4 text-sm outline-none transition-all duration-200"
                           style={{
-                            backgroundColor: "#F9F9FB",
+                            backgroundColor: "#F5F5F5",
                             border: "1px solid #E2E8F0",
                             color: "#232B32",
                           }}
@@ -276,7 +307,7 @@ export default function Contact() {
                         placeholder="e.g. Kitchen countertop inquiry"
                         className="w-full rounded-lg py-2.5 px-4 text-sm outline-none transition-all duration-200"
                         style={{
-                          backgroundColor: "#F9F9FB",
+                          backgroundColor: "#F5F5F5",
                           border: "1px solid #E2E8F0",
                           color: "#232B32",
                         }}
@@ -307,7 +338,7 @@ export default function Contact() {
                         placeholder="Tell us about your project..."
                         className="w-full rounded-lg py-2.5 px-4 text-sm outline-none resize-none transition-all duration-200"
                         style={{
-                          backgroundColor: "#F9F9FB",
+                          backgroundColor: "#F5F5F5",
                           border: "1px solid #E2E8F0",
                           color: "#232B32",
                         }}
@@ -346,7 +377,6 @@ export default function Contact() {
               </div>
             </div>
           </div>
-        </div>
       </section>
     </div>
   );
