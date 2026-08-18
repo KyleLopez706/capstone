@@ -92,9 +92,11 @@ export default function DimensionPanel() {
       }
 
       // Compute AI granite recommendations — score every granite design against
-      // the current cabinet and recommend the top 3 compatible stone alternatives.
+      // the current cabinet for countertops, or against the selected stone for
+      // walls/floors (to find complementary stone alternatives).
       if (materials?.length) {
-        const gRecs = await getGraniteRecommendations(cabinetHex, materials, selectedMaterial?.id, getHexForMaterial, 3);
+        const compareColor = hasCabinets ? cabinetHex : graniteHex;
+        const gRecs = await getGraniteRecommendations(compareColor, materials, selectedMaterial?.id, getHexForMaterial, 3);
         setGraniteRecs(gRecs);
       } else {
         setGraniteRecs([]);
@@ -600,7 +602,10 @@ export default function DimensionPanel() {
               Recommended Stone Designs
             </p>
             <p className="text-[11px] mb-3" style={{ color: '#6B7280' }}>
-              Other granite designs that pair well with your current setup.
+              {((selectedStructure?.name ?? '').toLowerCase().includes('wall') || (selectedStructure?.name ?? '').toLowerCase().includes('floor'))
+                ? 'Stones that complement your current selection.'
+                : 'Best granite matches for your cabinet finish.'
+              }
             </p>
             <div className="flex flex-col gap-2">
               {graniteRecs.map((rec, idx) => (
