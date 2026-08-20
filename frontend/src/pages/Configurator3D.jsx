@@ -207,7 +207,7 @@ export default function Configurator3D() {
   return (
     <div
       className="w-full h-screen flex flex-col overflow-hidden"
-      style={{ backgroundColor: '#1a1e22' }}
+      style={{ backgroundColor: '#000000' }}
     >
       <Navbar />
 

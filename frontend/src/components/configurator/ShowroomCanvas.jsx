@@ -1,5 +1,5 @@
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useGLTF, ContactShadows, Environment } from "@react-three/drei";
+import { useGLTF, ContactShadows, Environment, MeshReflectorMaterial } from "@react-three/drei";
 import {
   Suspense,
   useState,
@@ -65,6 +65,20 @@ function meshZone(name = "") {
   }
   if (
     [
+      "wall",
+      "walls"
+    ].some((kw) => lower.includes(kw))
+  )
+    return "wall";
+  if (
+    [
+      "floor",
+      "ground"
+    ].some((kw) => lower.includes(kw))
+  )
+    return "floor";
+  if (
+    [
       "top",
       "surface",
       "stone",
@@ -116,9 +130,9 @@ function meshZone(name = "") {
 /* Static shared materials — instantiated once at module load, never recreated */
 const SHOWROOM_MATERIALS = {
   stone: new THREE.MeshStandardMaterial({
-    color: "#C2B8B0",
-    roughness: 0.5,
-    metalness: 0.02,
+    color: "#DBDBDB", // Updated for countertops, walls, floors
+    roughness: 0.4,
+    metalness: 0.05,
   }),
   metal: new THREE.MeshStandardMaterial({
     color: "#BEC6CE",
@@ -127,17 +141,27 @@ const SHOWROOM_MATERIALS = {
     envMapIntensity: 1.2,
   }),
   cabinet: new THREE.MeshStandardMaterial({
-    color: "#5C4030",
+    color: "#7F5112", // Updated cabinet base color
     roughness: 0.7,
     metalness: 0.05,
   }),
   socket: new THREE.MeshStandardMaterial({
-    color: "#3A3D42",
+    color: "#3A3D42", // Keep socket dark so it looks like plastic
     roughness: 0.85,
     metalness: 0.02,
   }),
+  wall: new THREE.MeshStandardMaterial({
+    color: "#DBDBDB",
+    roughness: 0.7,
+    metalness: 0.0,
+  }),
+  floor: new THREE.MeshStandardMaterial({
+    color: "#DBDBDB",
+    roughness: 0.5,
+    metalness: 0.05,
+  }),
   default: new THREE.MeshStandardMaterial({
-    color: "#F0ECE8",
+    color: "#F4F4F2", // Offwhite fallback
     roughness: 0.8,
     metalness: 0.0,
   }),
@@ -304,6 +328,8 @@ function CanvasLoader() {
 ───────────────────────────────────────── */
 export default function ShowroomCanvas({ structures, onStructureSelect }) {
   const selectedStructure = useConfiguratorStore((s) => s.selectedStructure);
+  const canvasTheme       = useConfiguratorStore((s) => s.canvasTheme);
+  const toggleCanvasTheme = useConfiguratorStore((s) => s.toggleCanvasTheme);
 
   const [currentIndex, setCurrentIndex] = useState(() => {
     if (!selectedStructure || !structures?.length) return 0;
@@ -321,6 +347,7 @@ export default function ShowroomCanvas({ structures, onStructureSelect }) {
       return i > maxIdx ? maxIdx : i;
     });
   }, [structures]);
+
 
   /* ── Drag / swipe detection ──────────────────────────────────────── */
   const dragRef = useRef({ active: false, startX: 0, moved: false });
@@ -443,72 +470,53 @@ export default function ShowroomCanvas({ structures, onStructureSelect }) {
         style={{
           width: "100%",
           height: "100%",
-          background:
-            "radial-gradient(ellipse at 50% 28%, #181818 0%, #070707 100%)",
+          background: "transparent"
         }}
       >
-        <Suspense fallback={<CanvasLoader />}>
-          {/* PROFESSIONAL STUDIO LIGHTING — 4-POINT RIG */}
-          <ambientLight intensity={0.04} color="#dce8ff" />
+        <color attach="background" args={[canvasTheme === 'dark' ? '#0c0d10' : '#cfcfcf']} />
+        
+        {/* Fog perfectly matches the solid background to erase the horizon line */}
+        <fog attach="fog" args={[canvasTheme === 'dark' ? '#0c0d10' : '#cfcfcf', 5, 20]} />
 
-          {/* Key light */}
-          <spotLight
-            position={[3.5, 6.5, 4.5]}
-            intensity={5.0}
-            angle={0.28}
-            penumbra={0.4}
+        <Suspense fallback={<CanvasLoader />}>
+          {/* ── High-End PBR Lighting ── */}
+          <ambientLight intensity={0.4} />
+
+          <directionalLight
+            position={[5, 5, 4]}
+            intensity={1.5}
             castShadow
             shadow-mapSize={[1024, 1024]}
-            shadow-bias={-0.00012}
-            color="#fff9f2"
-          />
-
-          {/* Fill light */}
-          <spotLight
-            position={[-4.5, 5.0, 3.5]}
-            intensity={1.6}
-            angle={0.55}
-            penumbra={1.0}
-            castShadow={false}
-            color="#eef2ff"
-          />
-
-          {/* Rim / back light */}
-          <spotLight
-            position={[0.8, 5.5, -5.5]}
-            intensity={2.8}
-            angle={0.32}
-            penumbra={0.6}
-            castShadow={false}
+            shadow-bias={-0.0002}
             color="#ffffff"
           />
-
-          {/* Top overhead */}
-          <spotLight
-            position={[0, 7.0, 0.5]}
-            intensity={1.8}
-            angle={0.4}
-            penumbra={0.7}
-            castShadow={false}
-            color="#fff5e8"
-          />
-
-          {/* Kicker */}
-          <pointLight
-            position={[2.8, -0.1, 2.2]}
-            intensity={0.35}
-            color="#ffe0b0"
-            distance={9}
-            decay={2}
-          />
+          <directionalLight position={[-5, 3, -5]} intensity={0.6} color="#b0c4de" />
+          <directionalLight position={[0, 2, -6]} intensity={0.8} color="#ffffff" />
 
           <CarouselGroup structures={structures} currentIndex={currentIndex} />
 
+          {/* Reflective Showroom Floor */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.63, 0]}>
+            <planeGeometry args={[500, 500]} />
+            <MeshReflectorMaterial
+              blur={[200, 100]}
+              resolution={512}
+              mixBlur={0.5}
+              mixStrength={10}
+              roughness={0.8}
+              depthScale={1}
+              minDepthThreshold={0.4}
+              maxDepthThreshold={1.4}
+              color={canvasTheme === 'dark' ? '#0c0d10' : '#cfcfcf'}
+              metalness={0.6}
+            />
+          </mesh>
+
           <ContactShadows
-            position={[0, -0.63, 0]}
-            opacity={0.6}
+            position={[0, -0.62, 0]}
+            opacity={canvasTheme === 'dark' ? 0.8 : 0.4}
             scale={40}
-            blur={0.75}
+            blur={1.5}
             far={1.0}
           />
 
@@ -532,13 +540,15 @@ export default function ShowroomCanvas({ structures, onStructureSelect }) {
         >
           <p
             style={{
-              color: "#C5A059",
+              color: canvasTheme === 'dark' ? "#F9F9FB" : "#232B32",
               fontSize: "11px",
               fontWeight: "700",
               letterSpacing: "0.22em",
               textTransform: "uppercase",
               fontFamily: "'Inter', 'Segoe UI', sans-serif",
-              textShadow: "0 2px 12px rgba(0,0,0,0.9)",
+              textShadow: canvasTheme === 'dark' 
+                ? "0 2px 12px rgba(0,0,0,0.8)" 
+                : "0 2px 12px rgba(255,255,255,0.9)",
             }}
           >
             {current.name}
@@ -547,7 +557,7 @@ export default function ShowroomCanvas({ structures, onStructureSelect }) {
           <p
             style={{
               marginTop: "4px",
-              color: "rgba(197,160,89,0.50)",
+              color: "#C5A059",
               fontSize: "9px",
               fontWeight: "500",
               letterSpacing: "0.18em",
@@ -615,7 +625,7 @@ export default function ShowroomCanvas({ structures, onStructureSelect }) {
             fontSize: "26px",
             lineHeight: 1,
             backdropFilter: "blur(6px)",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
             transition: "all 0.2s ease",
             zIndex: 20,
           }}
@@ -654,7 +664,7 @@ export default function ShowroomCanvas({ structures, onStructureSelect }) {
             fontSize: "26px",
             lineHeight: 1,
             backdropFilter: "blur(6px)",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
             transition: "all 0.2s ease",
             zIndex: 20,
           }}
@@ -662,6 +672,53 @@ export default function ShowroomCanvas({ structures, onStructureSelect }) {
           ›
         </button>
       )}
+
+      {/* Theme Toggle Button */}
+      <button
+        onPointerDown={(e) => e.stopPropagation()}
+        onPointerUp={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleCanvasTheme();
+        }}
+        style={{
+          position: "absolute",
+          top: "16px",
+          right: "16px",
+          zIndex: 10,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "36px",
+          height: "36px",
+          borderRadius: "50%",
+          backgroundColor: canvasTheme === 'dark' ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)",
+          color: canvasTheme === 'dark' ? "#F9F9FB" : "#232B32",
+          border: canvasTheme === 'dark' ? "1px solid rgba(255,255,255,0.2)" : "1px solid rgba(0,0,0,0.1)",
+          backdropFilter: "blur(4px)",
+          cursor: "pointer",
+          transition: "all 0.2s ease"
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = canvasTheme === 'dark' ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.1)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = canvasTheme === 'dark' ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)";
+        }}
+        title="Toggle Canvas Theme"
+      >
+        {canvasTheme === 'dark' ? (
+          <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{ width: '20px', height: '20px' }}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+          </svg>
+        ) : (
+          <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{ width: '20px', height: '20px' }}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
+          </svg>
+        )}
+      </button>
     </div>
   );
 }

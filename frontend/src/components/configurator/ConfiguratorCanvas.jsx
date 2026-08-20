@@ -1,13 +1,29 @@
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import {
   useGLTF,
   OrbitControls,
   useTexture,
   Environment,
+  MeshReflectorMaterial,
+  ContactShadows,
 } from "@react-three/drei";
 import { Suspense, useEffect, useMemo, useRef, Component } from "react";
 import * as THREE from "three";
 import useConfiguratorStore from "../../store/configuratorStore";
+
+function CameraOffset() {
+  const { camera, size } = useThree();
+  useEffect(() => {
+    if (size.width >= 1024) {
+      camera.setViewOffset(size.width, size.height, 210, 0, size.width, size.height);
+    } else {
+      camera.clearViewOffset();
+    }
+    camera.updateProjectionMatrix();
+    return () => camera.clearViewOffset();
+  }, [camera, size]);
+  return null;
+}
 
 /* ─────────────────────────────────────────
    MESH ZONE CLASSIFIER
@@ -47,7 +63,7 @@ function meshZone(name = '') {
   }
 
   // 2. Keyword fallback (future-proofs against renamed meshes)
-  if (['top','surface','stone','counter','slab','granite','marble','quartz'].some((kw) => lower.includes(kw)))
+  if (['top','surface','stone','counter','slab','granite','marble','quartz','wall','floor'].some((kw) => lower.includes(kw)))
     return 'stone';
   if (['sink','faucet','tap','handle','spout','basin','drain','chrome','steel','metal','fixture'].some((kw) => lower.includes(kw)))
     return 'metal';
@@ -69,7 +85,7 @@ function meshZone(name = '') {
 const ZONE_MATERIALS = {
   // granite_slab — receives PBR texture from TextureApplicator (no static mat)
   cabinet: new THREE.MeshStandardMaterial({
-    color:     '#543D2B', // rich walnut brown
+    color:     '#7F5112', // wood/brown base color
     roughness: 0.75,
     metalness: 0.05,
   }),
@@ -284,7 +300,7 @@ function CabinetTextureApplicator({ material, targetNodes, scaleFactors }) {
 /* ─────────────────────────────────────────
    MODEL + MATERIAL COMPOSITION
 ───────────────────────────────────────── */
-function CountertopWithMaterial({ modelUrl, onTextureApplied }) {
+function CountertopWithMaterial({ modelUrl, onTextureApplied, theme }) {
   const { scene } = useGLTF(modelUrl, true);
   const selectedMaterial  = useConfiguratorStore((s) => s.selectedMaterial);
   const selectedCabinetMaterial = useConfiguratorStore((s) => s.selectedCabinetMaterial);
@@ -346,9 +362,26 @@ function CountertopWithMaterial({ modelUrl, onTextureApplied }) {
     return { stoneMeshes: s, cabinetMeshes: c };
   }, [clonedScene]);
 
+  // Dynamically compute the model's lowest point so the floor never clips
+  const minY = useMemo(() => {
+    const box = new THREE.Box3().setFromObject(clonedScene);
+    return isFinite(box.min.y) ? box.min.y : 0;
+  }, [clonedScene]);
+
   return (
     <>
       <primitive object={clonedScene} scale={[scaleX, 1, scaleZ]} />
+      
+      <group position={[0, minY, 0]}>
+        <ShowroomFloor theme={theme} />
+        <ContactShadows
+          position={[0, 0.01, 0]}
+          opacity={theme === 'dark' ? 0.8 : 0.4}
+          scale={10}
+          blur={1.5}
+          far={1.0}
+        />
+      </group>
 
       {/*
         IMPORTANT: TextureErrorBoundary is NOT keyed on material.id.
@@ -405,10 +438,45 @@ function CanvasLoader() {
 /* ─────────────────────────────────────────
    CONFIGURATOR CANVAS  (Centre Column)
 ───────────────────────────────────────── */
+function ShowroomFloor({ theme }) {
+  const concreteTexture = useTexture('/assets/concrete.jpg');
+  
+  // Make texture seamless
+  useEffect(() => {
+    // eslint-disable-next-line
+    concreteTexture.wrapS = THREE.RepeatWrapping;
+    // eslint-disable-next-line
+    concreteTexture.wrapT = THREE.RepeatWrapping;
+    concreteTexture.repeat.set(100, 100);
+    concreteTexture.needsUpdate = true;
+  }, [concreteTexture]);
+
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+      <planeGeometry args={[500, 500]} />
+      <MeshReflectorMaterial
+        blur={[300, 100]}
+        resolution={1024}
+        mixBlur={0.7}
+        mixStrength={1.5}
+        map={concreteTexture}
+        roughnessMap={concreteTexture}
+        roughness={0.9}
+        depthScale={1}
+        minDepthThreshold={0.4}
+        maxDepthThreshold={1.4}
+        color={theme === 'dark' ? '#0c0d10' : '#FAF9F6'}
+        metalness={0.2}
+      />
+    </mesh>
+  );
+}
+
 export default function ConfiguratorCanvas({ modelUrl }) {
   // Shimmer overlay: shown while a texture is loading, hidden once applied.
   // Uses a ref so toggling it never triggers a Canvas re-render.
   const overlayRef = useRef(null);
+  const canvasTheme = useConfiguratorStore((s) => s.canvasTheme);
 
   const handleTextureApplied = () => {
     if (overlayRef.current) {
@@ -440,8 +508,8 @@ export default function ConfiguratorCanvas({ modelUrl }) {
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <Canvas
         shadows
-        gl={{ shadowMapType: THREE.PCFShadowMap }}
-        camera={{ position: [0, 1.2, 2.5], fov: 45 }}
+        gl={{ shadowMapType: THREE.PCFShadowMap, preserveDrawingBuffer: true }}
+        camera={{ position: [0, 1.2, 3], fov: 45 }}
         onCreated={({ gl }) => {
           gl.domElement.addEventListener("webglcontextlost", (e) => {
             e.preventDefault();
@@ -453,11 +521,17 @@ export default function ConfiguratorCanvas({ modelUrl }) {
         style={{
           width: "100%",
           height: "100%",
-          background:
-            "radial-gradient(ellipse at 50% 30%, #2e3238 0%, #1a1e22 100%)",
+          background: "transparent",
           borderRadius: "12px",
         }}
       >
+        <CameraOffset />
+        {/* Soft studio background */}
+        <color attach="background" args={[canvasTheme === 'dark' ? '#0c0d10' : '#FAF9F6']} />
+        
+        {/* Fog perfectly matched to the background color to create an infinite floor illusion */}
+        <fog attach="fog" args={[canvasTheme === 'dark' ? '#0c0d10' : '#FAF9F6', 5, 25]} />
+
         <Suspense fallback={<CanvasLoader />}>
           {/* ── High-End PBR Lighting Setup ── */}
           <ambientLight intensity={0.4} />
@@ -486,19 +560,23 @@ export default function ConfiguratorCanvas({ modelUrl }) {
             color="#ffffff"
           />
 
-          <CountertopWithMaterial
-            modelUrl={modelUrl}
-            onTextureApplied={handleTextureApplied}
-          />
+          <group position={[0, -0.45, 0]}>
+            <CountertopWithMaterial
+              modelUrl={modelUrl}
+              onTextureApplied={handleTextureApplied}
+              theme={canvasTheme}
+            />
+          </group>
 
           <Environment preset="city" />
 
           <OrbitControls
             enablePan={false}
-            minDistance={1.5}
+            minDistance={0.5}
             maxDistance={5}
             minPolarAngle={Math.PI / 8}
             maxPolarAngle={Math.PI / 2}
+            target={[0, -0.2, 0]}
           />
         </Suspense>
       </Canvas>
@@ -522,8 +600,6 @@ export default function ConfiguratorCanvas({ modelUrl }) {
           flexDirection:  'column',
           gap:            '10px',
           pointerEvents:  'none',
-          background:     'rgba(26,30,34,0.55)',
-          backdropFilter: 'blur(2px)',
           zIndex:         10,
         }}
         aria-live="polite"

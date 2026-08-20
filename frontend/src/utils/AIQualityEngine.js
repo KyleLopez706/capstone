@@ -69,12 +69,19 @@ function extractFeatures(hex1, hex2) {
     const delta_H = Math.abs(hue1 - hue2);
     const delta_E = ciede2000Approx(lab1, lab2);
 
-    // This array order MUST EXACTLY MATCH the Python columns we trained on:
-    // ['L1', 'a1', 'b1', 'L2', 'a2', 'b2', 'delta_L', 'chroma1', 'chroma2', 'delta_C', 'hue_angle1', 'hue_angle2', 'delta_H', 'delta_E']
+    // 4 New Advanced Features
+    const luminance_ratio = lab1.L / (lab2.L + 0.0001);
+    const chroma_ratio = chroma1 / (chroma2 + 0.0001);
+    const complementary_proximity = Math.abs(delta_H - 180);
+    const warm_cool_diff = lab1.b - lab2.b;
+
+    // This array order MUST EXACTLY MATCH the Python columns we trained on (18 features):
     return [
         lab1.L, lab1.a, lab1.b, lab2.L, lab2.a, lab2.b,
         delta_L, chroma1, chroma2, delta_C,
-        hue1, hue2, delta_H, delta_E
+        hue1, hue2, delta_H, delta_E,
+        luminance_ratio, chroma_ratio,
+        complementary_proximity, warm_cool_diff
     ];
 }
 

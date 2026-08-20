@@ -46,8 +46,12 @@ const useConfiguratorStore = create(
       /* ── User-input dimensions in metres ── */
       dimensions: { length: 1.2, width: 0.6 },
 
+      /* ── Canvas Theme (light/dark) ── */
+      canvasTheme: 'dark', // 'dark' | 'light'
+
       /* ── Actions ── */
       setAppMode: (mode) => set({ appMode: mode }),
+      toggleCanvasTheme: () => set((state) => ({ canvasTheme: state.canvasTheme === 'dark' ? 'light' : 'dark' })),
 
       // When a structure is set, seed dimensions from its base_length / base_width
       setStructure: (structure) =>

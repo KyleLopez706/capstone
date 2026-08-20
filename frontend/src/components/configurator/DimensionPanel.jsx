@@ -36,75 +36,6 @@ export default function DimensionPanel() {
   const setDimension      = useConfiguratorStore((s) => s.setDimension);
   const selectedStructure = useConfiguratorStore((s) => s.selectedStructure);
 
-  const [aiScore, setAiScore] = useState(null);
-  const [recommendations, setRecommendations] = useState([]);
-  const [graniteRecs, setGraniteRecs] = useState([]);
-
-  // Helper to guess the hex color based on the material name since it's not in the DB yet
-  const getHexForMaterial = useCallback((name) => {
-    if (!name) return '#808080';
-    const n = name.toLowerCase();
-    if (n.includes('black') || n.includes('galaxy')) return '#1A1A1A';
-    if (n.includes('white') || n.includes('ivory') || n.includes('cream')) return '#F5F5F5';
-    if (n.includes('grey') || n.includes('gray')) return '#888888';
-    if (n.includes('brown') || n.includes('tan')) return '#8B5A2B';
-    if (n.includes('red') || n.includes('rose')) return '#8B2323';
-    if (n.includes('blue') || n.includes('pearl')) return '#4B535D';
-    if (n.includes('green')) return '#2E8B57';
-    if (n.includes('gold')) return '#D4AF37';
-    
-    // Deterministic fallback based on the name string so it always changes!
-    let hash = 0;
-    for (let i = 0; i < n.length; i++) hash = n.charCodeAt(i) + ((hash << 5) - hash);
-    const c = Math.floor(Math.abs((Math.sin(hash) * 16777215) % 16777215)).toString(16);
-    return '#' + '000000'.substring(0, 6 - c.length) + c;
-  }, []);
-
-  useEffect(() => {
-    async function fetchScore() {
-      if (!selectedMaterial) {
-        setAiScore(null);
-        return;
-      }
-      
-      const graniteHex = selectedMaterial.hex_code || getHexForMaterial(selectedMaterial.name);
-      
-      // Determine if this structure type actually has cabinets.
-      // Wall cladding and flooring are stone-only — no cabinet pairing exists.
-      // For these, we evaluate the stone against a clean neutral white backdrop.
-      const structName = (selectedStructure?.name ?? '').toLowerCase();
-      const hasCabinets = !structName.includes('wall') && !structName.includes('floor');
-      
-      const cabinetHex = hasCabinets
-        ? (selectedCabinetMaterial?.hex_code || getHexForMaterial(selectedCabinetMaterial?.name) || '#F9F9FB')
-        : '#F9F9FB'; // Neutral white — "How does this stone look in a clean modern room?"
-
-      const score = await evaluateDesignQuality(graniteHex, cabinetHex);
-      setAiScore(score);
-
-      // Compute AI cabinet recommendations — score every cabinet against this granite
-      // and surface the top 3 best-matching options for the customer.
-      if (hasCabinets && cabinetMaterials?.length) {
-        const recs = await getRecommendations(graniteHex, cabinetMaterials, getHexForMaterial, 3);
-        setRecommendations(recs);
-      } else {
-        setRecommendations([]);
-      }
-
-      // Compute AI granite recommendations — score every granite design against
-      // the current cabinet for countertops, or against the selected stone for
-      // walls/floors (to find complementary stone alternatives).
-      if (materials?.length) {
-        const compareColor = hasCabinets ? cabinetHex : graniteHex;
-        const gRecs = await getGraniteRecommendations(compareColor, materials, selectedMaterial?.id, getHexForMaterial, 3);
-        setGraniteRecs(gRecs);
-      } else {
-        setGraniteRecs([]);
-      }
-    }
-    fetchScore();
-  }, [selectedMaterial, selectedCabinetMaterial, selectedStructure, cabinetMaterials, materials, getHexForMaterial]);
-
   const navigate = useNavigate();
 
   /* ── Dynamic Bounds Calculation ──
@@ -241,25 +172,17 @@ export default function DimensionPanel() {
 
   return (
     <>
-    <div
-      className="h-full flex flex-col"
-      style={{ backgroundColor: '#1c2026', borderLeft: '1px solid rgba(226,232,240,0.1)' }}
-    >
-      {/* ── Panel Header ── */}
-      <div
-        className="px-4 py-4 shrink-0"
-        style={{ borderBottom: '1px solid rgba(226,232,240,0.1)' }}
-      >
-        <p className="text-xs font-semibold tracking-widest uppercase" style={{ color: '#C5A059' }}>
-          Dimensions & Pricing
-        </p>
-        <h2 className="text-sm font-light mt-1" style={{ color: '#F9F9FB' }}>
-          Customize Size
-        </h2>
-      </div>
-
+    <div className="h-full flex flex-col bg-transparent">
       {/* ── Scrollable Content ── */}
       <div className="flex-1 overflow-y-auto px-4 py-5 flex flex-col gap-5">
+        <div className="mb-1 px-1">
+          <p className="text-xs font-semibold tracking-widest uppercase" style={{ color: '#C5A059' }}>
+            Dimensions & Pricing
+          </p>
+          <h2 className="text-sm font-semibold mt-1" style={{ color: '#F9F9FB' }}>
+            Customize Size
+          </h2>
+        </div>
 
         {/* Selected Material Info */}
         <div
@@ -286,56 +209,52 @@ export default function DimensionPanel() {
         <div
           className="rounded-xl p-3 flex flex-col items-center gap-2"
           style={{
-            backgroundColor: '#232B32',
-            border: '1px solid rgba(226,232,240,0.1)',
+            backgroundColor: 'rgba(0, 0, 0, 0.2)',
+            border: '1px solid rgba(226, 232, 240, 0.1)',
           }}
         >
           <p className="text-xs tracking-wider uppercase w-full" style={{ color: '#9CA3AF' }}>
             Proportions Preview
           </p>
-          <div
-            style={{
-              width:  `${indicatorW}px`,
-              height: `${indicatorH}px`,
-              border: '1.5px solid #C5A059',
-              borderRadius: '4px',
-              backgroundColor: 'rgba(197,160,89,0.08)',
-              transition: 'width 0.25s ease, height 0.25s ease',
-              position: 'relative',
-            }}
-          >
-            {/* Dimension labels on the shape */}
-            <span
+          <div className="mt-2 mb-6 mr-12 flex justify-center">
+            <div
               style={{
-                position: 'absolute',
-                bottom: '-16px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                fontSize: '9px',
-                color: '#C5A059',
-                whiteSpace: 'nowrap',
-                fontWeight: 600,
+                width:  `${indicatorW}px`,
+                height: `${indicatorH}px`,
+                border: '1.5px solid #C5A059',
+                borderRadius: '4px',
+                backgroundColor: 'rgba(197,160,89,0.08)',
+                transition: 'width 0.25s ease, height 0.25s ease',
+                position: 'relative',
               }}
             >
-              {localLen.toFixed(1)}m
-            </span>
-            <span
-              style={{
-                position: 'absolute',
-                right: '-28px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                fontSize: '9px',
-                color: '#C5A059',
-                whiteSpace: 'nowrap',
-                fontWeight: 600,
-              }}
-            >
-              {localWid.toFixed(1)}m
-            </span>
+              {/* Dimension labels on the shape */}
+              <span
+                className="absolute text-[10px] font-bold"
+                style={{
+                  bottom: '-20px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  color: '#C5A059',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                L: {localLen.toFixed(2)}
+              </span>
+              <span
+                className="absolute text-[10px] font-bold"
+                style={{
+                  top: '50%',
+                  right: '-46px',
+                  transform: 'translateY(-50%)',
+                  color: '#C5A059',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                W: {localWid.toFixed(2)}
+              </span>
+            </div>
           </div>
-          {/* Spacer for the bottom label */}
-          <div style={{ height: '6px' }} />
         </div>
 
         {/* ── Reset to Baseline Button ── */}
@@ -355,9 +274,11 @@ export default function DimensionPanel() {
           Reset to Baseline
         </button>
 
-        {/* ── Length Slider ── */}
+        {/* ── Length Slider (User Adjustable) ──
+            The width is strictly tied to the structure's base width.
+            We only let them configure length. */}
         <div>
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-3">
             <label
               htmlFor="dim-length-slider"
               className="block text-xs font-semibold tracking-wider uppercase"
@@ -375,13 +296,13 @@ export default function DimensionPanel() {
             type="range"
             min={minLen}
             max={maxLen}
-            step={STEP}
+            step={0.05}
             value={localLen || minLen}
             onChange={handleLengthSlider}
             style={sliderStyle}
             aria-label="Length slider"
           />
-          <div className="flex justify-between text-xs mt-0.5" style={{ color: '#6B7280' }}>
+          <div className="flex justify-between text-xs mt-0.5" style={{ color: '#9CA3AF' }}>
             <span>{minLen.toFixed(1)}m</span>
             <span>{maxLen.toFixed(1)}m</span>
           </div>
@@ -419,7 +340,7 @@ export default function DimensionPanel() {
         {/* Total Estimate (live — reads from local parse) */}
         <div
           className="rounded-xl p-4"
-          style={{ backgroundColor: '#232B32', border: '1px solid rgba(226,232,240,0.1)' }}
+          style={{ backgroundColor: 'rgba(0,0,0,0.2)', border: '1px solid rgba(226,232,240,0.1)' }}
         >
           <p
             className="text-xs tracking-widest uppercase mb-2"
@@ -446,244 +367,6 @@ export default function DimensionPanel() {
           </p>
         </div>
 
-        {/* ── Design Quality Score ── */}
-        <div
-            className="rounded-xl p-4"
-            style={{
-              backgroundColor: '#232B32',
-              border: aiScore ? '1px solid rgba(197,160,89,0.3)' : '1px dashed rgba(197,160,89,0.3)',
-            }}
-          >
-            <div className="flex items-center gap-2 mb-3">
-              <p
-                className="text-xs font-semibold tracking-wider uppercase"
-                style={{ color: '#C5A059' }}
-              >
-                Design Quality Score
-              </p>
-            </div>
-            {aiScore !== null ? (
-              <div className="flex flex-col gap-3">
-                <div className="flex items-end gap-2">
-                  <span className="text-3xl font-bold leading-none" style={{ color: '#F9F9FB' }}>{aiScore}%</span>
-                  <span className="text-xs font-medium mb-0.5" style={{ color: aiScore >= 70 ? '#10B981' : aiScore >= 50 ? '#F59E0B' : '#EF4444' }}>
-                    {aiScore >= 70 ? 'Excellent Match' : aiScore >= 50 ? 'Fair Match' : 'Poor Match'}
-                  </span>
-                </div>
-                
-                <div 
-                  className="rounded-lg p-3" 
-                  style={{ backgroundColor: 'rgba(0,0,0,0.15)', border: '1px solid rgba(226,232,240,0.05)' }}
-                >
-                  <p className="text-[11px] leading-relaxed" style={{ color: '#9CA3AF' }}>
-                    <span style={{ color: '#E2E8F0', fontWeight: 600 }}>Why this score?</span>{' '}
-                    {aiScore >= 70 
-                      ? "Strong contrast and complementary hues — this pairing aligns with top-rated designs." 
-                      : aiScore >= 50 
-                      ? "Acceptable pairing, but lacks the contrast or hue harmony found in premium designs." 
-                      : "These surfaces may clash in tone or hue, creating an unbalanced look."}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs" style={{ color: '#6B7280' }}>
-                Select a stone material to view the live AI Design Quality Score.
-              </p>
-            )}
-          </div>
-
-        {/* ── AI Recommendations ── */}
-        {recommendations.length > 0 && (
-          <div
-            className="rounded-xl p-4"
-            style={{
-              backgroundColor: '#232B32',
-              border: '1px solid rgba(226,232,240,0.1)',
-            }}
-          >
-            <p
-              className="text-xs font-semibold tracking-wider uppercase mb-3"
-              style={{ color: '#C5A059' }}
-            >
-              Recommended Cabinet Finishes
-            </p>
-            <p className="text-[11px] mb-3" style={{ color: '#6B7280' }}>
-              Top matches for your selected stone.
-            </p>
-            <div className="flex flex-col gap-2">
-              {recommendations.map((rec, idx) => (
-                <button
-                  key={rec.id}
-                  onClick={() => {
-                    // Find the full cabinet material object from the store and apply it
-                    const fullMat = cabinetMaterials.find(c => c.id === rec.id);
-                    if (fullMat) setCabinetMaterial(fullMat);
-                  }}
-                  className="w-full flex items-center gap-3 rounded-lg p-2.5 text-left"
-                  style={{
-                    backgroundColor: selectedCabinetMaterial?.id === rec.id
-                      ? 'rgba(197,160,89,0.12)'
-                      : 'rgba(0,0,0,0.15)',
-                    border: selectedCabinetMaterial?.id === rec.id
-                      ? '1px solid rgba(197,160,89,0.35)'
-                      : '1px solid rgba(226,232,240,0.06)',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (selectedCabinetMaterial?.id !== rec.id)
-                      e.currentTarget.style.backgroundColor = 'rgba(197,160,89,0.06)';
-                  }}
-                  onMouseLeave={(e) => {
-                    if (selectedCabinetMaterial?.id !== rec.id)
-                      e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.15)';
-                  }}
-                >
-                  {/* Rank badge */}
-                  <span
-                    className="shrink-0 w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold"
-                    style={{
-                      backgroundColor: idx === 0 ? 'rgba(197,160,89,0.2)' : 'rgba(226,232,240,0.08)',
-                      color: idx === 0 ? '#C5A059' : '#6B7280',
-                    }}
-                  >
-                    {idx + 1}
-                  </span>
-
-                  {/* Color swatch */}
-                  <div
-                    className="shrink-0 w-6 h-6 rounded"
-                    style={{
-                      backgroundColor: rec.hex,
-                      border: '1px solid rgba(226,232,240,0.15)',
-                    }}
-                  />
-
-                  {/* Name and score */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate" style={{ color: '#E2E8F0' }}>
-                      {rec.name}
-                    </p>
-                  </div>
-
-                  {/* Score pill */}
-                  <span
-                    className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full"
-                    style={{
-                      backgroundColor: rec.score >= 70
-                        ? 'rgba(16,185,129,0.12)'
-                        : rec.score >= 50
-                        ? 'rgba(245,158,11,0.12)'
-                        : 'rgba(239,68,68,0.12)',
-                      color: rec.score >= 70 ? '#10B981' : rec.score >= 50 ? '#F59E0B' : '#EF4444',
-                    }}
-                  >
-                    {rec.score}%
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── AI Granite Recommendations ── */}
-        {graniteRecs.length > 0 && (
-          <div
-            className="rounded-xl p-4"
-            style={{
-              backgroundColor: '#232B32',
-              border: '1px solid rgba(226,232,240,0.1)',
-            }}
-          >
-            <p
-              className="text-xs font-semibold tracking-wider uppercase mb-3"
-              style={{ color: '#C5A059' }}
-            >
-              Recommended Stone Designs
-            </p>
-            <p className="text-[11px] mb-3" style={{ color: '#6B7280' }}>
-              {((selectedStructure?.name ?? '').toLowerCase().includes('wall') || (selectedStructure?.name ?? '').toLowerCase().includes('floor'))
-                ? 'Stones that complement your current selection.'
-                : 'Best granite matches for your cabinet finish.'
-              }
-            </p>
-            <div className="flex flex-col gap-2">
-              {graniteRecs.map((rec, idx) => (
-                <button
-                  key={rec.id}
-                  onClick={() => {
-                    const fullMat = materials.find(m => m.id === rec.id);
-                    if (fullMat) setMaterial(fullMat);
-                  }}
-                  className="w-full flex items-center gap-3 rounded-lg p-2.5 text-left"
-                  style={{
-                    backgroundColor: 'rgba(0,0,0,0.15)',
-                    border: '1px solid rgba(226,232,240,0.06)',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(197,160,89,0.06)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.15)';
-                  }}
-                >
-                  {/* Rank badge */}
-                  <span
-                    className="shrink-0 w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold"
-                    style={{
-                      backgroundColor: idx === 0 ? 'rgba(197,160,89,0.2)' : 'rgba(226,232,240,0.08)',
-                      color: idx === 0 ? '#C5A059' : '#6B7280',
-                    }}
-                  >
-                    {idx + 1}
-                  </span>
-
-                  {/* Granite texture thumbnail */}
-                  <div
-                    className="shrink-0 w-8 h-8 rounded overflow-hidden"
-                    style={{
-                      border: '1px solid rgba(226,232,240,0.15)',
-                      backgroundColor: rec.hex,
-                    }}
-                  >
-                    {rec.color_url && (
-                      <img
-                        src={rec.color_url}
-                        alt={rec.name}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                    )}
-                  </div>
-
-                  {/* Name and score */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate" style={{ color: '#E2E8F0' }}>
-                      {rec.name}
-                    </p>
-                  </div>
-
-                  {/* Score pill */}
-                  <span
-                    className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full"
-                    style={{
-                      backgroundColor: rec.score >= 70
-                        ? 'rgba(16,185,129,0.12)'
-                        : rec.score >= 50
-                        ? 'rgba(245,158,11,0.12)'
-                        : 'rgba(239,68,68,0.12)',
-                      color: rec.score >= 70 ? '#10B981' : rec.score >= 50 ? '#F59E0B' : '#EF4444',
-                    }}
-                  >
-                    {rec.score}%
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* ── Auth message (shown when user is not signed in) ── */}
         {authMsg && (
@@ -762,7 +445,7 @@ export default function DimensionPanel() {
         height: 16px;
         border-radius: 50%;
         background: #C5A059;
-        border: 2px solid #1c2026;
+        border: 2px solid #FFFFFF;
         cursor: pointer;
         box-shadow: 0 0 4px rgba(197,160,89,0.4);
         transition: box-shadow 0.15s ease;
@@ -775,7 +458,7 @@ export default function DimensionPanel() {
         height: 16px;
         border-radius: 50%;
         background: #C5A059;
-        border: 2px solid #1c2026;
+        border: 2px solid #FFFFFF;
         cursor: pointer;
         box-shadow: 0 0 4px rgba(197,160,89,0.4);
       }
@@ -786,7 +469,7 @@ export default function DimensionPanel() {
       input[type="range"]::-moz-range-track {
         height: 4px;
         border-radius: 2px;
-        background: rgba(226,232,240,0.15);
+        background: #E2E8F0;
       }
     `}</style>
     </>
