@@ -225,8 +225,8 @@ function TextureApplicator({ material, targetNodes, onApplied, scaleFactors }) {
       map:          material.color_url     ? colorMap  : null,
       normalMap:    material.normal_url    ? normalMap : null,
       roughnessMap: material.roughness_url ? roughMap  : null,
-      roughness: 0.65,
-      metalness: 0.04,
+      roughness: 0.35,
+      metalness: 0.05,
     });
 
     targetNodes.forEach((node) => {
@@ -300,7 +300,7 @@ function CabinetTextureApplicator({ material, targetNodes, scaleFactors }) {
 /* ─────────────────────────────────────────
    MODEL + MATERIAL COMPOSITION
 ───────────────────────────────────────── */
-function CountertopWithMaterial({ modelUrl, onTextureApplied, theme }) {
+function CountertopWithMaterial({ modelUrl, onTextureApplied, theme, lowEndMode }) {
   const { scene } = useGLTF(modelUrl, true);
   const selectedMaterial  = useConfiguratorStore((s) => s.selectedMaterial);
   const selectedCabinetMaterial = useConfiguratorStore((s) => s.selectedCabinetMaterial);
@@ -373,15 +373,19 @@ function CountertopWithMaterial({ modelUrl, onTextureApplied, theme }) {
       <primitive object={clonedScene} scale={[scaleX, 1, scaleZ]} />
       
       <group position={[0, minY, 0]}>
-        <ShowroomFloor theme={theme} />
-        <ContactShadows
-          position={[0, 0.01, 0]}
-          opacity={theme === 'dark' ? 0.8 : 0.4}
-          scale={10}
-          blur={1.5}
-          far={1.0}
-          resolution={256}
-        />
+        {!lowEndMode && (
+          <>
+            <ShowroomFloor theme={theme} />
+            <ContactShadows
+              position={[0, 0.01, 0]}
+              opacity={theme === 'dark' ? 0.8 : 0.4}
+              scale={10}
+              blur={1.5}
+              far={1.0}
+              resolution={256}
+            />
+          </>
+        )}
       </group>
 
       {/*
@@ -473,11 +477,66 @@ function ShowroomFloor({ theme }) {
   );
 }
 
+/* ─────────────────────────────────────────
+   DYNAMIC LIGHTING RIGS
+───────────────────────────────────────── */
+function RigSetup({ mode, lowEndMode }) {
+  if (lowEndMode) {
+    return (
+      <>
+        <ambientLight intensity={0.6} />
+        <directionalLight position={[5, 8, 4]} intensity={1.2} castShadow shadow-mapSize={[512, 512]} shadow-bias={-0.0001} color="#ffffff" />
+        <directionalLight position={[-5, 3, -5]} intensity={0.6} color="#b0c4de" />
+        <directionalLight position={[0, 2, -6]} intensity={0.8} color="#ffffff" />
+        <Environment preset="studio" />
+      </>
+    );
+  }
+
+  if (mode === 'daylight') {
+    return (
+      <>
+        <ambientLight intensity={0.5} color="#eef7ff" />
+        <directionalLight position={[10, 10, 5]} intensity={2.5} castShadow shadow-mapSize={[1024, 1024]} shadow-bias={-0.0001} color="#ffffff" />
+        <spotLight position={[0, 8, 2]} angle={0.8} penumbra={0.5} intensity={3} castShadow shadow-mapSize={[1024, 1024]} color="#ffffff" />
+        <directionalLight position={[-5, 5, -5]} intensity={1.2} color="#b0c4de" />
+        <Environment preset="city" />
+      </>
+    );
+  }
+
+  if (mode === 'warm') {
+    return (
+      <>
+        <ambientLight intensity={0.25} color="#ffeedd" />
+        <directionalLight position={[8, 4, 8]} intensity={2.0} castShadow shadow-mapSize={[1024, 1024]} shadow-bias={-0.0001} color="#ffb066" />
+        <spotLight position={[2, 6, 2]} angle={0.7} penumbra={0.8} intensity={5} castShadow shadow-mapSize={[1024, 1024]} color="#ffccaa" />
+        <directionalLight position={[-6, 2, -4]} intensity={0.8} color="#332244" />
+        <Environment preset="sunset" />
+      </>
+    );
+  }
+
+  // Default: Studio
+  return (
+    <>
+      <ambientLight intensity={0.3} />
+      <directionalLight position={[5, 8, 4]} intensity={2.0} castShadow shadow-mapSize={[1024, 1024]} shadow-bias={-0.0001} color="#ffffff" />
+      <spotLight position={[0, 5, 2]} angle={0.7} penumbra={0.8} intensity={4} castShadow shadow-mapSize={[1024, 1024]} color="#ffeedd" />
+      <directionalLight position={[-5, 3, -5]} intensity={0.6} color="#b0c4de" />
+      <directionalLight position={[0, 2, -6]} intensity={1.0} color="#ffffff" />
+      <Environment preset="studio" />
+    </>
+  );
+}
+
 export default function ConfiguratorCanvas({ modelUrl }) {
   // Shimmer overlay: shown while a texture is loading, hidden once applied.
   // Uses a ref so toggling it never triggers a Canvas re-render.
   const overlayRef = useRef(null);
   const canvasTheme = useConfiguratorStore((s) => s.canvasTheme);
+  const lowEndMode = useConfiguratorStore((s) => s.lowEndMode);
+  const lightingRig = useConfiguratorStore((s) => s.lightingRig);
 
   const handleTextureApplied = () => {
     if (overlayRef.current) {
@@ -530,58 +589,48 @@ export default function ConfiguratorCanvas({ modelUrl }) {
       >
         <CameraOffset />
         {/* Soft studio background */}
-        <color attach="background" args={[canvasTheme === 'dark' ? '#0c0d10' : '#FAF9F6']} />
+        <color 
+          attach="background" 
+          args={[
+            canvasTheme === 'dark' 
+              ? (lowEndMode ? '#1A1F24' : '#0c0d10') 
+              : (lowEndMode ? '#E2E8F0' : '#FAF9F6')
+          ]} 
+        />
         
         {/* Fog perfectly matched to the background color to create an infinite floor illusion */}
-        <fog attach="fog" args={[canvasTheme === 'dark' ? '#0c0d10' : '#FAF9F6', 5, 25]} />
+        <fog 
+          attach="fog" 
+          args={[
+            canvasTheme === 'dark' 
+              ? (lowEndMode ? '#1A1F24' : '#0c0d10') 
+              : (lowEndMode ? '#E2E8F0' : '#FAF9F6'), 
+            5, 25
+          ]} 
+        />
 
         <Suspense fallback={<CanvasLoader />}>
-          {/* ── High-End PBR Lighting Setup ── */}
-          <ambientLight intensity={0.4} />
-
-          {/* Key Light */}
-          <directionalLight
-            position={[5, 5, 4]}
-            intensity={1.5}
-            castShadow
-            shadow-mapSize={[512, 512]}
-            shadow-bias={-0.0002}
-            color="#ffffff"
-          />
-
-          {/* Fill Light */}
-          <directionalLight
-            position={[-5, 3, -5]}
-            intensity={0.6}
-            color="#b0c4de"
-          />
-
-          {/* Rim Light */}
-          <directionalLight
-            position={[0, 2, -6]}
-            intensity={0.8}
-            color="#ffffff"
-          />
+          <RigSetup mode={lightingRig} lowEndMode={lowEndMode} />
 
           <group position={[0, -0.45, 0]}>
             <CountertopWithMaterial
               modelUrl={modelUrl}
               onTextureApplied={handleTextureApplied}
               theme={canvasTheme}
+              lowEndMode={lowEndMode}
             />
           </group>
-
-          <Environment preset="city" />
-
-          <OrbitControls
-            enablePan={false}
-            minDistance={0.5}
-            maxDistance={5}
-            minPolarAngle={Math.PI / 8}
-            maxPolarAngle={Math.PI / 2}
-            target={[0, -0.2, 0]}
-          />
         </Suspense>
+
+        <OrbitControls
+          makeDefault
+          enablePan={false}
+          minDistance={0.5}
+          maxDistance={5}
+          minPolarAngle={Math.PI / 8}
+          maxPolarAngle={Math.PI / 2}
+          target={[0, -0.2, 0]}
+        />
       </Canvas>
 
       {/* ── Texture-loading shimmer overlay ──────────────────────────────

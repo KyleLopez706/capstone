@@ -49,9 +49,17 @@ const useConfiguratorStore = create(
       /* ── Canvas Theme (light/dark) ── */
       canvasTheme: 'dark', // 'dark' | 'light'
 
+      /* ── Performance Mode ── */
+      lowEndMode: false,
+
+      /* ── Lighting Rig ── */
+      lightingRig: 'studio', // 'studio' | 'daylight' | 'warm'
+
       /* ── Actions ── */
       setAppMode: (mode) => set({ appMode: mode }),
       toggleCanvasTheme: () => set((state) => ({ canvasTheme: state.canvasTheme === 'dark' ? 'light' : 'dark' })),
+      toggleLowEndMode: () => set((state) => ({ lowEndMode: !state.lowEndMode })),
+      setLightingRig: (rig) => set({ lightingRig: rig }),
 
       // When a structure is set, seed dimensions from its base_length / base_width
       setStructure: (structure) =>

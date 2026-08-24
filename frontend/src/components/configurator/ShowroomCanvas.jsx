@@ -131,7 +131,7 @@ function meshZone(name = "") {
 const SHOWROOM_MATERIALS = {
   stone: new THREE.MeshStandardMaterial({
     color: "#DBDBDB", // Updated for countertops, walls, floors
-    roughness: 0.4,
+    roughness: 0.3,
     metalness: 0.05,
   }),
   metal: new THREE.MeshStandardMaterial({
@@ -330,6 +330,8 @@ export default function ShowroomCanvas({ structures, onStructureSelect }) {
   const selectedStructure = useConfiguratorStore((s) => s.selectedStructure);
   const canvasTheme       = useConfiguratorStore((s) => s.canvasTheme);
   const toggleCanvasTheme = useConfiguratorStore((s) => s.toggleCanvasTheme);
+  const lowEndMode        = useConfiguratorStore((s) => s.lowEndMode);
+  const toggleLowEndMode  = useConfiguratorStore((s) => s.toggleLowEndMode);
 
   const [currentIndex, setCurrentIndex] = useState(() => {
     if (!selectedStructure || !structures?.length) return 0;
@@ -475,53 +477,93 @@ export default function ShowroomCanvas({ structures, onStructureSelect }) {
           background: "transparent"
         }}
       >
-        <color attach="background" args={[canvasTheme === 'dark' ? '#0c0d10' : '#cfcfcf']} />
+        <color 
+          attach="background" 
+          args={[
+            canvasTheme === 'dark' 
+              ? (lowEndMode ? '#1A1F24' : '#0c0d10') 
+              : (lowEndMode ? '#A0AEC0' : '#cfcfcf')
+          ]} 
+        />
         
         {/* Fog perfectly matches the solid background to erase the horizon line */}
-        <fog attach="fog" args={[canvasTheme === 'dark' ? '#0c0d10' : '#cfcfcf', 5, 20]} />
+        <fog 
+          attach="fog" 
+          args={[
+            canvasTheme === 'dark' 
+              ? (lowEndMode ? '#1A1F24' : '#0c0d10') 
+              : (lowEndMode ? '#A0AEC0' : '#cfcfcf'), 
+            5, 20
+          ]} 
+        />
 
         <Suspense fallback={<CanvasLoader />}>
-          {/* ── High-End PBR Lighting ── */}
-          <ambientLight intensity={0.4} />
+          {/* ── Dynamic PBR Lighting ── */}
+          <ambientLight intensity={lowEndMode ? 0.6 : 0.3} />
 
           <directionalLight
-            position={[5, 5, 4]}
-            intensity={1.5}
+            position={[5, 8, 4]}
+            intensity={lowEndMode ? 1.2 : 2.0}
             castShadow
-            shadow-mapSize={[512, 512]}
-            shadow-bias={-0.0002}
+            shadow-mapSize={lowEndMode ? [512, 512] : [1024, 1024]}
+            shadow-bias={-0.0001}
             color="#ffffff"
           />
+
+          {!lowEndMode && (
+            <spotLight
+              position={[0, 5, 2]}
+              angle={0.7}
+              penumbra={0.8}
+              intensity={4}
+              castShadow
+              shadow-mapSize={[1024, 1024]}
+              color="#ffeedd"
+            />
+          )}
+
           <directionalLight position={[-5, 3, -5]} intensity={0.6} color="#b0c4de" />
-          <directionalLight position={[0, 2, -6]} intensity={0.8} color="#ffffff" />
+          <directionalLight position={[0, 2, -6]} intensity={1.0} color="#ffffff" />
 
           <CarouselGroup structures={structures} currentIndex={currentIndex} />
 
           {/* Reflective Showroom Floor */}
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.63, 0]}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.63, 0]} receiveShadow>
             <planeGeometry args={[500, 500]} />
-            <MeshReflectorMaterial
-              blur={[200, 100]}
-              resolution={256}
-              mixBlur={0.5}
-              mixStrength={10}
-              roughness={0.8}
-              depthScale={1}
-              minDepthThreshold={0.4}
-              maxDepthThreshold={1.4}
-              color={canvasTheme === 'dark' ? '#0c0d10' : '#cfcfcf'}
-              metalness={0.6}
-            />
+            {lowEndMode ? (
+              <meshStandardMaterial 
+                color={
+                  canvasTheme === 'dark' 
+                    ? '#1A1F24' 
+                    : '#A0AEC0'
+                } 
+              />
+            ) : (
+              <MeshReflectorMaterial
+                blur={[200, 100]}
+                resolution={256}
+                mixBlur={0.5}
+                mixStrength={10}
+                roughness={0.8}
+                depthScale={1}
+                minDepthThreshold={0.4}
+                maxDepthThreshold={1.4}
+                color={canvasTheme === 'dark' ? '#0c0d10' : '#cfcfcf'}
+                metalness={0.6}
+              />
+            )}
           </mesh>
 
-          <ContactShadows
-            position={[0, -0.62, 0]}
-            opacity={canvasTheme === 'dark' ? 0.8 : 0.4}
-            scale={40}
-            blur={1.5}
-            far={1.0}
-            resolution={256}
-          />
+          {!lowEndMode && (
+            <ContactShadows
+              position={[0, -0.62, 0]}
+              opacity={canvasTheme === 'dark' ? 0.8 : 0.4}
+              scale={40}
+              blur={1.5}
+              far={1.0}
+              resolution={256}
+            />
+          )}
 
           <Environment preset="studio" />
         </Suspense>
@@ -676,52 +718,91 @@ export default function ShowroomCanvas({ structures, onStructureSelect }) {
         </button>
       )}
 
-      {/* Theme Toggle Button */}
-      <button
+      <div 
+        style={{ position: "absolute", top: "16px", right: "16px", zIndex: 10, display: "flex", gap: "8px" }}
         onPointerDown={(e) => e.stopPropagation()}
         onPointerUp={(e) => e.stopPropagation()}
         onTouchStart={(e) => e.stopPropagation()}
         onTouchEnd={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation();
-          toggleCanvasTheme();
-        }}
-        style={{
-          position: "absolute",
-          top: "16px",
-          right: "16px",
-          zIndex: 10,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: "36px",
-          height: "36px",
-          borderRadius: "50%",
-          backgroundColor: canvasTheme === 'dark' ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)",
-          color: canvasTheme === 'dark' ? "#F9F9FB" : "#232B32",
-          border: canvasTheme === 'dark' ? "1px solid rgba(255,255,255,0.2)" : "1px solid rgba(0,0,0,0.1)",
-          backdropFilter: "blur(4px)",
-          cursor: "pointer",
-          transition: "all 0.2s ease"
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = canvasTheme === 'dark' ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.1)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = canvasTheme === 'dark' ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)";
-        }}
-        title="Toggle Canvas Theme"
       >
-        {canvasTheme === 'dark' ? (
-          <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{ width: '20px', height: '20px' }}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
-          </svg>
-        ) : (
-          <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{ width: '20px', height: '20px' }}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
-          </svg>
-        )}
-      </button>
+        {/* Performance Toggle */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleLowEndMode();
+          }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "36px",
+            height: "36px",
+            borderRadius: "50%",
+            backgroundColor: lowEndMode ? "rgba(197,160,89,0.2)" : (canvasTheme === 'dark' ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)"),
+            color: lowEndMode ? "#C5A059" : (canvasTheme === 'dark' ? "#F9F9FB" : "#232B32"),
+            border: lowEndMode ? "1px solid rgba(197,160,89,0.4)" : (canvasTheme === 'dark' ? "1px solid rgba(255,255,255,0.2)" : "1px solid rgba(0,0,0,0.1)"),
+            backdropFilter: "blur(4px)",
+            cursor: "pointer",
+            transition: "all 0.2s ease"
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = lowEndMode ? "rgba(197,160,89,0.3)" : (canvasTheme === 'dark' ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.1)");
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = lowEndMode ? "rgba(197,160,89,0.2)" : (canvasTheme === 'dark' ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)");
+          }}
+          title={lowEndMode ? "High Performance (Low Quality)" : "High Quality (Low Performance)"}
+        >
+          {lowEndMode ? (
+            <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{ width: '20px', height: '20px' }}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+            </svg>
+          ) : (
+            <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{ width: '20px', height: '20px' }}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11.412 15.655 9.75 21.75l3.745-4.012M9.257 13.5H3.75l2.659-2.849m2.048-2.194L11.412 2.25l-.42 4.058m5.053 5.053L20.25 10.5h-5.412m-3.158 5.412 1.554 1.666" />
+            </svg>
+          )}
+        </button>
+
+        {/* Theme Toggle */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleCanvasTheme();
+          }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "36px",
+            height: "36px",
+            borderRadius: "50%",
+            backgroundColor: canvasTheme === 'dark' ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)",
+            color: canvasTheme === 'dark' ? "#F9F9FB" : "#232B32",
+            border: canvasTheme === 'dark' ? "1px solid rgba(255,255,255,0.2)" : "1px solid rgba(0,0,0,0.1)",
+            backdropFilter: "blur(4px)",
+            cursor: "pointer",
+            transition: "all 0.2s ease"
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = canvasTheme === 'dark' ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.1)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = canvasTheme === 'dark' ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)";
+          }}
+          title={canvasTheme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
+        >
+          {canvasTheme === 'dark' ? (
+            <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{ width: '20px', height: '20px' }}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+            </svg>
+          ) : (
+            <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" style={{ width: '20px', height: '20px' }}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
+            </svg>
+          )}
+        </button>
+      </div>
     </div>
   );
 }

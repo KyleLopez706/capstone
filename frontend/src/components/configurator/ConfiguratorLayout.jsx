@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import MaterialPanel      from './MaterialPanel';
 import ConfiguratorCanvas from './ConfiguratorCanvas';
 import DimensionPanel     from './DimensionPanel';
+import LightingPanel      from './LightingPanel';
 import useConfiguratorStore from '../../store/configuratorStore';
 
 /* ─────────────────────────────────────────
@@ -15,6 +16,8 @@ export default function ConfiguratorLayout() {
   const selectedStructure = useConfiguratorStore((s) => s.selectedStructure);
   const canvasTheme       = useConfiguratorStore((s) => s.canvasTheme);
   const toggleCanvasTheme = useConfiguratorStore((s) => s.toggleCanvasTheme);
+  const lowEndMode        = useConfiguratorStore((s) => s.lowEndMode);
+  const toggleLowEndMode  = useConfiguratorStore((s) => s.toggleLowEndMode);
   const modelUrl          = selectedStructure?.model_url ?? '';
 
   const [activeTab, setActiveTab] = useState('materials');
@@ -126,15 +129,35 @@ export default function ConfiguratorLayout() {
             style={{ color: canvasTheme === 'dark' ? '#9CA3AF' : '#6B7280' }}
             onMouseEnter={(e) => (e.currentTarget.style.color = '#C5A059')}
             onMouseLeave={(e) => (e.currentTarget.style.color = canvasTheme === 'dark' ? '#9CA3AF' : '#6B7280')}
-            title="Toggle Canvas Theme"
+            title={canvasTheme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
           >
             {canvasTheme === 'dark' ? (
               <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
               </svg>
             ) : (
               <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" />
+              </svg>
+            )}
+          </button>
+
+          {/* Performance Toggle */}
+          <button
+            onClick={toggleLowEndMode}
+            className="flex items-center justify-center w-8 h-8 rounded-full cursor-pointer transition-colors duration-150"
+            style={{ color: lowEndMode ? '#C5A059' : (canvasTheme === 'dark' ? '#9CA3AF' : '#6B7280') }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#C5A059')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = lowEndMode ? '#C5A059' : (canvasTheme === 'dark' ? '#9CA3AF' : '#6B7280'))}
+            title={lowEndMode ? "High Performance (Low Quality)" : "High Quality (Low Performance)"}
+          >
+            {lowEndMode ? (
+              <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+              </svg>
+            ) : (
+              <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11.412 15.655 9.75 21.75l3.745-4.012M9.257 13.5H3.75l2.659-2.849m2.048-2.194L11.412 2.25l-.42 4.058m5.053 5.053L20.25 10.5h-5.412m-3.158 5.412 1.554 1.666" />
               </svg>
             )}
           </button>
@@ -189,6 +212,16 @@ export default function ConfiguratorLayout() {
             >
               Dimensions
             </button>
+            <button
+              onClick={() => setActiveTab('lighting')}
+              className="flex-1 pb-3 text-xs font-semibold tracking-widest uppercase transition-colors"
+              style={{
+                color: activeTab === 'lighting' ? '#C5A059' : '#9CA3AF',
+                borderBottom: activeTab === 'lighting' ? '2px solid #C5A059' : '2px solid transparent'
+              }}
+            >
+              Lighting
+            </button>
           </div>
 
           {/* Active Tab Content */}
@@ -198,6 +231,9 @@ export default function ConfiguratorLayout() {
             </div>
             <div className="w-full h-full absolute inset-0" style={{ display: activeTab === 'dimensions' ? 'block' : 'none' }}>
               <DimensionPanel />
+            </div>
+            <div className="w-full h-full absolute inset-0" style={{ display: activeTab === 'lighting' ? 'block' : 'none' }}>
+              <LightingPanel />
             </div>
           </div>
         </div>
