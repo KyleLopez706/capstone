@@ -129,21 +129,7 @@ export default function Home() {
                 <div className="absolute inset-0 w-full h-full bg-white opacity-0 group-hover:opacity-20 transition-opacity duration-300" />
               </button>
               
-              <button
-                onClick={() => navigate("/gallery")}
-                className="inline-flex items-center justify-center px-8 py-4 rounded-full text-sm font-semibold tracking-widest uppercase cursor-pointer transition-all duration-300 border"
-                style={{ backgroundColor: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.15)", color: "#FFFFFF" }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)";
-                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.3)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.03)";
-                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)";
-                }}
-              >
-                View Gallery
-              </button>
+
             </div>
           </div>
         </div>
@@ -503,26 +489,9 @@ export default function Home() {
           <h2 className="text-4xl sm:text-5xl font-light tracking-tight mb-6" style={{ color: "#FFFFFF" }}>
             Ready to bring your vision to life?
           </h2>
-          <p className="text-lg mb-10" style={{ color: "#9CA3AF" }}>
-            Experience our premium stones in full 3D and get a custom quotation instantly.
+          <p className="text-lg mb-10 leading-relaxed max-w-2xl mx-auto" style={{ color: "#9CA3AF" }}>
+            Step into a world of architectural elegance. Experience our premium stone designs in stunning 3D detail, visualize your dream space, and request a quotation today to start your project.
           </p>
-          <button
-            onClick={() => navigate("/configurator-3d")}
-            className="inline-flex items-center justify-center px-10 py-5 rounded-full text-sm font-bold tracking-widest uppercase cursor-pointer transition-all duration-300"
-            style={{ backgroundColor: "#FFFFFF", color: "#232B32", boxShadow: "0 10px 40px rgba(0,0,0,0.5)" }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = "translateY(-4px)";
-              e.currentTarget.style.boxShadow = "0 20px 50px rgba(0,0,0,0.6)";
-              e.currentTarget.style.color = "#C5A059";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = "translateY(0)";
-              e.currentTarget.style.boxShadow = "0 10px 40px rgba(0,0,0,0.5)";
-              e.currentTarget.style.color = "#232B32";
-            }}
-          >
-            Launch the 3D Configurator
-          </button>
         </div>
       </section>
 

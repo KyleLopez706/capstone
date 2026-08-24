@@ -380,6 +380,7 @@ function CountertopWithMaterial({ modelUrl, onTextureApplied, theme }) {
           scale={10}
           blur={1.5}
           far={1.0}
+          resolution={256}
         />
       </group>
 
@@ -456,7 +457,7 @@ function ShowroomFloor({ theme }) {
       <planeGeometry args={[500, 500]} />
       <MeshReflectorMaterial
         blur={[300, 100]}
-        resolution={1024}
+        resolution={256}
         mixBlur={0.7}
         mixStrength={1.5}
         map={concreteTexture}
@@ -508,7 +509,9 @@ export default function ConfiguratorCanvas({ modelUrl }) {
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <Canvas
         shadows
-        gl={{ shadowMapType: THREE.PCFShadowMap, preserveDrawingBuffer: true }}
+        dpr={[1, 1.5]}
+        performance={{ min: 0.5 }}
+        gl={{ shadowMapType: THREE.PCFShadowMap, preserveDrawingBuffer: true, powerPreference: 'high-performance' }}
         camera={{ position: [0, 1.2, 3], fov: 45 }}
         onCreated={({ gl }) => {
           gl.domElement.addEventListener("webglcontextlost", (e) => {
@@ -541,7 +544,7 @@ export default function ConfiguratorCanvas({ modelUrl }) {
             position={[5, 5, 4]}
             intensity={1.5}
             castShadow
-            shadow-mapSize={[1024, 1024]}
+            shadow-mapSize={[512, 512]}
             shadow-bias={-0.0002}
             color="#ffffff"
           />

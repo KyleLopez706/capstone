@@ -1,51 +1,52 @@
+import { useState } from "react";
 import Navbar from "../components/Navbar";
-import blackMarquinaImg from "../assets/Black Marquina.jpg";
-import blackGalaxyImg from "../assets/Black galaxy.png";
-import calacattaImg from "../assets/calacatta quarts.jpg";
-import saltPepperImg from "../assets/salt and pepper.png";
-import whiteQuartzImg from "../assets/white quartz.png";
-import kitchenImg from "../assets/kitchen.png";
+import lobbyCounterImg from "../assets/lobby counter.jpg";
+import lobbyWallCladdingImg from "../assets/lobby wall cladding.jpg";
+import lobbyWallImg from "../assets/lobby wall.jpg";
+import towerStoneImg from "../assets/tower stone cladding.jpg";
+import barCountertopImg from "../assets/bar countertop.jpg";
 
 const GALLERY_ITEMS = [
   {
-    id: "black-marquina",
-    name: "Black Marquina",
-    tag: "Veined Marble",
-    image: blackMarquinaImg,
+    id: "lobby-counter",
+    name: "Yellow Onyx Lobby Counter",
+    tag: "Luxury Onyx",
+    image: lobbyCounterImg,
+    description: "Yellow onyx was chosen for this reception counter due to its rare translucent properties. When backlit, the stone’s golden veins naturally illuminate, creating a warm, inviting focal point that offsets the darker tones of the lobby."
   },
   {
-    id: "black-galaxy",
-    name: "Black Galaxy",
-    tag: "Speckled Granite",
-    image: blackGalaxyImg,
+    id: "lobby-wall-cladding",
+    name: "Premium Lobby Cladding",
+    tag: "Architectural Stone",
+    image: lobbyWallCladdingImg,
+    description: "This lobby features expansive slabs of travertine gray stone, selected for its subtle, linear veining. The horizontal cut of the stone visually widens the hall, while its dense composition ensures the high-traffic walls remain pristine."
   },
   {
-    id: "calacatta-quartz",
-    name: "Calacatta Quartz",
-    tag: "Book-Matched Marble",
-    image: calacattaImg,
+    id: "lobby-wall",
+    name: "Beige Travertine Wall",
+    tag: "Warm Travertine",
+    image: lobbyWallImg,
+    description: "Beige travertine brings an earthy warmth to this hospitality lounge. Left with its natural porous texture, the stone softens the acoustics of the large open space and provides a calming, neutral backdrop that beautifully diffuses light."
   },
   {
-    id: "salt-pepper",
-    name: "Salt & Pepper",
-    tag: "Granular Granite",
-    image: saltPepperImg,
+    id: "tower-cladding",
+    name: "Travertine Tower Cladding",
+    tag: "Exterior Facade",
+    image: towerStoneImg,
+    description: "Gray travertine cladding was utilized for the exterior due to its exceptional weather resistance and timeless aging process. The stone’s natural banding breaks up the sheer scale of the facade, anchoring the building with an organic texture."
   },
   {
-    id: "white-quartz",
-    name: "White Quartz",
-    tag: "Pure Crystalline",
-    image: whiteQuartzImg,
-  },
-  {
-    id: "kitchen-install",
-    name: "Kitchen Installation",
-    tag: "Project Showcase",
-    image: kitchenImg,
+    id: "bar-countertop",
+    name: "Golden Yellow Granite Bar",
+    tag: "Premium Granite",
+    image: barCountertopImg,
+    description: "Golden yellow granite serves as the ideal bar surface because of its incredible hardness and resistance to spills. The vibrant mineral speckles naturally conceal daily wear, while its high-gloss polish catches the ambient lighting perfectly."
   },
 ];
 
 export default function Gallery() {
+  const [selectedItem, setSelectedItem] = useState(null);
+
   return (
     <div className="min-h-screen w-full" style={{ backgroundColor: "#F5F5F5" }}>
       <Navbar />
@@ -75,7 +76,7 @@ export default function Gallery() {
             className="text-5xl sm:text-6xl lg:text-7xl font-light leading-tight tracking-tight mb-8"
             style={{ color: "#FFFFFF" }}
           >
-            Stone{" "}
+            Finished{" "}
             <span
               className="font-semibold"
               style={{
@@ -85,16 +86,14 @@ export default function Gallery() {
                 backgroundClip: "text",
               }}
             >
-              Gallery
+              Projects
             </span>
           </h1>
           <p
             className="text-lg sm:text-xl leading-relaxed max-w-2xl mx-auto"
             style={{ color: "#E2E8F0" }}
           >
-            Browse our curated collection of premium granite, marble, and quartz
-            surfaces — each one a testament to natural beauty and expert
-            craftsmanship.
+            Explore our gallery of completed projects showcasing our commitment to detail and design.
           </p>
         </div>
       </section>
@@ -131,6 +130,7 @@ export default function Gallery() {
               <div
                 key={item.id}
                 className="group relative rounded-2xl overflow-hidden cursor-pointer"
+                onClick={() => setSelectedItem(item)}
                 style={{
                   boxShadow: "0 4px 20px rgba(35,43,50,0.08)",
                   border: "1px solid rgba(226,232,240,0.15)",
@@ -162,42 +162,23 @@ export default function Gallery() {
                 <div
                   className="absolute inset-0 flex flex-col justify-end p-6 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                   style={{
-                    background: "linear-gradient(to top, rgba(26,31,36,0.9) 0%, rgba(35,43,50,0.4) 50%, transparent 100%)",
+                    background: "linear-gradient(to top, rgba(26,31,36,0.95) 0%, rgba(35,43,50,0.6) 70%, transparent 100%)",
                   }}
                 >
-                  <span
-                    className="text-xs font-semibold tracking-widest uppercase mb-2 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500"
-                    style={{ color: "#C5A059" }}
-                  >
-                    {item.tag}
-                  </span>
+
                   <p
-                    className="text-xl font-semibold mb-4 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500 delay-75"
+                    className="text-xl font-semibold mb-1 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500 delay-75"
                     style={{ color: "#FFFFFF" }}
                   >
                     {item.name}
                   </p>
-                  
-                  {/* View in 3D Button */}
-                  <a
-                    href="/configurator-3d"
-                    className="inline-flex items-center gap-2 self-start px-5 py-2.5 rounded-full text-xs font-bold tracking-widest uppercase transition-all duration-300 transform translate-y-4 group-hover:translate-y-0 delay-150"
-                    style={{ backgroundColor: "rgba(197,160,89,0.2)", color: "#DFBE74", border: "1px solid rgba(197,160,89,0.4)", backdropFilter: "blur(4px)" }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = "#C5A059";
-                      e.currentTarget.style.color = "#1A1F24";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = "rgba(197,160,89,0.2)";
-                      e.currentTarget.style.color = "#DFBE74";
-                    }}
-                    onClick={(e) => e.stopPropagation()}
+                  <p
+                    className="text-sm leading-relaxed mb-4 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500 delay-100"
+                    style={{ color: "#E2E8F0" }}
                   >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM10.5 7.5v6m3-3h-6" />
-                    </svg>
-                    View in 3D
-                  </a>
+                    {item.description}
+                  </p>
+
                 </div>
 
                 {/* Always-visible tag badge */}
@@ -247,6 +228,34 @@ export default function Gallery() {
           </a>
         </div>
       </section>
+      {/* ════════════════════════════════════════
+          LIGHTBOX MODAL
+      ════════════════════════════════════════ */}
+      {selectedItem && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8"
+          style={{ backgroundColor: "rgba(12, 13, 16, 0.95)", backdropFilter: "blur(12px)" }}
+          onClick={() => setSelectedItem(null)}
+        >
+          {/* Close Button */}
+          <button 
+            className="absolute top-6 right-6 w-12 h-12 flex items-center justify-center rounded-full text-white hover:text-[#C5A059] transition-colors z-50"
+            style={{ backgroundColor: "rgba(255,255,255,0.1)" }}
+            onClick={(e) => { e.stopPropagation(); setSelectedItem(null); }}
+          >
+            <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          <img 
+            src={selectedItem.image} 
+            alt={selectedItem.name} 
+            className="max-w-full max-h-full object-contain rounded-xl shadow-2xl border border-white/10"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }
