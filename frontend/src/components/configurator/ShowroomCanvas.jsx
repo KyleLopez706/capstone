@@ -499,11 +499,11 @@ export default function ShowroomCanvas({ structures, onStructureSelect }) {
 
         <Suspense fallback={<CanvasLoader />}>
           {/* ── Dynamic PBR Lighting ── */}
-          <ambientLight intensity={lowEndMode ? 0.6 : 0.3} />
+          <ambientLight intensity={lowEndMode ? 0.5 : 0.3} color={lowEndMode ? "#eef7ff" : "#ffffff"} />
 
           <directionalLight
-            position={[5, 8, 4]}
-            intensity={lowEndMode ? 1.2 : 2.0}
+            position={lowEndMode ? [10, 10, 5] : [5, 8, 4]}
+            intensity={lowEndMode ? 1.5 : 2.0}
             castShadow
             shadow-mapSize={lowEndMode ? [512, 512] : [1024, 1024]}
             shadow-bias={-0.0001}
@@ -522,8 +522,8 @@ export default function ShowroomCanvas({ structures, onStructureSelect }) {
             />
           )}
 
-          <directionalLight position={[-5, 3, -5]} intensity={0.6} color="#b0c4de" />
-          <directionalLight position={[0, 2, -6]} intensity={1.0} color="#ffffff" />
+          <directionalLight position={[-5, 5, -5]} intensity={lowEndMode ? 1.0 : 0.6} color="#b0c4de" />
+          {!lowEndMode && <directionalLight position={[0, 2, -6]} intensity={1.0} color="#ffffff" />}
 
           <CarouselGroup structures={structures} currentIndex={currentIndex} />
 
@@ -565,7 +565,7 @@ export default function ShowroomCanvas({ structures, onStructureSelect }) {
             />
           )}
 
-          <Environment preset="studio" />
+          <Environment preset={lowEndMode ? "city" : "studio"} />
         </Suspense>
       </Canvas>
 

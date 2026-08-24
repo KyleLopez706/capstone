@@ -484,11 +484,10 @@ function RigSetup({ mode, lowEndMode }) {
   if (lowEndMode) {
     return (
       <>
-        <ambientLight intensity={0.6} />
-        <directionalLight position={[5, 8, 4]} intensity={1.2} castShadow shadow-mapSize={[512, 512]} shadow-bias={-0.0001} color="#ffffff" />
-        <directionalLight position={[-5, 3, -5]} intensity={0.6} color="#b0c4de" />
-        <directionalLight position={[0, 2, -6]} intensity={0.8} color="#ffffff" />
-        <Environment preset="studio" />
+        <ambientLight intensity={0.5} color="#eef7ff" />
+        <directionalLight position={[10, 10, 5]} intensity={1.5} castShadow shadow-mapSize={[512, 512]} shadow-bias={-0.0001} color="#ffffff" />
+        <directionalLight position={[-5, 5, -5]} intensity={1.0} color="#b0c4de" />
+        <Environment preset="city" />
       </>
     );
   }
