@@ -4,6 +4,7 @@ import {
   evaluateDesignQuality,
   getRecommendations,
   getGraniteRecommendations,
+  generateScoreExplanation,
 } from "../../utils/AIQualityEngine";
 
 /* ─────────────────────────────────────────
@@ -392,20 +393,19 @@ export default function MaterialPanel() {
                     Why this score?
                   </span>{" "}
                   {(() => {
-                    const isWallOrFloor = hideCabinets;
-                    if (!isWallOrFloor) {
-                      if (aiScore >= 70)
-                        return "Strong contrast and complementary hues between the granite and cabinet finish. This pairing provides excellent visual balance and aligns with top-rated interior designs.";
-                      if (aiScore >= 50)
-                        return "An acceptable pairing between the stone and cabinet, but it lacks the dynamic contrast or hue harmony required for a premium, high-end look.";
-                      return "The cabinet finish and granite color clash in tone or temperature. The lack of contrast creates an unbalanced and muddy appearance for a countertop setup.";
-                    } else {
-                      if (aiScore >= 70)
-                        return "This stone is an excellent choice for large walls or floors! Its brightness and colors are perfectly balanced, keeping the room feeling open, elegant, and not overwhelmingly busy.";
-                      if (aiScore >= 50)
-                        return "This stone looks decent on walls and floors, but it lacks a bit of contrast. When spread across a huge room, it might feel slightly plain or heavy without cabinets to break up the space.";
-                      return "This stone is not recommended for covering massive wall or floor areas by itself. Its colors can feel too intense or too dark in a large open space without cabinets to balance it out.";
-                    }
+                    const isWF = hideCabinets;
+                    const graniteHex = selectedMaterial?.hex_code || getHexForMaterial(selectedMaterial?.name);
+                    const compareHex = isWF
+                      ? '#F9F9FB'
+                      : (selectedCabinetMaterial?.hex_code || getHexForMaterial(selectedCabinetMaterial?.name) || '#F9F9FB');
+                    return generateScoreExplanation(
+                      graniteHex,
+                      compareHex,
+                      aiScore,
+                      selectedMaterial?.name ?? 'This stone',
+                      isWF,
+                      selectedCabinetMaterial?.name
+                    );
                   })()}
                 </p>
               </div>

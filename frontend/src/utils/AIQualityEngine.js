@@ -190,3 +190,122 @@ export async function getGraniteRecommendations(cabinetHex, materials, currentMa
     scored.sort((a, b) => b.score - a.score);
     return scored.slice(0, topN);
 }
+
+/**
+ * Generates a unique, stone-specific explanation for why the AI gave a particular score.
+ * Analyzes the actual CIELAB color properties (lightness, chroma, warmth, contrast)
+ * of both the granite and its comparison target to build a human-readable sentence
+ * that is different for every single stone + structure combination.
+ *
+ * @param {string} graniteHex - Hex color of the selected granite
+ * @param {string} compareHex - Hex color being compared against (cabinet or #F9F9FB for walls)
+ * @param {number} score - The AI score (0-100)
+ * @param {string} graniteName - Display name of the granite
+ * @param {boolean} isWallOrFloor - Whether the structure is a wall/floor (no cabinets)
+ * @param {string} [cabinetName] - Display name of the cabinet finish (only for countertops)
+ * @returns {string} - A unique human-readable explanation
+ */
+export function generateScoreExplanation(graniteHex, compareHex, score, graniteName, isWallOrFloor, cabinetName) {
+    const lab1 = rgbToLab(hexToRGB(graniteHex));
+    const lab2 = rgbToLab(hexToRGB(compareHex));
+
+    // Derive human-readable color traits from CIELAB values
+    const lightness1 = lab1.L;       // 0 = pitch black, 100 = pure white
+    const chroma1 = Math.sqrt(lab1.a ** 2 + lab1.b ** 2); // saturation intensity
+    const warmth1 = lab1.b;          // positive = warm/yellow, negative = cool/blue
+
+    const deltaL = Math.abs(lab1.L - lab2.L);  // lightness contrast
+    const deltaE = Math.sqrt((lab1.L - lab2.L) ** 2 + (lab1.a - lab2.a) ** 2 + (lab1.b - lab2.b) ** 2);
+
+    // Classify the stone's visual character
+    const isDark = lightness1 < 40;
+    const isLight = lightness1 > 65;
+    const isMidtone = !isDark && !isLight;
+    const isVivid = chroma1 > 25;
+    const isMuted = chroma1 < 10;
+    const isWarm = warmth1 > 5;
+    const isCool = warmth1 < -5;
+    const isNeutral = !isWarm && !isCool;
+
+    // Classify contrast level between the two surfaces
+    const hasStrongContrast = deltaL > 35;
+    const hasModerateContrast = deltaL > 15 && deltaL <= 35;
+    const hasLowContrast = deltaL <= 15;
+
+    // Build the stone's tone descriptor
+    let toneDesc;
+    if (isDark && isWarm) toneDesc = 'deep, warm tones';
+    else if (isDark && isCool) toneDesc = 'deep, cool tones';
+    else if (isDark && isNeutral) toneDesc = 'rich, dark tones';
+    else if (isLight && isWarm) toneDesc = 'light, warm tones';
+    else if (isLight && isCool) toneDesc = 'bright, cool tones';
+    else if (isLight && isNeutral) toneDesc = 'clean, light tones';
+    else if (isMidtone && isWarm) toneDesc = 'mid-range warm tones';
+    else if (isMidtone && isCool) toneDesc = 'mid-range cool tones';
+    else toneDesc = 'balanced, neutral tones';
+
+    // Build the saturation descriptor
+    let satDesc;
+    if (isVivid) satDesc = 'bold veining and strong color presence';
+    else if (isMuted) satDesc = 'subtle, understated pattern';
+    else satDesc = 'moderate color depth';
+
+    // ── COUNTERTOP WITH CABINETS ──
+    if (!isWallOrFloor) {
+        if (score >= 70) {
+            if (hasStrongContrast) {
+                return `${graniteName} features ${toneDesc} with ${satDesc}, creating a striking contrast against the ${cabinetName ?? 'selected cabinet'} finish. The significant difference in lightness between the stone and cabinet produces a visually dynamic pairing that draws the eye and defines the countertop as a standout feature.`;
+            }
+            if (isVivid) {
+                return `The ${satDesc} of ${graniteName} pairs beautifully with the ${cabinetName ?? 'selected cabinet'} finish. The stone's ${toneDesc} complement the cabinet's color temperature, creating a cohesive and elegant countertop presentation with enough visual interest to feel premium.`;
+            }
+            return `${graniteName}'s ${toneDesc} harmonize naturally with the ${cabinetName ?? 'selected cabinet'} finish. The color temperature and lightness balance between these two materials creates a polished, well-coordinated look that aligns with top-rated interior pairings.`;
+        }
+        if (score >= 50) {
+            if (hasLowContrast) {
+                return `${graniteName} has ${toneDesc} that are similar in lightness to the ${cabinetName ?? 'selected cabinet'} finish, resulting in low contrast. While this creates a uniform look, the pairing lacks the dynamic visual separation that makes premium countertop designs stand out.`;
+            }
+            if (isMuted) {
+                return `The ${satDesc} of ${graniteName} blends quietly with the ${cabinetName ?? 'selected cabinet'} finish. While there's no visual clash, the stone's ${toneDesc} don't create enough visual interest against this particular cabinet to produce a high-impact design.`;
+            }
+            return `${graniteName} provides an acceptable pairing with the ${cabinetName ?? 'selected cabinet'} finish. The stone's ${toneDesc} create a workable combination, but the contrast and color harmony between these specific materials falls short of what premium countertop designs typically achieve.`;
+        }
+        // Poor match (<50)
+        if (hasLowContrast && !isVivid) {
+            return `${graniteName}'s ${toneDesc} are too close in lightness and saturation to the ${cabinetName ?? 'selected cabinet'} finish, causing both surfaces to blend together. Without sufficient contrast, the countertop loses its visual definition and the overall design appears flat.`;
+        }
+        if (isWarm && isCool) {
+            return `${graniteName} carries ${toneDesc} that clash with the cooler temperature of the ${cabinetName ?? 'selected cabinet'} finish. This warm-cool mismatch creates visual tension that makes the countertop pairing feel disjointed rather than intentional.`;
+        }
+        return `The combination of ${graniteName}'s ${toneDesc} with the ${cabinetName ?? 'selected cabinet'} finish creates an unbalanced appearance. The ${satDesc} of this stone does not complement this particular cabinet color, resulting in a pairing that lacks cohesion.`;
+    }
+
+    // ── WALL / FLOOR CLADDING (standalone against white backdrop) ──
+    if (score >= 70) {
+        if (isDark) {
+            return `${graniteName}'s ${toneDesc} create a bold, dramatic statement when applied across walls or floors. Against a neutral room environment, the stone's ${satDesc} produces a stunning focal point without overwhelming the space because its darkness provides natural visual grounding.`;
+        }
+        if (isLight) {
+            return `${graniteName}'s ${toneDesc} make it an ideal choice for expansive wall or floor coverage. The stone's brightness integrates seamlessly into modern interiors, keeping rooms feeling open and airy while the ${satDesc} adds just enough character to prevent a sterile look.`;
+        }
+        return `${graniteName}'s ${toneDesc} and ${satDesc} strike an excellent balance for large surface coverage. Applied across walls or floors, this stone maintains visual harmony by providing enough color presence to be interesting without dominating the room's overall aesthetic.`;
+    }
+    if (score >= 50) {
+        if (isDark && isVivid) {
+            return `While ${graniteName} features striking ${satDesc} that works well paired with contrasting cabinets, its ${toneDesc} can feel heavy when spread across entire walls or floor expanses without lighter cabinetry to break up the visual weight.`;
+        }
+        if (isLight && isMuted) {
+            return `${graniteName}'s ${toneDesc} and ${satDesc} are slightly too understated for standalone wall or floor coverage. While this stone pairs nicely with cabinets that add contrast, on its own it may lack the visual anchor needed to make the space feel designed rather than plain.`;
+        }
+        return `${graniteName} performs moderately as a standalone wall or floor material. Its ${toneDesc} are acceptable for large surfaces, but the ${satDesc} doesn't fully deliver the visual impact needed when the stone must carry the entire room's design character by itself.`;
+    }
+    // Poor match (<50) for walls/floors
+    if (isDark && isMuted) {
+        return `${graniteName}'s combination of ${toneDesc} and ${satDesc} creates an overly heavy atmosphere when applied to large wall or floor areas. This stone would score significantly higher as a countertop paired with lighter cabinets, which would provide the contrast it needs to shine.`;
+    }
+    if (isLight && isMuted) {
+        return `When covering entire walls or floors, ${graniteName}'s ${toneDesc} and ${satDesc} result in a washed-out appearance that lacks visual definition. This stone benefits from being paired with contrasting cabinetry to bring out its character rather than being used as a standalone surface.`;
+    }
+    return `${graniteName} is not recommended as a standalone wall or floor material. Its ${toneDesc} and ${satDesc} struggle to anchor the design of a large room by themselves. This stone would perform much better as a countertop, where a contrasting cabinet finish can elevate its visual qualities.`;
+}
+
