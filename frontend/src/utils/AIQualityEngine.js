@@ -215,7 +215,6 @@ export function generateScoreExplanation(graniteHex, compareHex, score, graniteN
     const warmth1 = lab1.b;          // positive = warm/yellow, negative = cool/blue
 
     const deltaL = Math.abs(lab1.L - lab2.L);  // lightness contrast
-    const deltaE = Math.sqrt((lab1.L - lab2.L) ** 2 + (lab1.a - lab2.a) ** 2 + (lab1.b - lab2.b) ** 2);
 
     // Classify the stone's visual character
     const isDark = lightness1 < 40;
@@ -229,7 +228,6 @@ export function generateScoreExplanation(graniteHex, compareHex, score, graniteN
 
     // Classify contrast level between the two surfaces
     const hasStrongContrast = deltaL > 35;
-    const hasModerateContrast = deltaL > 15 && deltaL <= 35;
     const hasLowContrast = deltaL <= 15;
 
     // Build the stone's tone descriptor
