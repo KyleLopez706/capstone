@@ -167,10 +167,24 @@ async function patchBucket(bucket) {
 
   console.log(`   Found ${files.length} file(s)\n`);
 
+  // You can add multiple keywords here to patch specific files.
+  // Leave the array empty [] to patch everything.
+  const FILTER_KEYWORDS = ['normal', 'marigold']; 
+
   let patched = 0;
   let failed  = 0;
+  let skipped = 0;
 
   for (const path of files) {
+    // Check if the path matches ANY of the keywords
+    const matchesFilter = FILTER_KEYWORDS.length === 0 || 
+                          FILTER_KEYWORDS.some(kw => path.toLowerCase().includes(kw.toLowerCase()));
+
+    if (!matchesFilter) {
+      skipped++;
+      continue;
+    }
+
     process.stdout.write(`   → ${path} … `);
     try {
       const buffer = await downloadFile(bucket, path);
@@ -181,6 +195,10 @@ async function patchBucket(bucket) {
       process.stdout.write(`❌  ${err.message}\n`);
       failed++;
     }
+  }
+
+  if (skipped > 0) {
+    console.log(`   ⏭️  Skipped ${skipped} file(s) that did not match your keywords.`);
   }
 
   return { patched, failed };

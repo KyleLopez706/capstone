@@ -225,8 +225,14 @@ function TextureApplicator({ material, targetNodes, onApplied, scaleFactors }) {
       map:          material.color_url     ? colorMap  : null,
       normalMap:    material.normal_url    ? normalMap : null,
       roughnessMap: material.roughness_url ? roughMap  : null,
-      roughness: 0.35,
-      metalness: 0.05,
+      // Roughness at 0.55 keeps a subtle satin sheen on the granite
+      // without letting the environment map overpower the color texture
+      roughness: 0.55,
+      metalness: 0.03,
+      // Boost the normal map influence so micro-surface detail (veining,
+      // crystal grain) is clearly visible under directional light
+      normalScale: new THREE.Vector2(1.5, 1.5),
+      envMapIntensity: 0.4,
     });
 
     targetNodes.forEach((node) => {
@@ -479,15 +485,21 @@ function ShowroomFloor({ theme }) {
 
 /* ─────────────────────────────────────────
    DYNAMIC LIGHTING RIGS
+   Tuned for granite/stone surfaces:
+   - Low ambient to preserve color saturation
+   - Strong directional key light for texture relief
+   - Subtle fill light for shadow softening
+   - Environment map at reduced intensity for
+     reflections without washing out the color map
 ───────────────────────────────────────── */
 function RigSetup({ mode, lowEndMode }) {
   if (lowEndMode) {
     return (
       <>
-        <ambientLight intensity={0.5} color="#eef7ff" />
-        <directionalLight position={[10, 10, 5]} intensity={1.5} castShadow shadow-mapSize={[512, 512]} shadow-bias={-0.0001} color="#ffffff" />
-        <directionalLight position={[-5, 5, -5]} intensity={1.0} color="#b0c4de" />
-        <Environment preset="city" />
+        <ambientLight intensity={0.3} color="#ffffff" />
+        <directionalLight position={[10, 10, 5]} intensity={1.2} castShadow shadow-mapSize={[512, 512]} shadow-bias={-0.0001} color="#ffffff" />
+        <directionalLight position={[-5, 3, -5]} intensity={0.4} color="#b0c4de" />
+        <Environment preset="city" environmentIntensity={0.3} />
       </>
     );
   }
@@ -495,11 +507,16 @@ function RigSetup({ mode, lowEndMode }) {
   if (mode === 'daylight') {
     return (
       <>
-        <ambientLight intensity={0.5} color="#eef7ff" />
-        <directionalLight position={[10, 10, 5]} intensity={2.5} castShadow shadow-mapSize={[1024, 1024]} shadow-bias={-0.0001} color="#ffffff" />
-        <spotLight position={[0, 8, 2]} angle={0.8} penumbra={0.5} intensity={3} castShadow shadow-mapSize={[1024, 1024]} color="#ffffff" />
-        <directionalLight position={[-5, 5, -5]} intensity={1.2} color="#b0c4de" />
-        <Environment preset="city" />
+        {/* Low ambient keeps shadows deep so texture bumps are visible */}
+        <ambientLight intensity={0.25} color="#ffffff" />
+        {/* Key light: strong overhead sun hitting at an angle to rake across the surface */}
+        <directionalLight position={[8, 12, 4]} intensity={1.8} castShadow shadow-mapSize={[1024, 1024]} shadow-bias={-0.0001} color="#fff8f0" />
+        {/* Accent spot: focused pool of light on the countertop center */}
+        <spotLight position={[-2, 7, 3]} angle={0.6} penumbra={0.6} intensity={1.5} castShadow shadow-mapSize={[1024, 1024]} color="#ffffff" />
+        {/* Fill: subtle cool bounce to soften harsh shadows without flattening */}
+        <directionalLight position={[-6, 4, -4]} intensity={0.35} color="#c4d4e8" />
+        {/* Environment kept low so reflections hint at surroundings without dominating the color map */}
+        <Environment preset="city" environmentIntensity={0.35} />
       </>
     );
   }
@@ -507,24 +524,34 @@ function RigSetup({ mode, lowEndMode }) {
   if (mode === 'warm') {
     return (
       <>
-        <ambientLight intensity={0.25} color="#ffeedd" />
-        <directionalLight position={[8, 4, 8]} intensity={2.0} castShadow shadow-mapSize={[1024, 1024]} shadow-bias={-0.0001} color="#ffb066" />
-        <spotLight position={[2, 6, 2]} angle={0.7} penumbra={0.8} intensity={5} castShadow shadow-mapSize={[1024, 1024]} color="#ffccaa" />
-        <directionalLight position={[-6, 2, -4]} intensity={0.8} color="#332244" />
-        <Environment preset="sunset" />
+        <ambientLight intensity={0.15} color="#ffeedd" />
+        {/* Warm key light simulating evening interior lighting */}
+        <directionalLight position={[6, 6, 6]} intensity={1.6} castShadow shadow-mapSize={[1024, 1024]} shadow-bias={-0.0001} color="#ffb066" />
+        {/* Warm accent spot */}
+        <spotLight position={[1, 5, 2]} angle={0.6} penumbra={0.7} intensity={2.5} castShadow shadow-mapSize={[1024, 1024]} color="#ffccaa" />
+        {/* Cool counter-fill for depth without killing the warm mood */}
+        <directionalLight position={[-6, 2, -4]} intensity={0.3} color="#445566" />
+        <Environment preset="sunset" environmentIntensity={0.25} />
       </>
     );
   }
 
-  // Default: Studio
+  // Default: Studio — the most neutral, color-accurate preset
   return (
     <>
-      <ambientLight intensity={0.3} />
-      <directionalLight position={[5, 8, 4]} intensity={2.0} castShadow shadow-mapSize={[1024, 1024]} shadow-bias={-0.0001} color="#ffffff" />
-      <spotLight position={[0, 5, 2]} angle={0.7} penumbra={0.8} intensity={4} castShadow shadow-mapSize={[1024, 1024]} color="#ffeedd" />
-      <directionalLight position={[-5, 3, -5]} intensity={0.6} color="#b0c4de" />
-      <directionalLight position={[0, 2, -6]} intensity={1.0} color="#ffffff" />
-      <Environment preset="studio" />
+      {/* Very low ambient so the directional lights do the heavy lifting */}
+      <ambientLight intensity={0.2} color="#ffffff" />
+      {/* Key light from upper-front-right: rakes across the surface to reveal normal map detail */}
+      <directionalLight position={[5, 8, 4]} intensity={1.6} castShadow shadow-mapSize={[1024, 1024]} shadow-bias={-0.0001} color="#ffffff" />
+      {/* Accent spot: tight pool directly above the model */}
+      <spotLight position={[0, 6, 1]} angle={0.5} penumbra={0.6} intensity={2.0} castShadow shadow-mapSize={[1024, 1024]} color="#ffffff" />
+      {/* Fill from the back-left to gently lift shadows */}
+      <directionalLight position={[-5, 3, -5]} intensity={0.3} color="#c4d4e8" />
+      {/* Rim light from behind to separate model from background */}
+      <directionalLight position={[0, 3, -6]} intensity={0.5} color="#ffffff" />
+      {/* Studio environment at low intensity: gives subtle reflections on polished stone
+         without overpowering the actual texture colors */}
+      <Environment preset="studio" environmentIntensity={0.3} />
     </>
   );
 }

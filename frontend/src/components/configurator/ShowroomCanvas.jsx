@@ -130,15 +130,16 @@ function meshZone(name = "") {
 /* Static shared materials — instantiated once at module load, never recreated */
 const SHOWROOM_MATERIALS = {
   stone: new THREE.MeshStandardMaterial({
-    color: "#DBDBDB", // Updated for countertops, walls, floors
-    roughness: 0.3,
-    metalness: 0.05,
+    color: "#DBDBDB",
+    roughness: 0.55,
+    metalness: 0.03,
+    envMapIntensity: 0.4,
   }),
   metal: new THREE.MeshStandardMaterial({
     color: "#BEC6CE",
     roughness: 0.15,
     metalness: 0.92,
-    envMapIntensity: 1.2,
+    envMapIntensity: 0.6,
   }),
   cabinet: new THREE.MeshStandardMaterial({
     color: "#7F5112", // Updated cabinet base color
@@ -266,6 +267,25 @@ const UnsafeModelPlaceholder = memo(function UnsafeModelPlaceholder({
   );
 });
 
+/* ─── Lazy Loaded Model Wrapper ─── */
+const LazyShowroomModel = memo(function LazyShowroomModel({ structure, position, isVisible }) {
+  const [hasBeenVisible, setHasBeenVisible] = useState(isVisible);
+  
+  useEffect(() => {
+    if (isVisible) setHasBeenVisible(true);
+  }, [isVisible]);
+
+  if (!hasBeenVisible) {
+    return <UnsafeModelPlaceholder position={position} />;
+  }
+
+  return (
+    <Suspense fallback={<UnsafeModelPlaceholder position={position} />}>
+      <ShowroomModel structure={structure} position={position} />
+    </Suspense>
+  );
+});
+
 /* ─────────────────────────────────────────
    CAROUSEL GROUP  (memoised)
    Lerps its X toward -currentIndex × SPACING each frame.
@@ -298,17 +318,19 @@ const CarouselGroup = memo(function CarouselGroup({
 
   return (
     <group ref={groupRef}>
-      {structures.map((s, i) =>
-        isSafeModelUrl(s.model_url) ? (
-          <ShowroomModel
+      {structures.map((s, i) => {
+        const isNearby = Math.abs(currentIndex - i) <= 1;
+        return isSafeModelUrl(s.model_url) ? (
+          <LazyShowroomModel
             key={s.id}
             structure={s}
             position={[i * SPACING, 0, 0]}
+            isVisible={isNearby}
           />
         ) : (
           <UnsafeModelPlaceholder key={s.id} position={[i * SPACING, 0, 0]} />
-        ),
-      )}
+        );
+      })}
     </group>
   );
 });
@@ -498,12 +520,12 @@ export default function ShowroomCanvas({ structures, onStructureSelect }) {
         />
 
         <Suspense fallback={<CanvasLoader />}>
-          {/* ── Dynamic PBR Lighting ── */}
-          <ambientLight intensity={lowEndMode ? 0.5 : 0.3} color={lowEndMode ? "#eef7ff" : "#ffffff"} />
+          {/* ── Dynamic PBR Lighting (tuned to preserve texture colors) ── */}
+          <ambientLight intensity={lowEndMode ? 0.3 : 0.2} color="#ffffff" />
 
           <directionalLight
             position={lowEndMode ? [10, 10, 5] : [5, 8, 4]}
-            intensity={lowEndMode ? 1.5 : 2.0}
+            intensity={lowEndMode ? 1.2 : 1.6}
             castShadow
             shadow-mapSize={lowEndMode ? [512, 512] : [1024, 1024]}
             shadow-bias={-0.0001}
@@ -512,18 +534,18 @@ export default function ShowroomCanvas({ structures, onStructureSelect }) {
 
           {!lowEndMode && (
             <spotLight
-              position={[0, 5, 2]}
-              angle={0.7}
-              penumbra={0.8}
-              intensity={4}
+              position={[0, 6, 1]}
+              angle={0.5}
+              penumbra={0.6}
+              intensity={2.0}
               castShadow
               shadow-mapSize={[1024, 1024]}
-              color="#ffeedd"
+              color="#ffffff"
             />
           )}
 
-          <directionalLight position={[-5, 5, -5]} intensity={lowEndMode ? 1.0 : 0.6} color="#b0c4de" />
-          {!lowEndMode && <directionalLight position={[0, 2, -6]} intensity={1.0} color="#ffffff" />}
+          <directionalLight position={[-5, 3, -5]} intensity={lowEndMode ? 0.4 : 0.3} color="#c4d4e8" />
+          {!lowEndMode && <directionalLight position={[0, 3, -6]} intensity={0.5} color="#ffffff" />}
 
           <CarouselGroup structures={structures} currentIndex={currentIndex} />
 
@@ -565,7 +587,7 @@ export default function ShowroomCanvas({ structures, onStructureSelect }) {
             />
           )}
 
-          <Environment preset={lowEndMode ? "city" : "studio"} />
+          <Environment preset={lowEndMode ? "city" : "studio"} environmentIntensity={lowEndMode ? 0.3 : 0.3} />
         </Suspense>
       </Canvas>
 

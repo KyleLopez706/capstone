@@ -1,20 +1,23 @@
 import { Routes, Route, useNavigate } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { supabase } from "./supabaseClient";
-import Home from "./pages/Home";
-import UserLogin from "./pages/UserLogin";
-import Dashboard from "./pages/Dashboard";
-import About from "./pages/About";
-import Services from "./pages/Services";
-import Gallery from "./pages/Gallery";
-import Contact from "./pages/Contact";
-import Configurator3D from "./pages/Configurator3D";
-import ResetPassword from "./pages/ResetPassword";
-import QuotationRequest from "./pages/QuotationRequest";
-import Analytics from "./pages/Analytics";
-import AdminLayout from "./components/AdminLayout";
-import CreateQuotation from "./pages/CreateQuotation";
-import AdminMessages from "./pages/AdminMessages";
+
+// Lazy load all pages to split the JavaScript bundle
+const Home = lazy(() => import("./pages/Home"));
+const UserLogin = lazy(() => import("./pages/UserLogin"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const About = lazy(() => import("./pages/About"));
+const Services = lazy(() => import("./pages/Services"));
+const Gallery = lazy(() => import("./pages/Gallery"));
+const Contact = lazy(() => import("./pages/Contact"));
+const Configurator3D = lazy(() => import("./pages/Configurator3D"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const QuotationRequest = lazy(() => import("./pages/QuotationRequest"));
+const Analytics = lazy(() => import("./pages/Analytics"));
+const CreateQuotation = lazy(() => import("./pages/CreateQuotation"));
+const AdminMessages = lazy(() => import("./pages/AdminMessages"));
+// Layouts can remain static or be lazy. AdminLayout is small enough, but let's lazy load it too
+const AdminLayout = lazy(() => import("./components/AdminLayout"));
 
 function App() {
   const navigate = useNavigate();
@@ -38,15 +41,11 @@ function App() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY") {
-        // Set active session so they aren't signed out by checkPersistence
         sessionStorage.setItem("sixsigma_active", "1");
-        // Replace history entry so the back button doesn't loop
         navigate("/reset-password", { replace: true });
       }
 
       if (event === "SIGNED_IN") {
-        // Only act when returning from a Google OAuth redirect
-        // (the flag is written in handleGoogleSignIn before the redirect)
         const oauthPending = localStorage.getItem("sixsigma_oauth_remember");
         if (oauthPending !== null) {
           sessionStorage.setItem("sixsigma_active", "1");
@@ -60,7 +59,6 @@ function App() {
       }
 
       if (event === "SIGNED_OUT") {
-        // Wipe all persistence flags so the next visit starts clean
         sessionStorage.removeItem("sixsigma_active");
         localStorage.removeItem("sixsigma_remember");
         localStorage.removeItem("sixsigma_oauth_remember");
@@ -70,46 +68,23 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ── Session Persistence Boot Check ─────────────────────────────────────
-     Supabase stores the session in localStorage by default, so it survives
-     page refreshes AND full browser restarts (including npm run dev reloads).
-     We layer our own persistence preference on top:
-
-     sixsigma_remember  (localStorage)  — user explicitly checked "Stay signed in"
-     sixsigma_active    (sessionStorage) — user is in an active browser session
-                                          (sessionStorage is cleared when the
-                                          browser / tab is fully closed)
-
-     If neither flag exists but Supabase has a stored session → sign out.
-     This means: close the browser without "Stay signed in" → next visit starts
-     fresh, as the user would expect.
-
-     Admin redirect: if a valid session exists AND the profile role is "admin",
-     immediately route them to /dashboard so they never land on the user-facing
-     home page after a dev-server restart or tab reopen.
-  ────────────────────────────────────────────────────────────────────────── */
+  /* ── Session Persistence Boot Check ───────────────────────────────────── */
   useEffect(() => {
     const checkPersistence = async () => {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      if (!session) return; // No session stored — nothing to do
+      if (!session) return; 
 
       const rememberMe = localStorage.getItem("sixsigma_remember") === "1";
       const activeSession = sessionStorage.getItem("sixsigma_active") === "1";
       const isResetRoute = window.location.pathname === "/reset-password";
 
       if (!rememberMe && !activeSession && !isResetRoute) {
-        // Supabase has a stale session in localStorage but the user never
-        // opted into persistence and this is a new browser session.
-        // Sign them out cleanly so the login page is shown.
         await supabase.auth.signOut();
         return;
       }
 
-      // Valid persisted session — check if the user is an admin and redirect
-      // them away from the home page back to the dashboard automatically.
-      // Skip this check if they are already on the dashboard or a protected route.
       const isOnAdminRoute = window.location.pathname === "/dashboard";
       if (!isOnAdminRoute) {
         const { data: profile } = await supabase
@@ -128,24 +103,32 @@ function App() {
   }, []);
 
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/login" element={<UserLogin />} />
-      <Route path="/about" element={<About />} />
-      <Route path="/services" element={<Services />} />
-      <Route path="/gallery" element={<Gallery />} />
-      <Route path="/contact" element={<Contact />} />
-      <Route path="/configurator-3d" element={<Configurator3D />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-      <Route path="/quotation-request" element={<QuotationRequest />} />
+    <Suspense 
+      fallback={
+        <div className="min-h-screen w-full flex items-center justify-center bg-[#F9F9FB]">
+          <div className="w-8 h-8 border-4 border-[#C5A059] border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      }
+    >
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<UserLogin />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/services" element={<Services />} />
+        <Route path="/gallery" element={<Gallery />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/configurator-3d" element={<Configurator3D />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/quotation-request" element={<QuotationRequest />} />
 
-      <Route element={<AdminLayout />}>
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/analytics" element={<Analytics />} />
-        <Route path="/messages" element={<AdminMessages />} />
-      </Route>
-      <Route path="/admin/quotation/:id" element={<CreateQuotation />} />
-    </Routes>
+        <Route element={<AdminLayout />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/analytics" element={<Analytics />} />
+          <Route path="/messages" element={<AdminMessages />} />
+        </Route>
+        <Route path="/admin/quotation/:id" element={<CreateQuotation />} />
+      </Routes>
+    </Suspense>
   );
 }
 

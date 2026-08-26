@@ -2,6 +2,4 @@ node_modules/
 AGENTS.md
 .env
 .env.*
-# Local Texture Compression Folders
-raw_textures/
-compressed_textures/
+dist/
