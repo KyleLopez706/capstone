@@ -25,13 +25,75 @@ const AdminLayout = lazy(() => import("./components/AdminLayout"));
 function App() {
   const navigate = useNavigate();
 
+  /* ── Auth State Listener ─────────────────────────────────────────────────
+     onAuthStateChange is the ONLY reliable way to detect a completed
+     OAuth login. When Google redirects back with ?code=, Supabase
+     exchanges it in the background (PKCE). getSession() returns the
+     OLD cached session during this exchange. Only when SIGNED_IN fires
+     is the NEW Google session guaranteed to be ready.
+
+     This listener handles three events:
+
+     PASSWORD_RECOVERY — route to /reset-password immediately.
+
+     SIGNED_IN — if sixsigma_oauth_remember exists in localStorage,
+       this is an OAuth callback completing. We finalize persistence
+       flags and route to the saved returnTo destination (e.g.
+       /quotation-request). The session parameter is the NEW Google
+       session, not a stale cache.
+
+     SIGNED_OUT — clear all persistence flags.
+  ────────────────────────────────────────────────────────────────────── */
   useEffect(() => {
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "PASSWORD_RECOVERY") {
         sessionStorage.setItem("sixsigma_active", "1");
         navigate("/reset-password", { replace: true });
+        return;
+      }
+
+      if (event === "SIGNED_IN") {
+        const oauthPendingStr = localStorage.getItem("sixsigma_oauth_remember");
+        // Only act if this is an OAuth callback (flag was set before redirect)
+        if (oauthPendingStr !== null) {
+          // 1. Finalize persistence flags
+          sessionStorage.setItem("sixsigma_active", "1");
+          if (oauthPendingStr === "1") {
+            localStorage.setItem("sixsigma_remember", "1");
+          } else {
+            localStorage.removeItem("sixsigma_remember");
+          }
+          localStorage.removeItem("sixsigma_oauth_remember");
+
+          // 2. Read and clear the returnTo destination
+          const returnTo = localStorage.getItem("sixsigma_return_to");
+          localStorage.removeItem("sixsigma_return_to");
+          sessionStorage.removeItem("returnTo");
+
+          // 3. Route based on role using the NEW session (not getSession cache)
+          if (session) {
+            try {
+              const { data: profile } = await supabase
+                .from("profiles")
+                .select("role")
+                .eq("id", session.user.id)
+                .single();
+
+              if (profile?.role === "admin") {
+                navigate("/dashboard", { replace: true });
+              } else {
+                navigate(returnTo || "/", { replace: true });
+              }
+            } catch {
+              navigate(returnTo || "/", { replace: true });
+            }
+          } else {
+            navigate(returnTo || "/", { replace: true });
+          }
+        }
+        return;
       }
 
       if (event === "SIGNED_OUT") {
@@ -47,46 +109,46 @@ function App() {
 
   const bootRan = useRef(false);
 
-  /* -- Session Persistence Boot Check ------------------------------------- */
+  /* ── Session Persistence Boot Check ─────────────────────────────────────
+     Runs once on mount for NON-OAuth scenarios (page refresh, new tab).
+     If an OAuth callback is in progress (?code= in URL or oauthPending
+     flag set), this function bails out COMPLETELY and defers all routing
+     to the onAuthStateChange SIGNED_IN handler above.
+
+     CRITICAL: We must NOT call getSession() during an OAuth callback
+     because it returns the OLD cached session (previous user), not
+     the new Google session. The PKCE exchange hasn't completed yet.
+  ────────────────────────────────────────────────────────────────────── */
   useEffect(() => {
     if (bootRan.current) return;
     bootRan.current = true;
 
     const checkPersistence = async () => {
-      // getSession() automatically resolves PKCE ?code= in the URL if present,
-      // meaning by the time this resolves, an OAuth login is fully complete.
+      // Detect OAuth callback — bail out entirely if one is in progress.
+      // The onAuthStateChange SIGNED_IN handler will handle everything.
+      const hasCodeInUrl = window.location.search.includes("code=");
+      const oauthPending = localStorage.getItem("sixsigma_oauth_remember") !== null;
+      if (hasCodeInUrl || oauthPending) return;
+
+      // Safe to call getSession() now — no OAuth exchange is happening,
+      // so the cached session (if any) is accurate.
       const {
         data: { session },
       } = await supabase.auth.getSession();
+      if (!session) return;
 
       const rememberMe = localStorage.getItem("sixsigma_remember") === "1";
       const activeSession = sessionStorage.getItem("sixsigma_active") === "1";
       const isResetRoute = window.location.pathname === "/reset-password";
-      
-      const oauthPendingStr = localStorage.getItem("sixsigma_oauth_remember");
-      const oauthPending = oauthPendingStr !== null;
 
-      // 1. If we just completed an OAuth callback, finalize the persistence flags
-      if (oauthPending) {
-        sessionStorage.setItem("sixsigma_active", "1");
-        if (oauthPendingStr === "1") {
-          localStorage.setItem("sixsigma_remember", "1");
-        } else {
-          localStorage.removeItem("sixsigma_remember");
-        }
-        localStorage.removeItem("sixsigma_oauth_remember");
+      // If neither remember-me nor active-session is set, sign out
+      // (browser was closed without "Stay signed in" checked)
+      if (!rememberMe && !activeSession && !isResetRoute) {
+        await supabase.auth.signOut();
+        return;
       }
 
-      // 2. If there's NO session, enforce standard logouts if persistence is disabled
-      if (!session) {
-        if (!rememberMe && !activeSession && !isResetRoute && !oauthPending) {
-          await supabase.auth.signOut();
-        }
-        return; 
-      }
-
-      // 3. We HAVE a session. Handle routing.
-      // Fetch role to separate admins from regular users
+      // Route based on role
       const isOnAdminRoute = window.location.pathname === "/dashboard";
       const { data: profile } = await supabase
         .from("profiles")
@@ -101,30 +163,29 @@ function App() {
         return;
       }
 
-      // Normal User Routing
-      const returnTo = localStorage.getItem("sixsigma_return_to") || sessionStorage.getItem("returnTo");
-      
-      // Clean up routing flags now that they are read
+      // Normal user — check for pending returnTo
+      const returnTo =
+        localStorage.getItem("sixsigma_return_to") ||
+        sessionStorage.getItem("returnTo");
+
       localStorage.removeItem("sixsigma_return_to");
       sessionStorage.removeItem("returnTo");
 
       if (returnTo) {
-        // We have a specific place to go (e.g. /quotation-request)
         if (window.location.pathname !== returnTo) {
           navigate(returnTo, { replace: true });
         }
       } else if (window.location.pathname === "/login") {
-        // Fallback: If logged in user lands on /login without a return destination, send to home
         navigate("/", { replace: true });
       }
     };
-    
+
     checkPersistence();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
-    <Suspense 
+    <Suspense
       fallback={
         <div className="min-h-screen w-full flex items-center justify-center bg-[#F9F9FB]">
           <div className="w-8 h-8 border-4 border-[#C5A059] border-t-transparent rounded-full animate-spin"></div>
