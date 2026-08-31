@@ -47,55 +47,6 @@ function App() {
         navigate("/reset-password", { replace: true });
       }
 
-      if (event === "SIGNED_IN") {
-        const oauthPending = localStorage.getItem("sixsigma_oauth_remember");
-        if (oauthPending !== null) {
-          sessionStorage.setItem("sixsigma_active", "1");
-          if (oauthPending === "1") {
-            localStorage.setItem("sixsigma_remember", "1");
-          } else {
-            localStorage.removeItem("sixsigma_remember");
-          }
-          localStorage.removeItem("sixsigma_oauth_remember");
-
-          /* ── OAuth returnTo routing ──────────────────────────────────────
-             This is the ONLY reliable place to route after Google OAuth.
-             checkPersistence skips routing when oauthPending is set, so
-             this handler is the single source of truth for post-OAuth
-             navigation. We check the user's role first: admins always
-             go to /dashboard regardless of returnTo.
-          ────────────────────────────────────────────────────────────── */
-          const returnTo = localStorage.getItem("sixsigma_return_to");
-          localStorage.removeItem("sixsigma_return_to");
-          sessionStorage.removeItem("returnTo");
-
-          // Async role check — wrapped in an IIFE so we don't make the
-          // callback itself async (Supabase listener doesn't await it).
-          (async () => {
-            try {
-              const { data: { session } } = await supabase.auth.getSession();
-              if (!session) {
-                navigate(returnTo || "/", { replace: true });
-                return;
-              }
-              const { data: profile } = await supabase
-                .from("profiles")
-                .select("role")
-                .eq("id", session.user.id)
-                .single();
-
-              if (profile?.role === "admin") {
-                navigate("/dashboard", { replace: true });
-              } else {
-                navigate(returnTo || "/", { replace: true });
-              }
-            } catch {
-              navigate(returnTo || "/", { replace: true });
-            }
-          })();
-        }
-      }
-
       if (event === "SIGNED_OUT") {
         sessionStorage.removeItem("sixsigma_active");
         localStorage.removeItem("sixsigma_remember");
@@ -109,56 +60,72 @@ function App() {
   /* ── Session Persistence Boot Check ───────────────────────────────────── */
   useEffect(() => {
     const checkPersistence = async () => {
+      // getSession() automatically resolves PKCE ?code= in the URL if present,
+      // meaning by the time this resolves, an OAuth login is fully complete.
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      if (!session) return; 
 
       const rememberMe = localStorage.getItem("sixsigma_remember") === "1";
       const activeSession = sessionStorage.getItem("sixsigma_active") === "1";
       const isResetRoute = window.location.pathname === "/reset-password";
       
-      const isOAuthCallback = window.location.hash.includes("access_token");
-      const oauthPending = localStorage.getItem("sixsigma_oauth_remember") !== null;
+      const oauthPendingStr = localStorage.getItem("sixsigma_oauth_remember");
+      const oauthPending = oauthPendingStr !== null;
 
-      if (!rememberMe && !activeSession && !isResetRoute && !isOAuthCallback && !oauthPending) {
-        await supabase.auth.signOut();
+      // 1. If we just completed an OAuth callback, finalize the persistence flags
+      if (oauthPending) {
+        sessionStorage.setItem("sixsigma_active", "1");
+        if (oauthPendingStr === "1") {
+          localStorage.setItem("sixsigma_remember", "1");
+        } else {
+          localStorage.removeItem("sixsigma_remember");
+        }
+        localStorage.removeItem("sixsigma_oauth_remember");
+      }
+
+      // 2. If there's NO session, enforce standard logouts if persistence is disabled
+      if (!session) {
+        if (!rememberMe && !activeSession && !isResetRoute && !oauthPending) {
+          await supabase.auth.signOut();
+        }
+        return; 
+      }
+
+      // 3. We HAVE a session. Handle routing.
+      // Fetch role to separate admins from regular users
+      const isOnAdminRoute = window.location.pathname === "/dashboard";
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", session.user.id)
+        .single();
+
+      if (profile?.role === "admin") {
+        if (!isOnAdminRoute) {
+          navigate("/dashboard", { replace: true });
+        }
         return;
       }
 
-      /* If an OAuth callback is in progress, skip all routing here.
-         The onAuthStateChange SIGNED_IN handler (above) is the single
-         source of truth for post-OAuth routing — it fires AFTER the
-         PKCE code exchange completes and will handle returnTo + role
-         routing reliably. Running routing logic here too causes a race
-         where both handlers consume/clear the returnTo flag and the
-         loser falls through to navigate("/"). */
-      if (oauthPending || isOAuthCallback) return;
+      // Normal User Routing
+      const returnTo = localStorage.getItem("sixsigma_return_to") || sessionStorage.getItem("returnTo");
+      
+      // Clean up routing flags now that they are read
+      localStorage.removeItem("sixsigma_return_to");
+      sessionStorage.removeItem("returnTo");
 
-      const isOnAdminRoute = window.location.pathname === "/dashboard";
-      if (!isOnAdminRoute) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", session.user.id)
-          .single();
-
-        if (profile?.role === "admin") {
-          navigate("/dashboard", { replace: true });
-        } else {
-          const returnTo = localStorage.getItem("sixsigma_return_to") || sessionStorage.getItem("returnTo");
-          if (returnTo) {
-            localStorage.removeItem("sixsigma_return_to");
-            sessionStorage.removeItem("returnTo");
-            if (window.location.pathname !== returnTo) {
-              navigate(returnTo, { replace: true });
-            }
-          } else if (window.location.pathname === "/login") {
-            navigate("/", { replace: true });
-          }
+      if (returnTo) {
+        // We have a specific place to go (e.g. /quotation-request)
+        if (window.location.pathname !== returnTo) {
+          navigate(returnTo, { replace: true });
         }
+      } else if (window.location.pathname === "/login") {
+        // Fallback: If logged in user lands on /login without a return destination, send to home
+        navigate("/", { replace: true });
       }
     };
+    
     checkPersistence();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
