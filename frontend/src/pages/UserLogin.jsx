@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { friendlyAuthError } from "../utils/authErrors";
@@ -54,12 +54,18 @@ export default function UserLogin() {
 
   const navigate = useNavigate();
   const { toast, showToast, dismissToast } = useToast();
+  const isRouting = useRef(false);
 
   /* ── Role-based routing helper ──
      Queries only the 'role' column to keep the query lean (AGENTS.md §A).
      If RLS blocks the query, silently falls back to homepage (AGENTS.md §B). */
   const routeByRole = async (userId) => {
-    const returnTo = sessionStorage.getItem("returnTo");
+    if (isRouting.current) return;
+    isRouting.current = true;
+
+    const params = new URLSearchParams(window.location.search);
+    const urlReturnTo = params.get("returnTo");
+    const returnTo = urlReturnTo || sessionStorage.getItem("returnTo");
 
     const { data, error } = await supabase
       .from("profiles")
@@ -203,18 +209,23 @@ export default function UserLogin() {
     }
   };
 
-  /* ─── Google OAuth via Supabase GoTrue ─── */
   const handleGoogleSignIn = async () => {
     // Save the remember-me preference to localStorage before the redirect.
     // App.jsx's onAuthStateChange SIGNED_IN handler reads this flag after
     // the page re-mounts and sets the real persistence flags.
     localStorage.setItem("sixsigma_oauth_remember", rememberMe ? "1" : "0");
 
+    // Read returnTo from sessionStorage or URL
+    const params = new URLSearchParams(window.location.search);
+    const urlReturnTo = params.get("returnTo");
+    const returnTo = urlReturnTo || sessionStorage.getItem("returnTo") || "/";
+
     // Supabase handles the full OAuth redirect flow
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/login`,
+        // Pass the returnTo in the URL so it survives cross-origin OAuth redirects
+        redirectTo: `${window.location.origin}/login?returnTo=${encodeURIComponent(returnTo)}`,
       },
     });
     if (error) {

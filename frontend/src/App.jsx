@@ -81,8 +81,11 @@ function App() {
       const rememberMe = localStorage.getItem("sixsigma_remember") === "1";
       const activeSession = sessionStorage.getItem("sixsigma_active") === "1";
       const isResetRoute = window.location.pathname === "/reset-password";
+      
+      const isOAuthCallback = window.location.hash.includes("access_token");
+      const oauthPending = localStorage.getItem("sixsigma_oauth_remember") !== null;
 
-      if (!rememberMe && !activeSession && !isResetRoute) {
+      if (!rememberMe && !activeSession && !isResetRoute && !isOAuthCallback && !oauthPending) {
         await supabase.auth.signOut();
         return;
       }
