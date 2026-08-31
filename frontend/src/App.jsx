@@ -57,6 +57,19 @@ function App() {
             localStorage.removeItem("sixsigma_remember");
           }
           localStorage.removeItem("sixsigma_oauth_remember");
+
+          /* ── OAuth returnTo routing ──────────────────────────────────────
+             This is the ONLY reliable place to route after Google OAuth.
+             checkPersistence runs before the PKCE code exchange finishes,
+             so getSession() returns null there. This handler fires AFTER
+             the SDK has successfully exchanged the ?code= for a session.
+          ────────────────────────────────────────────────────────────── */
+          const returnTo = localStorage.getItem("sixsigma_return_to");
+          if (returnTo) {
+            localStorage.removeItem("sixsigma_return_to");
+            sessionStorage.removeItem("returnTo");
+            navigate(returnTo, { replace: true });
+          }
         }
       }
 
