@@ -116,7 +116,7 @@ const useConfiguratorStore = create(
     }),
     {
       name:    'sixsigma-configurator',
-      storage: createJSONStorage(() => sessionStorage),
+      storage: createJSONStorage(() => localStorage),
     }
   )
 );

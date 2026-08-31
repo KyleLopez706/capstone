@@ -51,6 +51,7 @@ function App() {
         sessionStorage.removeItem("sixsigma_active");
         localStorage.removeItem("sixsigma_remember");
         localStorage.removeItem("sixsigma_oauth_remember");
+        localStorage.removeItem("sixsigma-configurator");
       }
     });
     return () => subscription.unsubscribe();
