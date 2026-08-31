@@ -16,6 +16,8 @@ const QuotationRequest = lazy(() => import("./pages/QuotationRequest"));
 const Analytics = lazy(() => import("./pages/Analytics"));
 const CreateQuotation = lazy(() => import("./pages/CreateQuotation"));
 const AdminMessages = lazy(() => import("./pages/AdminMessages"));
+const AdminSettings = lazy(() => import("./pages/AdminSettings"));
+const AdminMaterials = lazy(() => import("./pages/AdminMaterials"));
 // Layouts can remain static or be lazy. AdminLayout is small enough, but let's lazy load it too
 const AdminLayout = lazy(() => import("./components/AdminLayout"));
 
@@ -125,6 +127,8 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/messages" element={<AdminMessages />} />
+          <Route path="/admin/settings" element={<AdminSettings />} />
+          <Route path="/admin/materials" element={<AdminMaterials />} />
         </Route>
         <Route path="/admin/quotation/:id" element={<CreateQuotation />} />
       </Routes>

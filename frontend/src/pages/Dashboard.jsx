@@ -249,7 +249,7 @@ export default function Dashboard() {
     };
 
     fetchRequests();
-  }, []);
+  }, [showToast]);
 
   /* ── Status update propagated from DetailModal ── */
   const handleStatusChange = (id, newStatus) => {

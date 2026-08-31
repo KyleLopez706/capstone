@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import useConfiguratorStore from '../../store/configuratorStore';
-import { evaluateDesignQuality, getRecommendations, getGraniteRecommendations } from '../../utils/AIQualityEngine';
+
 
 /* ─────────────────────────────────────────
    DIMENSION & PRICING PANEL  (Right Column)
@@ -23,15 +23,8 @@ import { evaluateDesignQuality, getRecommendations, getGraniteRecommendations } 
    the store.
 ───────────────────────────────────────── */
 
-const STEP     = 0.1;
-
 export default function DimensionPanel() {
   const selectedMaterial  = useConfiguratorStore((s) => s.selectedMaterial);
-  const materials         = useConfiguratorStore((s) => s.materials);
-  const setMaterial       = useConfiguratorStore((s) => s.setMaterial);
-  const selectedCabinetMaterial = useConfiguratorStore((s) => s.selectedCabinetMaterial);
-  const cabinetMaterials  = useConfiguratorStore((s) => s.cabinetMaterials);
-  const setCabinetMaterial = useConfiguratorStore((s) => s.setCabinetMaterial);
   const dimensions        = useConfiguratorStore((s) => s.dimensions);
   const setDimension      = useConfiguratorStore((s) => s.setDimension);
   const selectedStructure = useConfiguratorStore((s) => s.selectedStructure);
@@ -42,7 +35,6 @@ export default function DimensionPanel() {
      Limits size modifications to a realistic range to prevent 3D distortion.
      Shrinking is limited to -20%, Growing is limited to +50%. */
   const baseLen = selectedStructure?.base_length || 1.2;
-  const baseWid = selectedStructure?.base_width  || 0.6;
   const minLen  = Number((baseLen * 0.8).toFixed(2));
   const maxLen  = Number((baseLen * 1.5).toFixed(2));
 
@@ -67,9 +59,6 @@ export default function DimensionPanel() {
       prevDimRef.current = dimensions;
     }
   }, [dimensions]);
-
-  /* ── Helpers ── */
-  const clamp = (val, min, max) => Math.min(Math.max(val, min), max);
 
   /* Reset to baseline dimensions */
   const handleResetBaseline = useCallback(() => {
@@ -119,11 +108,15 @@ export default function DimensionPanel() {
   const localWid    = Math.max(parseFloat(widStr) || 0, 0);
   const area        = localLen * localWid;
   
-  // Installation rate logic (matches QuotationRequest.jsx)
+  /* ── Installation rate: prefer DB values from Zustand, hardcoded fallback ── */
+  const laborRates = useConfiguratorStore((s) => s.laborRates);
+
   const getInstallRate = (nameStr) => {
     const name = (nameStr ?? '').toLowerCase();
-    if (name.includes('wall') || name.includes('cladding')) return 2600;
-    return 1300;
+    if (name.includes('wall') || name.includes('cladding')) {
+      return laborRates?.wall_cladding ?? 2600;
+    }
+    return laborRates?.base_installation ?? 1300;
   };
 
   const pricePerSqm  = selectedMaterial?.price_per_sqm ?? 0;

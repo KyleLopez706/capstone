@@ -177,79 +177,58 @@ class TextureErrorBoundary extends Component {
      textures are live (used to dismiss the shimmer).
 ───────────────────────────────────────── */
 function TextureApplicator({ material, targetNodes, onApplied, scaleFactors }) {
-  // Load all three PBR maps. Null/missing URLs fall back to the 1px white PNG
-  // so useTexture always receives three valid URLs and never throws on null.
+  // Load the primary color map. We ignore normal/roughness maps
+  // to give the granite a smooth, realistic polished finish.
   const textures = useTexture({
-    map:          material.color_url     || FALLBACK_1PX,
-    normalMap:    material.normal_url    || FALLBACK_1PX,
-    roughnessMap: material.roughness_url || FALLBACK_1PX,
+    map: material.color_url || FALLBACK_1PX,
   });
 
-  // Track the material id we last applied so we skip redundant GPU uploads
-  // when the parent re-renders without the selection actually changing.
   const appliedIdRef = useRef(null);
 
   useEffect(() => {
     if (!targetNodes?.length) return;
 
-    /* Clone each texture so we mutate our own copy, not the cached
-       shared instance (react-hooks immutability rule).              */
     const colorMap = textures.map?.clone();
-    const normalMap = textures.normalMap?.clone();
-    const roughMap  = textures.roughnessMap?.clone();
-
-    // Color space: color map must be sRGB; data maps stay linear
     if (colorMap) colorMap.colorSpace = THREE.SRGBColorSpace;
 
-    /* Scale-aware texture tiling:
-       When the model stretches (e.g. 2× length), UVs still map 0→1 over
-       the stretched surface. To prevent the granite pattern from stretching,
-       we tile the texture proportionally via repeat. RepeatWrapping ensures
-       the pattern tiles seamlessly rather than clamping at the edges.
-       Mipmaps are re-enabled for clean rendering at varied repeat counts. */
     const repeatX = scaleFactors?.x ?? 1;
     const repeatZ = scaleFactors?.z ?? 1;
 
-    [colorMap, normalMap, roughMap].forEach((t) => {
-      if (!t) return;
-      t.flipY = false;                          // GLTF UVs: top-left origin
-      t.generateMipmaps = true;                 // needed for clean tiling at varied densities
-      t.minFilter  = THREE.LinearMipmapLinearFilter;
-      t.wrapS = THREE.RepeatWrapping;
-      t.wrapT = THREE.RepeatWrapping;
-      t.repeat.set(repeatX, repeatZ);
-      t.needsUpdate = true;
-    });
+    if (colorMap) {
+      colorMap.flipY = false;
+      colorMap.generateMipmaps = true;
+      colorMap.minFilter = THREE.LinearMipmapLinearFilter;
+      colorMap.anisotropy = 16;
+      colorMap.wrapS = THREE.RepeatWrapping;
+      colorMap.wrapT = THREE.RepeatWrapping;
+      colorMap.repeat.set(repeatX, repeatZ);
+      colorMap.needsUpdate = true;
+    }
 
-    const mat = new THREE.MeshStandardMaterial({
-      map:          material.color_url     ? colorMap  : null,
-      normalMap:    material.normal_url    ? normalMap : null,
-      roughnessMap: material.roughness_url ? roughMap  : null,
-      // Roughness at 0.55 keeps a subtle satin sheen on the granite
-      // without letting the environment map overpower the color texture
-      roughness: 0.55,
-      metalness: 0.03,
-      // Boost the normal map influence so micro-surface detail (veining,
-      // crystal grain) is clearly visible under directional light
-      normalScale: new THREE.Vector2(1.5, 1.5),
-      envMapIntensity: 0.4,
+    const mat = new THREE.MeshPhysicalMaterial({
+      map: material.color_url ? colorMap : null,
+      // Base roughness before the clearcoat
+      roughness: 0.2,
+      metalness: 0.0,
+      envMapIntensity: 1.0,
+      // The magic sauce for polished stone: a thick, perfectly smooth glassy layer on top
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.0,
+      ior: 1.5, // Index of refraction similar to glass/resin
     });
 
     targetNodes.forEach((node) => {
-      node.material   = mat;
+      node.material = mat;
       node.castShadow = true;
       node.receiveShadow = true;
     });
 
     appliedIdRef.current = material.id;
-    // Signal the parent that the texture is now live on the mesh
     onApplied?.();
 
     return () => {
       mat.dispose();
       colorMap?.dispose();
-      normalMap?.dispose();
-      roughMap?.dispose();
     };
   }, [textures, targetNodes, material, onApplied, scaleFactors]);
 
@@ -454,9 +433,8 @@ function ShowroomFloor({ theme }) {
   
   // Make texture seamless
   useEffect(() => {
-    // eslint-disable-next-line
+    // eslint-disable-next-line react-hooks/immutability
     concreteTexture.wrapS = THREE.RepeatWrapping;
-    // eslint-disable-next-line
     concreteTexture.wrapT = THREE.RepeatWrapping;
     concreteTexture.repeat.set(100, 100);
     concreteTexture.needsUpdate = true;
@@ -658,6 +636,46 @@ export default function ConfiguratorCanvas({ modelUrl }) {
           target={[0, -0.2, 0]}
         />
       </Canvas>
+
+      {/* ── Rotation Hint ── */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: '24px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          background: canvasTheme === 'dark' ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.7)',
+          padding: '10px 20px',
+          borderRadius: '30px',
+          backdropFilter: 'blur(8px)',
+          border: canvasTheme === 'dark' ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.05)',
+          pointerEvents: 'none',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+          zIndex: 5,
+        }}
+      >
+        <div style={{ display: 'flex', gap: '4px', color: '#C5A059' }}>
+          <svg fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" style={{ width: '16px', height: '16px' }}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+          </svg>
+          <svg fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" style={{ width: '16px', height: '16px' }}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+          </svg>
+        </div>
+        <span style={{ 
+          fontSize: '12px', 
+          fontWeight: '700', 
+          color: canvasTheme === 'dark' ? '#F9F9FB' : '#232B32',
+          letterSpacing: '0.05em',
+          textTransform: 'uppercase',
+          fontFamily: "'Inter', 'Segoe UI', sans-serif"
+        }}>
+          Drag to Rotate
+        </span>
+      </div>
 
       {/* ── Texture-loading shimmer overlay ──────────────────────────────
           Shown for the exact duration of a first-load texture fetch.

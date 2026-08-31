@@ -271,9 +271,9 @@ const UnsafeModelPlaceholder = memo(function UnsafeModelPlaceholder({
 const LazyShowroomModel = memo(function LazyShowroomModel({ structure, position, isVisible }) {
   const [hasBeenVisible, setHasBeenVisible] = useState(isVisible);
   
-  useEffect(() => {
-    if (isVisible) setHasBeenVisible(true);
-  }, [isVisible]);
+  if (isVisible && !hasBeenVisible) {
+    setHasBeenVisible(true);
+  }
 
   if (!hasBeenVisible) {
     return <UnsafeModelPlaceholder position={position} />;
@@ -597,25 +597,32 @@ export default function ShowroomCanvas({ structures, onStructureSelect }) {
           key={current.id}
           style={{
             position: "absolute",
-            bottom: "2rem",
+            bottom: "2.5rem",
             left: "50%",
             transform: "translateX(-50%)",
             pointerEvents: "none",
             textAlign: "center",
             animation: "fadeSlideUp 0.35s ease forwards",
+            background: canvasTheme === 'dark' ? "rgba(0, 0, 0, 0.65)" : "rgba(255, 255, 255, 0.85)",
+            padding: "14px 32px",
+            borderRadius: "16px",
+            backdropFilter: "blur(12px)",
+            border: canvasTheme === 'dark' ? "1px solid rgba(255, 255, 255, 0.1)" : "1px solid rgba(0, 0, 0, 0.05)",
+            boxShadow: canvasTheme === 'dark' ? "0 8px 32px rgba(0, 0, 0, 0.5)" : "0 8px 32px rgba(0, 0, 0, 0.1)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "6px"
           }}
         >
           <p
             style={{
               color: canvasTheme === 'dark' ? "#F9F9FB" : "#232B32",
-              fontSize: "11px",
-              fontWeight: "700",
-              letterSpacing: "0.22em",
+              fontSize: "16px",
+              fontWeight: "800",
+              letterSpacing: "0.15em",
               textTransform: "uppercase",
               fontFamily: "'Inter', 'Segoe UI', sans-serif",
-              textShadow: canvasTheme === 'dark' 
-                ? "0 2px 12px rgba(0,0,0,0.8)" 
-                : "0 2px 12px rgba(255,255,255,0.9)",
             }}
           >
             {current.name}
@@ -623,13 +630,16 @@ export default function ShowroomCanvas({ structures, onStructureSelect }) {
 
           <p
             style={{
-              marginTop: "4px",
-              color: "#C5A059",
-              fontSize: "9px",
-              fontWeight: "500",
-              letterSpacing: "0.18em",
+              background: "#C5A059",
+              color: "#FFFFFF",
+              padding: "4px 12px",
+              borderRadius: "20px",
+              fontSize: "10px",
+              fontWeight: "700",
+              letterSpacing: "0.1em",
               textTransform: "uppercase",
               fontFamily: "'Inter', 'Segoe UI', sans-serif",
+              boxShadow: "0 2px 8px rgba(197, 160, 89, 0.4)",
             }}
           >
             Tap to configure

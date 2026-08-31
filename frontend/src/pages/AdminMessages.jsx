@@ -99,7 +99,7 @@ export default function AdminMessages() {
     };
 
     fetchMessages();
-  }, []);
+  }, [showToast]);
 
   return (
     <div className="p-4 md:p-8" style={{ backgroundColor: '#F9F9FB', minHeight: '100vh' }}>

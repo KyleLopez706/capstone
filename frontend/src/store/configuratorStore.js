@@ -36,7 +36,7 @@ const useConfiguratorStore = create(
       selectedStructure: null, // { id, name, base_length, base_width, model_url }
 
       /* ── Active material from Supabase materials table ── */
-      selectedMaterial: null, // { id, name, price_per_sqm, color_url, normal_url, roughness_url }
+      selectedMaterial: null, // { id, name, price_per_sqm, color_url }
       materials: [],          // Shared list of all materials fetched on boot
 
       /* ── Active cabinet material from Supabase cabinet_materials table ── */
@@ -55,11 +55,15 @@ const useConfiguratorStore = create(
       /* ── Lighting Rig ── */
       lightingRig: 'studio', // 'studio' | 'daylight' | 'warm'
 
+      /* ── Labor Rates from Supabase (populated on configurator boot) ── */
+      laborRates: null, // { base_installation, wall_cladding, ... } or null if not yet fetched
+
       /* ── Actions ── */
       setAppMode: (mode) => set({ appMode: mode }),
       toggleCanvasTheme: () => set((state) => ({ canvasTheme: state.canvasTheme === 'dark' ? 'light' : 'dark' })),
       toggleLowEndMode: () => set((state) => ({ lowEndMode: !state.lowEndMode })),
       setLightingRig: (rig) => set({ lightingRig: rig }),
+      setLaborRates: (rates) => set({ laborRates: rates }),
 
       // When a structure is set, seed dimensions from its base_length / base_width
       setStructure: (structure) =>
@@ -107,6 +111,7 @@ const useConfiguratorStore = create(
           materials:               [],
           cabinetMaterials:        [],
           dimensions:        { length: 1.2, width: 0.6 },
+          laborRates:              null,
         }),
     }),
     {

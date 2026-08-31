@@ -76,9 +76,7 @@ function addCacheVersion(url) {
  */
 function preloadMaterialTextures(materials = []) {
   materials.forEach((mat) => {
-    if (mat.color_url)     useTexture.preload(mat.color_url);
-    if (mat.normal_url)    useTexture.preload(mat.normal_url);
-    if (mat.roughness_url) useTexture.preload(mat.roughness_url);
+    if (mat.color_url) useTexture.preload(mat.color_url);
   });
 }
 
@@ -90,6 +88,7 @@ export default function Configurator3D() {
   const setMaterial  = useConfiguratorStore((s) => s.setMaterial);
   const setCabinetMaterials = useConfiguratorStore((s) => s.setCabinetMaterials);
   const setCabinetMaterial  = useConfiguratorStore((s) => s.setCabinetMaterial);
+  const setLaborRates       = useConfiguratorStore((s) => s.setLaborRates);
 
   // All available structures fetched from Supabase
   const [structures, setStructures] = useState([]);
@@ -104,19 +103,22 @@ export default function Configurator3D() {
   useEffect(() => {
     const boot = async () => {
       /* Fire all fetches at the same time — parallel, not sequential */
-      const [structuresResult, materialsResult, cabinetMaterialsResult] = await Promise.all([
+      const [structuresResult, materialsResult, cabinetMaterialsResult, laborRatesResult] = await Promise.all([
         supabase
           .from('structures')
           .select('id, name, base_length, base_width, model_url')
           .order('name'),
         supabase
           .from('materials')
-          .select('id, name, price_per_sqm, color_url, normal_url, roughness_url, hex_code')
-          .limit(32), // upper-bound guard; matches MaterialPanel's limit
+          .select('*')
+          .limit(32),
         supabase
           .from('cabinet_materials')
           .select('id, name, color_url, hex_code')
           .order('name'),
+        supabase
+          .from('labor_rates')
+          .select('item_name, rate_amount'),
       ]);
 
       /* ── Handle structures ── */
@@ -154,16 +156,15 @@ export default function Configurator3D() {
          the on-demand loading is extremely fast and won't crash the browser's 
          download queue.
       ─────────────────────────────────────────────────────────────────── */
-      if (!materialsResult.error && materialsResult.data?.length) {
-        setMaterials(materialsResult.data);
-        setMaterial(materialsResult.data[0]); // Auto-select first material
-        
-        // ONLY preload the default material
-        preloadMaterialTextures([materialsResult.data[0]]);
-      }
-      // A materials fetch failure is non-fatal here — we log it silently.
-      else if (materialsResult.error) {
-        console.warn('[Configurator3D] Material preload fetch failed (non-fatal):', materialsResult.error.message);
+      if (materialsResult.error) {
+        console.warn('[Configurator3D] Materials fetch failed:', materialsResult.error.message);
+      } else {
+        const activeMaterials = (materialsResult.data || []).filter(m => !m.is_archived);
+        setMaterials(activeMaterials);
+        if (activeMaterials.length > 0) {
+          setMaterial(activeMaterials[0]); // fallback if query param is invalid
+          preloadMaterialTextures([activeMaterials[0]]);
+        }
       }
 
       /* ── Cabinet Materials ── */
@@ -183,11 +184,20 @@ export default function Configurator3D() {
         console.warn('[Configurator3D] Cabinet materials fetch failed:', cabinetMaterialsResult.error.message);
       }
 
+      /* ── Labor Rates → Zustand for DimensionPanel / QuotationRequest ── */
+      if (!laborRatesResult.error && laborRatesResult.data?.length) {
+        const ratesMap = {};
+        laborRatesResult.data.forEach((r) => { ratesMap[r.item_name] = r.rate_amount; });
+        setLaborRates(ratesMap);
+      } else if (laborRatesResult.error) {
+        console.warn('[Configurator3D] Labor rates fetch failed (non-fatal):', laborRatesResult.error.message);
+      }
+
       setLoading(false);
     };
 
     boot();
-  }, [setMaterial, setMaterials, setCabinetMaterial, setCabinetMaterials]);
+  }, [setMaterial, setMaterials, setCabinetMaterial, setCabinetMaterials, setLaborRates]);
 
   /**
    * handleStructureSelect — called when the user clicks a model in the showroom.

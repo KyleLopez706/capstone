@@ -23,11 +23,13 @@ import { useToast, ToastNotification } from '../utils/toast';
      Wall Cladding          →  ₱2,600 / m²  installation
 ───────────────────────────────────────────────────────────── */
 
-/* ── Installation rate helper ── */
-function getInstallRate(structureName) {
+/* ── Installation rate helper — reads from Zustand store, hardcoded fallback ── */
+function getInstallRate(structureName, laborRates) {
   const name = (structureName ?? '').toLowerCase();
-  if (name.includes('wall') || name.includes('cladding')) return 2600;
-  return 1300;
+  if (name.includes('wall') || name.includes('cladding')) {
+    return laborRates?.wall_cladding ?? 2600;
+  }
+  return laborRates?.base_installation ?? 1300;
 }
 
 /* ── Format peso ── */
@@ -121,12 +123,13 @@ export default function QuotationRequest() {
   const selectedStructure = useConfiguratorStore((s) => s.selectedStructure);
   const selectedMaterial  = useConfiguratorStore((s) => s.selectedMaterial);
   const dimensions        = useConfiguratorStore((s) => s.dimensions);
+  const laborRates        = useConfiguratorStore((s) => s.laborRates);
 
   /* ── Computed values ── */
   const area         = (dimensions.length ?? 0) * (dimensions.width ?? 0);
   const ratePerSqm   = selectedMaterial?.price_per_sqm ?? 0;
   const materialCost = area * ratePerSqm;
-  const installRate  = getInstallRate(selectedStructure?.name);
+  const installRate  = getInstallRate(selectedStructure?.name, laborRates);
   const installCost  = area * installRate;
   const totalCost    = materialCost + installCost;
 

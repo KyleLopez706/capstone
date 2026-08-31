@@ -51,11 +51,13 @@ export default function CreateQuotation() {
     mobilization: 0,
   });
 
+  // Dynamic VAT rate from DB (defaults to 12% if not found)
+  const [vatRate, setVatRate] = useState(12);
+
   const [validUntil, setValidUntil] = useState(getDefaultValidUntil);
   const [terms, setTerms] = useState(
     "PAYMENT TERMS:\n- 60% of Total Contract Amount as down payment\n- 30% upon delivery\n- 10% balance upon completion of work\n\nOTHER TERMS:\n- Price quoted includes VAT (12%)\n- Warranty: 1 year on workmanship, manufacturer warranty on materials"
   );
-
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -92,6 +94,10 @@ export default function CreateQuotation() {
           const rate = rates.find(r => r.item_name === name);
           return rate ? rate.rate_amount : 0;
         };
+
+        // Read dynamic VAT from DB, fallback to 12%
+        const dbVat = getRateAmount('vat_percentage');
+        if (dbVat > 0) setVatRate(dbVat);
 
         const prod = (reqData.product_type || '').toLowerCase();
         
@@ -148,7 +154,7 @@ export default function CreateQuotation() {
   };
 
   const subtotal = Object.values(costs).reduce((sum, cost) => sum + cost, 0);
-  const vat = subtotal * 0.12;
+  const vat = subtotal * (vatRate / 100);
   const totalDue = subtotal + vat;
 
   const fmt = (n) => `₱${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -250,7 +256,7 @@ export default function CreateQuotation() {
       y += 10;
 
       drawRow("Subtotal", subtotal);
-      drawRow("VAT (12%)", vat);
+      drawRow("VAT (" + vatRate + "%)", vat);
       
       y += 4;
       doc.setFontSize(14);
@@ -444,7 +450,7 @@ export default function CreateQuotation() {
 
             {/* VAT */}
             <div className="flex justify-between items-center py-4 bg-[#F8FAFC] rounded-lg px-4 mt-4 border border-[#E2E8F0]">
-              <span className="text-[13px] font-bold text-[#232B32]">Value Added Tax (12%)</span>
+              <span className="text-[13px] font-bold text-[#232B32]">Value Added Tax ({vatRate}%)</span>
               <span className="text-[14px] font-bold text-[#232B32]">{fmt(vat)}</span>
             </div>
           </div>
@@ -457,7 +463,7 @@ export default function CreateQuotation() {
                 <span className="text-[13px] font-semibold text-[#232B32]">{fmt(subtotal)}</span>
               </div>
               <div className="flex justify-between items-center mb-6 pb-6 border-b border-[#F3F4F6]">
-                <span className="text-[13px] text-[#6B7280]">Value Added Tax (12%):</span>
+                <span className="text-[13px] text-[#6B7280]">Value Added Tax ({vatRate}%):</span>
                 <span className="text-[13px] font-semibold text-[#232B32]">{fmt(vat)}</span>
               </div>
               <div className="flex justify-between items-center">

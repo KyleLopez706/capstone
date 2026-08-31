@@ -1,4 +1,5 @@
 import Navbar from "../components/Navbar";
+import aboutImage from "../assets/about-history.jpg";
 
 export default function About() {
   return (
@@ -60,7 +61,20 @@ export default function About() {
       <section className="w-full py-20 sm:py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-            {/* Text */}
+            {/* Image (Left side) */}
+            <div className="w-full">
+              <img 
+                src={aboutImage} 
+                alt="Stone quarrying history" 
+                className="w-full h-auto rounded-2xl shadow-2xl object-cover"
+                style={{ 
+                  maxHeight: "600px", 
+                  border: "1px solid rgba(226,232,240,0.8)" 
+                }}
+              />
+            </div>
+
+            {/* Text (Right side) */}
             <div>
               <p
                 className="text-xs font-semibold tracking-widest uppercase mb-3"
@@ -69,68 +83,23 @@ export default function About() {
                 Who We Are
               </p>
               <h2
-                className="text-3xl sm:text-4xl font-bold tracking-tight mb-6"
+                className="text-3xl sm:text-4xl font-bold tracking-tight mb-8"
                 style={{ color: "#232B32" }}
               >
                 Philippine Craftsmanship Meets Global Standards
               </h2>
               <p
-                className="text-base leading-relaxed mb-4"
+                className="text-base sm:text-lg leading-relaxed mb-6"
                 style={{ color: "#6B7280" }}
               >
-                Founded with a passion for natural stone, Six Sigmaphil has
-                grown into a full-service granite and marble specialist. We
-                source the finest materials from quarries around the world and
-                deliver them with precision and care directly to your project.
+                Founded in the early 2000s by Rolando Koh, SixSigmaPhil Enterprise Corporation is engaged in the supply fabrication and installation of high quality granite, marble, limestone, sandstone, quartz & slates. Roland, an engineer by profession and a visionary by nature, was deeply inspired by the Six Sigma methodology, a systematic approach to eliminating waste, reducing errors, and optimizing performance in organizations.
               </p>
               <p
-                className="text-base leading-relaxed"
+                className="text-base sm:text-lg leading-relaxed"
                 style={{ color: "#6B7280" }}
               >
-                Our team of skilled craftsmen and designers work hand-in-hand
-                with architects, interior designers, and homeowners to ensure
-                every surface is a masterpiece — measured, cut, and finished to
-                exact specifications.
+                Over the years, Six SigmaPhil expanded its expertise beyond traditional process improvement. Today, the company provides integrated business solutions that include process optimization, data analytics, digital transformation consulting, and corporate training programs. Through a team of dedicated professionals, the company continues to empower organizations to reach operational excellence while fostering a culture of continuous improvement.
               </p>
-            </div>
-
-            {/* Stats grid */}
-            <div className="grid grid-cols-2 gap-6">
-              {[
-                { value: "15+", label: "Years of Excellence" },
-                { value: "500+", label: "Projects Completed" },
-                { value: "50+", label: "Stone Varieties" },
-                { value: "100%", label: "Client Satisfaction" },
-              ].map((stat) => (
-                <div
-                  key={stat.label}
-                  className="rounded-2xl p-6 sm:p-8 text-center transition-transform duration-300 hover:-translate-y-1"
-                  style={{
-                    backgroundColor: "rgba(255,255,255,0.6)",
-                    backdropFilter: "blur(12px)",
-                    border: "1px solid rgba(226,232,240,0.8)",
-                    boxShadow: "0 10px 30px rgba(35,43,50,0.05)",
-                  }}
-                >
-                  <p
-                    className="text-4xl sm:text-5xl font-bold mb-3"
-                    style={{
-                      background: "linear-gradient(135deg, #C5A059 0%, #e8c97a 100%)",
-                      WebkitBackgroundClip: "text",
-                      WebkitTextFillColor: "transparent",
-                      backgroundClip: "text",
-                    }}
-                  >
-                    {stat.value}
-                  </p>
-                  <p
-                    className="text-sm font-semibold tracking-wide uppercase"
-                    style={{ color: "#6B7280" }}
-                  >
-                    {stat.label}
-                  </p>
-                </div>
-              ))}
             </div>
           </div>
         </div>

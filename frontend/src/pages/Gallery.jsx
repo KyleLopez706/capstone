@@ -5,43 +5,73 @@ import lobbyWallCladdingImg from "../assets/lobby wall cladding.jpg";
 import lobbyWallImg from "../assets/lobby wall.jpg";
 import towerStoneImg from "../assets/tower stone cladding.jpg";
 import barCountertopImg from "../assets/bar countertop.jpg";
+import kitchenIslandImg from "../assets/kitchen-island-blue-pearl.jpg";
+import wallCladdingProjectImg from "../assets/wall cladding project.jpg";
+import whiteCountertopImg from "../assets/white countertop.jpg";
+import brCountertopImg from "../assets/B & R countertop.jpg";
+import countertopsImg from "../assets/countertops.jpg";
 
 const GALLERY_ITEMS = [
   {
     id: "lobby-counter",
     name: "Yellow Onyx Lobby Counter",
-    tag: "Luxury Onyx",
     image: lobbyCounterImg,
-    description: "Yellow onyx was chosen for this reception counter due to its rare translucent properties. When backlit, the stone’s golden veins naturally illuminate, creating a warm, inviting focal point that offsets the darker tones of the lobby."
+    description: "Yellow onyx reception counter featuring rare translucent properties and glowing golden veins for a warm focal point."
   },
   {
     id: "lobby-wall-cladding",
     name: "Premium Lobby Cladding",
-    tag: "Architectural Stone",
     image: lobbyWallCladdingImg,
-    description: "This lobby features expansive slabs of travertine gray stone, selected for its subtle, linear veining. The horizontal cut of the stone visually widens the hall, while its dense composition ensures the high-traffic walls remain pristine."
+    description: "Expansive travertine gray stone slabs with linear veining, visually widening the hall while enduring high traffic."
   },
   {
     id: "lobby-wall",
     name: "Beige Travertine Wall",
-    tag: "Warm Travertine",
     image: lobbyWallImg,
-    description: "Beige travertine brings an earthy warmth to this hospitality lounge. Left with its natural porous texture, the stone softens the acoustics of the large open space and provides a calming, neutral backdrop that beautifully diffuses light."
+    description: "Beige travertine brings earthy warmth and softens acoustics, offering a calming, neutral backdrop."
   },
   {
     id: "tower-cladding",
     name: "Travertine Tower Cladding",
-    tag: "Exterior Facade",
     image: towerStoneImg,
-    description: "Gray travertine cladding was utilized for the exterior due to its exceptional weather resistance and timeless aging process. The stone’s natural banding breaks up the sheer scale of the facade, anchoring the building with an organic texture."
+    description: "Gray travertine exterior cladding known for weather resistance and natural banding that adds organic texture."
   },
   {
     id: "bar-countertop",
     name: "Golden Yellow Granite Bar",
-    tag: "Premium Granite",
     image: barCountertopImg,
-    description: "Golden yellow granite serves as the ideal bar surface because of its incredible hardness and resistance to spills. The vibrant mineral speckles naturally conceal daily wear, while its high-gloss polish catches the ambient lighting perfectly."
+    description: "Golden yellow granite bar surface offering high durability and vibrant mineral speckles."
   },
+  {
+    id: "kitchen-island",
+    name: "Blue Pearl Granite Kitchen Island",
+    image: kitchenIslandImg,
+    description: "Blue Pearl granite kitchen island featuring silver-blue metallic flakes for a striking contrast and lasting resilience."
+  },
+  {
+    id: "wall-cladding-project",
+    name: "Decorative Wall Cladding",
+    image: wallCladdingProjectImg,
+    description: "Intricate mosaic wall cladding showcasing a stunning blend of textures and colors, elevating the room's aesthetic."
+  },
+  {
+    id: "white-countertop",
+    name: "Pristine White Countertop",
+    image: whiteCountertopImg,
+    description: "Sleek white countertop paired with warm wood cabinetry, offering a modern and minimalist design."
+  },
+  {
+    id: "br-countertop",
+    name: "Modern Bathroom Vanity",
+    image: brCountertopImg,
+    description: "Elegant bathroom vanity featuring a dark polished surface and contrasting vessel sink."
+  },
+  {
+    id: "countertops",
+    name: "Expansive Kitchen Surfaces",
+    image: countertopsImg,
+    description: "Extensive kitchen countertops in speckled granite, providing a durable and stylish workspace."
+  }
 ];
 
 export default function Gallery() {
@@ -181,18 +211,6 @@ export default function Gallery() {
 
                 </div>
 
-                {/* Always-visible tag badge */}
-                <div
-                  className="absolute top-4 left-4 px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase"
-                  style={{
-                    backgroundColor: "rgba(26,31,36,0.75)",
-                    color: "#C5A059",
-                    backdropFilter: "blur(8px)",
-                    border: "1px solid rgba(197,160,89,0.3)",
-                  }}
-                >
-                  {item.tag}
-                </div>
               </div>
             ))}
           </div>
