@@ -60,16 +60,39 @@ function App() {
 
           /* ── OAuth returnTo routing ──────────────────────────────────────
              This is the ONLY reliable place to route after Google OAuth.
-             checkPersistence runs before the PKCE code exchange finishes,
-             so getSession() returns null there. This handler fires AFTER
-             the SDK has successfully exchanged the ?code= for a session.
+             checkPersistence skips routing when oauthPending is set, so
+             this handler is the single source of truth for post-OAuth
+             navigation. We check the user's role first: admins always
+             go to /dashboard regardless of returnTo.
           ────────────────────────────────────────────────────────────── */
           const returnTo = localStorage.getItem("sixsigma_return_to");
-          if (returnTo) {
-            localStorage.removeItem("sixsigma_return_to");
-            sessionStorage.removeItem("returnTo");
-            navigate(returnTo, { replace: true });
-          }
+          localStorage.removeItem("sixsigma_return_to");
+          sessionStorage.removeItem("returnTo");
+
+          // Async role check — wrapped in an IIFE so we don't make the
+          // callback itself async (Supabase listener doesn't await it).
+          (async () => {
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              if (!session) {
+                navigate(returnTo || "/", { replace: true });
+                return;
+              }
+              const { data: profile } = await supabase
+                .from("profiles")
+                .select("role")
+                .eq("id", session.user.id)
+                .single();
+
+              if (profile?.role === "admin") {
+                navigate("/dashboard", { replace: true });
+              } else {
+                navigate(returnTo || "/", { replace: true });
+              }
+            } catch {
+              navigate(returnTo || "/", { replace: true });
+            }
+          })();
         }
       }
 
@@ -102,6 +125,15 @@ function App() {
         await supabase.auth.signOut();
         return;
       }
+
+      /* If an OAuth callback is in progress, skip all routing here.
+         The onAuthStateChange SIGNED_IN handler (above) is the single
+         source of truth for post-OAuth routing — it fires AFTER the
+         PKCE code exchange completes and will handle returnTo + role
+         routing reliably. Running routing logic here too causes a race
+         where both handlers consume/clear the returnTo flag and the
+         loser falls through to navigate("/"). */
+      if (oauthPending || isOAuthCallback) return;
 
       const isOnAdminRoute = window.location.pathname === "/dashboard";
       if (!isOnAdminRoute) {
