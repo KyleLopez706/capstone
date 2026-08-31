@@ -63,9 +63,7 @@ export default function UserLogin() {
     if (isRouting.current) return;
     isRouting.current = true;
 
-    const params = new URLSearchParams(window.location.search);
-    const urlReturnTo = params.get("returnTo");
-    const returnTo = urlReturnTo || sessionStorage.getItem("returnTo");
+    const returnTo = localStorage.getItem("sixsigma_return_to") || sessionStorage.getItem("returnTo");
 
     const { data, error } = await supabase
       .from("profiles")
@@ -97,28 +95,7 @@ export default function UserLogin() {
     }
   };
 
-  /* ── If already logged in, route them away from the login page ──
-     Exception: do NOT redirect if this is a password-recovery session —
-     the global App.jsx interceptor owns that routing to /reset-password. */
-  useEffect(() => {
-    // Check initial session on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session && session.user?.aud !== "recovery") {
-        routeByRole(session.user.id);
-      }
-    });
-
-    // Also listen for auth state changes (crucial for catching OAuth redirects
-    // if getSession fires before the URL hash is parsed)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session && session.user?.aud !== "recovery") {
-        routeByRole(session.user.id);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  /* ── If already logged in, App.jsx handles booting them away ── */
 
   /* ─── User Sign-In via Supabase GoTrue ─── */
   const handleUserSignIn = async (e) => {
@@ -215,17 +192,16 @@ export default function UserLogin() {
     // the page re-mounts and sets the real persistence flags.
     localStorage.setItem("sixsigma_oauth_remember", rememberMe ? "1" : "0");
 
-    // Read returnTo from sessionStorage or URL
-    const params = new URLSearchParams(window.location.search);
-    const urlReturnTo = params.get("returnTo");
-    const returnTo = urlReturnTo || sessionStorage.getItem("returnTo") || "/";
+    // Persist returnTo across OAuth domains using localStorage
+    const returnTo = sessionStorage.getItem("returnTo") || localStorage.getItem("sixsigma_return_to") || "/";
+    localStorage.setItem("sixsigma_return_to", returnTo);
 
     // Supabase handles the full OAuth redirect flow
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        // Pass the returnTo in the URL so it survives cross-origin OAuth redirects
-        redirectTo: `${window.location.origin}/login?returnTo=${encodeURIComponent(returnTo)}`,
+        // Safe redirect to root to avoid "URL not allowed" errors in Supabase
+        redirectTo: `${window.location.origin}`,
       },
     });
     if (error) {

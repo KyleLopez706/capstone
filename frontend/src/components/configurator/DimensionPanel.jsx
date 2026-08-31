@@ -393,8 +393,9 @@ export default function DimensionPanel() {
               if (!session) {
                 /* Not signed in — store return intent and redirect to login */
                 sessionStorage.setItem("returnTo", "/quotation-request");
+                localStorage.setItem("sixsigma_return_to", "/quotation-request");
                 setAuthMsg('Please sign in to request a quote.');
-                setTimeout(() => navigate('/login?returnTo=%2Fquotation-request'), 1500);
+                setTimeout(() => navigate('/login'), 1500);
                 return;
               }
               /* Signed in — navigate to quotation page (store state persists in-memory) */

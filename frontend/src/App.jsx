@@ -100,6 +100,17 @@ function App() {
 
         if (profile?.role === "admin") {
           navigate("/dashboard", { replace: true });
+        } else {
+          const returnTo = localStorage.getItem("sixsigma_return_to") || sessionStorage.getItem("returnTo");
+          if (returnTo) {
+            localStorage.removeItem("sixsigma_return_to");
+            sessionStorage.removeItem("returnTo");
+            if (window.location.pathname !== returnTo) {
+              navigate(returnTo, { replace: true });
+            }
+          } else if (window.location.pathname === "/login") {
+            navigate("/", { replace: true });
+          }
         }
       }
     };
