@@ -53,7 +53,7 @@ const FALLBACK_STRUCTURES = [
  * (e.g. '1' → '2').  All users will then fetch the new file once, after
  * which it is cached again.  Never use Date.now() here.
  */
-const MODEL_VERSION = '4';
+const MODEL_VERSION = '5';
 function addCacheVersion(url) {
   if (!url) return url;
   const separator = url.includes('?') ? '&' : '?';

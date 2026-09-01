@@ -1,5 +1,5 @@
 import { Routes, Route, useNavigate } from "react-router-dom";
-import { useEffect, lazy, Suspense, useRef } from "react";
+import { useState, useEffect, lazy, Suspense, useRef } from "react";
 import { supabase } from "./supabaseClient";
 
 // Lazy load all pages to split the JavaScript bundle
@@ -24,6 +24,12 @@ const AdminLayout = lazy(() => import("./components/AdminLayout"));
 
 function App() {
   const navigate = useNavigate();
+
+  // Prevents UI flashing (showing the Home page for a split second)
+  // while Supabase is processing the Google login code in the background.
+  const [isProcessingOAuth, setIsProcessingOAuth] = useState(() => {
+    return window.location.search.includes("code=") || localStorage.getItem("sixsigma_oauth_remember") !== null;
+  });
 
   // Prevents the OAuth routing block from executing more than once.
   // Both SIGNED_IN and INITIAL_SESSION can fire during the same OAuth
@@ -99,11 +105,14 @@ function App() {
             .single();
 
           if (profile?.role === "admin") {
+            setIsProcessingOAuth(false);
             navigate("/dashboard", { replace: true });
           } else {
+            setIsProcessingOAuth(false);
             navigate(returnTo || "/", { replace: true });
           }
         } catch {
+          setIsProcessingOAuth(false);
           navigate(returnTo || "/", { replace: true });
         }
         return;
@@ -191,6 +200,14 @@ function App() {
     checkPersistence();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  if (isProcessingOAuth) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-[#F9F9FB]">
+        <div className="w-8 h-8 border-4 border-[#C5A059] border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <Suspense
