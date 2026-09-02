@@ -110,7 +110,7 @@ export default function Configurator3D() {
           .order('name'),
         supabase
           .from('materials')
-          .select('*')
+          .select('id, name, price_per_sqm, color_url, hex_code')
           .limit(32),
         supabase
           .from('cabinet_materials')
