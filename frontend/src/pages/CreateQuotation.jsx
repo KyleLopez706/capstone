@@ -15,6 +15,31 @@ function getDefaultValidUntil() {
 
 /* ── InputRow: editable cost line item ── */
 function InputRow({ label, field, costs, onChange }) {
+  // Keep a local string so the user can freely clear and retype without
+  // the field snapping back to "0" and causing "0200" style artifacts.
+  const [localVal, setLocalVal] = useState(String(costs[field] ?? ''));
+
+  // Sync if the parent resets the value externally (e.g. on data load)
+  const extVal = String(costs[field] ?? '');
+  const prevExt = useState(extVal)[0];
+  if (prevExt !== extVal && localVal !== extVal) {
+    setLocalVal(extVal);
+  }
+
+  const handleChange = (e) => {
+    const raw = e.target.value;
+    setLocalVal(raw);
+    // Immediately commit numeric value so totals stay live
+    onChange(field, raw === '' ? 0 : Number(raw));
+  };
+
+  const handleBlur = () => {
+    // On blur, normalise: empty → 0, strip any leading zeros
+    const num = localVal === '' ? 0 : Number(localVal);
+    setLocalVal(String(num));
+    onChange(field, num);
+  };
+
   return (
     <div className="flex justify-between items-center py-4 border-b border-[#F3F4F6] last:border-0">
       <span className="text-[13px] text-[#6B7280]">{label}</span>
@@ -22,8 +47,9 @@ function InputRow({ label, field, costs, onChange }) {
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] font-semibold text-[#232B32]">₱</span>
         <input
           type="number"
-          value={costs[field]}
-          onChange={(e) => onChange(field, e.target.value)}
+          value={localVal}
+          onChange={handleChange}
+          onBlur={handleBlur}
           className="w-32 pl-7 pr-3 py-2 bg-white border border-[#E2E8F0] rounded-lg text-right font-semibold text-[#232B32] focus:outline-none focus:border-[#C5A059] transition-colors"
         />
       </div>
@@ -53,8 +79,8 @@ export default function CreateQuotation() {
 
   // Dynamic VAT rate from DB (defaults to 12% if not found)
   const [vatRate, setVatRate] = useState(12);
-  // Admin-applied discount percentage (0 by default, e.g. 2, 5, 10)
-  const [discountPercent, setDiscountPercent] = useState(0);
+  // Admin-applied discount percentage (empty string by default to prevent leading 0)
+  const [discountPercent, setDiscountPercent] = useState("");
 
   const [validUntil, setValidUntil] = useState(getDefaultValidUntil);
   const [terms, setTerms] = useState(
@@ -99,7 +125,12 @@ export default function CreateQuotation() {
 
         // Read dynamic VAT from DB, fallback to 12%
         const dbVat = getRateAmount('vat_percentage');
-        if (dbVat > 0) setVatRate(dbVat);
+        if (dbVat > 0) {
+          setVatRate(dbVat);
+          setTerms(
+            `PAYMENT TERMS:\n- 60% of Total Contract Amount as down payment\n- 30% upon delivery\n- 10% balance upon completion of work\n\nOTHER TERMS:\n- Price quoted includes VAT (${dbVat}%)\n- Warranty: 1 year on workmanship, manufacturer warranty on materials`
+          );
+        }
 
         const prod = (reqData.product_type || '').toLowerCase();
         
@@ -333,7 +364,7 @@ export default function CreateQuotation() {
         design: request.design,
         area: request.area,
         subtotal: fmt(discountableCosts),
-        discount_percent: discountPercent,
+        discount_percent: discountPercent || 0,
         discount_amount: discountPercent > 0 ? fmt(discountAmount) : 'N/A',
         discounted_subtotal: discountPercent > 0 ? fmt(netAmount) : fmt(discountableCosts),
         vat: fmt(vat),
@@ -494,8 +525,12 @@ export default function CreateQuotation() {
                     step="0.5"
                     value={discountPercent}
                     onChange={(e) => {
-                      const val = Math.min(100, Math.max(0, Number(e.target.value)));
-                      setDiscountPercent(val);
+                      if (e.target.value === '') {
+                        setDiscountPercent('');
+                      } else {
+                        const val = Math.min(100, Math.max(0, Number(e.target.value)));
+                        setDiscountPercent(val);
+                      }
                     }}
                     className="w-20 pr-6 pl-3 py-2 bg-white border border-[#E2E8F0] rounded-lg text-right font-semibold text-[#232B32] focus:outline-none focus:border-[#C5A059] transition-colors"
                   />
