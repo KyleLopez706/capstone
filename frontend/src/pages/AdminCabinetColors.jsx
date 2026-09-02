@@ -228,7 +228,6 @@ export default function AdminCabinetColors() {
   });
 
   const fetchColors = async () => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     Promise.resolve().then(() => setLoading(true));
     const { data, error } = await supabase
       .from('cabinet_materials')
@@ -244,6 +243,7 @@ export default function AdminCabinetColors() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchColors();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -328,7 +328,7 @@ export default function AdminCabinetColors() {
 
     const timestamp = Date.now();
     const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const fileName = 	extures/cabinets__;
+    const fileName = `textures/cabinets_${timestamp}_${cleanName}`;
 
     const { error: uploadError } = await supabase.storage
       .from('showroom-assets')
@@ -355,7 +355,7 @@ export default function AdminCabinetColors() {
     try {
       const hex = await extractDominantColor(formData.color_file);
       setFormData(prev => ({ ...prev, hex_code: hex }));
-    } catch (err) {
+    } catch {
       showToast('Failed to extract color from image', 'error');
     }
   };
