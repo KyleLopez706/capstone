@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Image as ImageIcon, Trash2, Edit2, UploadCloud, X, Loader2, AlertTriangle } from 'lucide-react';
+import { Plus, Image as ImageIcon, Trash2, Edit2, UploadCloud, X, Loader2, AlertTriangle, Wand2 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useToast, ToastNotification } from '../utils/toast';
 import { getColor } from 'colorthief';
@@ -543,6 +543,26 @@ export default function AdminMaterials() {
                       disabled={submitting}
                       className="flex-1 border border-[#E2E8F0] rounded-xl px-4 py-2.5 text-[#232B32] font-mono focus:outline-none focus:border-[#C5A059] focus:ring focus:ring-[#C5A059]/20 transition-all uppercase disabled:bg-[#F9F9FB] disabled:opacity-70"
                     />
+                    <div className="relative group flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!formData.color_file) {
+                            showToast('error', 'Please upload an image first.');
+                          } else {
+                            extractDominantColor(formData.color_file);
+                          }
+                        }}
+                        disabled={submitting || !formData.color_file}
+                        className="p-3 border border-[#E2E8F0] rounded-xl text-[#6B7280] hover:text-[#C5A059] hover:border-[#C5A059] hover:bg-orange-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0 flex items-center justify-center"
+                      >
+                        <Wand2 size={20} />
+                      </button>
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-[#232B32] text-[#F9F9FB] text-xs font-medium rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-sm z-10">
+                        Auto-detect from image
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-[#232B32]"></div>
+                      </div>
+                    </div>
                   </div>
                   <p className="text-xs text-[#6B7280]">Used by the AI Quality Engine for color matching.</p>
                 </div>
