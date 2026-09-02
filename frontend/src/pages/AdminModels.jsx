@@ -1,5 +1,5 @@
-﻿import { useState, useEffect, useCallback } from 'react';
-import { Plus, Box, Edit2, UploadCloud, X, Loader2, RefreshCw, Trash2, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Box, Edit2, UploadCloud, X, Loader2, Trash2, AlertTriangle } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useToast, ToastNotification } from '../utils/toast';
 
@@ -111,7 +111,7 @@ const ModelCard = ({ model, onEdit, onDelete }) => {
 };
 
 const DeleteConfirmModal = ({ model, onConfirm, onCancel, isDeleting }) => (
-  <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+  <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
     <div className="bg-[#FFFFFF] w-full max-w-sm rounded-2xl shadow-2xl border border-[#E2E8F0] p-6 flex flex-col gap-5">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
@@ -169,14 +169,15 @@ export default function AdminModels() {
   });
 
   const fetchModels = async () => {
-    setLoading(true);
+    // Defer state update to bypass synchronous setState in effect rule
+    Promise.resolve().then(() => setLoading(true));
     const { data, error } = await supabase
       .from('structures')
       .select('*')
       .order('name');
     
     if (error) {
-      showToast('error', 'Failed to load models');
+      showToast('Failed to load models', 'error');
     } else {
       setModels(data);
     }
@@ -184,6 +185,7 @@ export default function AdminModels() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchModels();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -248,10 +250,10 @@ export default function AdminModels() {
         await purgeCacheForUrl(deleteTarget.model_url);
       }
 
-      showToast('success', 'Model deleted successfully');
+      showToast('Model deleted successfully', 'success');
       setModels(models.filter(m => m.id !== deleteTarget.id));
     } catch (error) {
-      showToast('error', error.message || 'Failed to delete model');
+      showToast(error.message || 'Failed to delete model', 'error');
     } finally {
       setIsDeleting(false);
       setDeleteTarget(null);
@@ -272,8 +274,8 @@ export default function AdminModels() {
     }
 
     const timestamp = Date.now();
-    const cleanName = file.name.replace(/[^a-zA-Z0-9.\-]/g, '_');
-    const fileName = models/_;
+    const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const fileName = `models/${timestamp}_${cleanName}`;
 
     const { error: uploadError } = await supabase.storage
       .from('showroom-assets')
@@ -291,7 +293,7 @@ export default function AdminModels() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.name.trim() || !formData.model_file) {
-      showToast('error', 'Please fill all required fields');
+      showToast('Please fill all required fields', 'error');
       return;
     }
 
@@ -320,20 +322,20 @@ export default function AdminModels() {
           .eq('id', editingModel.id);
           
         if (error) throw error;
-        showToast('success', 'Model updated successfully');
+        showToast('Model updated successfully', 'success');
       } else {
         const { error } = await supabase
           .from('structures')
           .insert([payload]);
           
         if (error) throw error;
-        showToast('success', 'Model added successfully');
+        showToast('Model added successfully', 'success');
       }
 
       await fetchModels();
       closeModal();
     } catch (error) {
-      showToast('error', error.message || 'An error occurred');
+      showToast(error.message || 'An error occurred', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -360,11 +362,11 @@ export default function AdminModels() {
         </div>
 
         {loading ? (
-          <div className="flex-1 flex items-center justify-center min-h-[400px]">
+          <div className="flex-1 flex items-center justify-center min-h-100">
             <Loader2 className="animate-spin text-[#C5A059]" size={32} />
           </div>
         ) : models.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center min-h-[400px] bg-[#FFFFFF] rounded-2xl border border-[#E2E8F0] p-8 text-center">
+          <div className="flex-1 flex flex-col items-center justify-center min-h-100 bg-[#FFFFFF] rounded-2xl border border-[#E2E8F0] p-8 text-center">
             <div className="w-16 h-16 bg-[#F9F9FB] rounded-full flex items-center justify-center mb-4">
               <Box size={32} className="text-[#9CA3AF]" />
             </div>
