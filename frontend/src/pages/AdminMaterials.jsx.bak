@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Image as ImageIcon, Trash2, Edit2, UploadCloud, X, Loader2, AlertTriangle } from 'lucide-react';
+import { Plus, Image as ImageIcon, Archive, Edit2, UploadCloud, X, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useToast, ToastNotification } from '../utils/toast';
-import ColorThief from 'colorthief';
 
 const FileUploadZone = ({ label, required, accept, file, onChange, onRemove }) => {
   const [objectUrl, setObjectUrl] = useState(null);
@@ -73,15 +72,20 @@ const FileUploadZone = ({ label, required, accept, file, onChange, onRemove }) =
   );
 };
 
-const MaterialCard = ({ material, onEdit, onDelete }) => {
+const MaterialCard = ({ material, onEdit, onArchive, onRestore }) => {
   return (
-    <div className="flex flex-col bg-[#FFFFFF] border border-[#E2E8F0] rounded-2xl shadow-sm overflow-hidden transition-all">
+    <div className={`flex flex-col bg-[#FFFFFF] border border-[#E2E8F0] rounded-2xl shadow-sm overflow-hidden transition-all ${material.is_archived ? 'opacity-60' : ''}`}>
       <div className="relative h-48 bg-[#F9F9FB]">
         {material.color_url ? (
           <img src={material.color_url} alt={material.name} className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-[#9CA3AF]">
             <ImageIcon size={48} opacity={0.5} />
+          </div>
+        )}
+        {material.is_archived && (
+          <div className="absolute top-3 left-3 bg-[#232B32] text-[#FFFFFF] text-xs font-semibold px-2 py-1 rounded-md uppercase tracking-wider">
+            Archived
           </div>
         )}
       </div>
@@ -107,109 +111,42 @@ const MaterialCard = ({ material, onEdit, onDelete }) => {
             <Edit2 size={16} /> Edit
           </button>
           
-          <button
-            onClick={() => onDelete(material)}
-            className="flex items-center justify-center p-2.5 bg-[#F9F9FB] hover:bg-red-50 text-[#6B7280] hover:text-red-600 rounded-xl transition-colors"
-            title="Delete"
-          >
-            <Trash2 size={16} />
-          </button>
+          {material.is_archived ? (
+            <button
+              onClick={() => onRestore(material)}
+              className="flex items-center justify-center p-2.5 bg-[#F9F9FB] hover:bg-[#E2E8F0] text-[#232B32] rounded-xl transition-colors"
+              title="Restore"
+            >
+              <RefreshCw size={16} />
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                if (window.confirm(`Are you sure you want to archive ${material.name}?`)) {
+                  onArchive(material);
+                }
+              }}
+              className="flex items-center justify-center p-2.5 bg-[#F9F9FB] hover:bg-red-50 text-[#6B7280] hover:text-red-600 rounded-xl transition-colors"
+              title="Archive"
+            >
+              <Archive size={16} />
+            </button>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-/* ── Delete Confirmation Modal ── */
-const DeleteConfirmModal = ({ material, onConfirm, onCancel, isDeleting }) => (
-  <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-    <div className="bg-[#FFFFFF] w-full max-w-sm rounded-2xl shadow-2xl border border-[#E2E8F0] p-6 flex flex-col gap-5">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
-          <AlertTriangle size={20} className="text-red-500" />
-        </div>
-        <div>
-          <h3 className="text-[#232B32] font-bold text-base">Delete Material</h3>
-          <p className="text-[#6B7280] text-sm mt-0.5">This action cannot be undone.</p>
-        </div>
-      </div>
-
-      <p className="text-[#232B32] text-sm">
-        Are you sure you want to permanently delete{' '}
-        <span className="font-semibold">{material.name}</span>? The material record and its
-        image file will be removed from storage.
-      </p>
-
-      <div className="flex items-center gap-3 justify-end">
-        <button
-          onClick={onCancel}
-          disabled={isDeleting}
-          className="px-5 py-2.5 text-sm font-medium text-[#232B32] hover:bg-[#F9F9FB] rounded-xl transition-colors disabled:opacity-50"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={onConfirm}
-          disabled={isDeleting}
-          className="flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-60"
-        >
-          {isDeleting ? (
-            <>
-              <Loader2 size={15} className="animate-spin" />
-              Deleting...
-            </>
-          ) : (
-            <>
-              <Trash2 size={15} />
-              Delete
-            </>
-          )}
-        </button>
-      </div>
-    </div>
-  </div>
-);
-
-
 export default function AdminMaterials() {
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showArchived, setShowArchived] = useState(false);
   const { toast, showToast, dismissToast } = useToast();
 
-  const extractDominantColor = (file) => {
-    if (typeof file === 'string' || !file) return;
-    
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        try {
-          const colorThief = new ColorThief();
-          const rgb = colorThief.getColor(img);
-          const hex = '#' + rgb.map(x => {
-            const hexStr = x.toString(16);
-            return hexStr.length === 1 ? '0' + hexStr : hexStr;
-          }).join('');
-          
-          setFormData(prev => ({ ...prev, hex_code: hex.toUpperCase() }));
-          showToast('success', 'AI auto-detected the dominant color!');
-        } catch (error) {
-          console.error("Color extraction failed:", error);
-        }
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // Add / Edit modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-
-  // Delete confirmation modal state
-  const [deleteTarget, setDeleteTarget] = useState(null); // material pending deletion
-  const [isDeleting, setIsDeleting] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -240,55 +177,26 @@ export default function AdminMaterials() {
     Promise.resolve().then(() => fetchMaterials());
   }, [fetchMaterials]);
 
-  /* ── Extract Supabase Storage path from a public URL ── */
-  const extractStoragePath = (publicUrl) => {
-    if (!publicUrl) return null;
+  const handleArchiveToggle = async (material, isArchiving) => {
     try {
-      // Public URLs follow the pattern: .../storage/v1/object/public/<bucket>/<path>
-      const marker = '/object/public/showroom-assets/';
-      const idx = publicUrl.indexOf(marker);
-      if (idx !== -1) {
-        return publicUrl.substring(idx + marker.length);
-      }
-    } catch {
-      // If parsing fails, skip storage deletion (non-critical)
-    }
-    return null;
-  };
-
-  /* ── Delete: remove file from Storage then DB record ── */
-  const handleDeleteConfirm = async () => {
-    if (!deleteTarget) return;
-    setIsDeleting(true);
-    try {
-      // 1. Attempt to delete file from Supabase Storage (best effort)
-      const filePath = extractStoragePath(deleteTarget.color_url);
-      if (filePath) {
-        const { error: storageError } = await supabase.storage
-          .from('showroom-assets')
-          .remove([filePath]);
-        if (storageError) {
-          // Log but don't block — DB record still needs deletion
-          console.warn('Storage delete warning:', storageError.message);
-        }
-      }
-
-      // 2. Delete the database record
-      const { error: dbError } = await supabase
+      const { error } = await supabase
         .from('materials')
-        .delete()
-        .eq('id', deleteTarget.id);
-
-      if (dbError) throw dbError;
-
-      showToast('success', `"${deleteTarget.name}" deleted successfully`);
-      setDeleteTarget(null);
-      fetchMaterials();
+        .update({ is_archived: isArchiving })
+        .eq('id', material.id);
+        
+      if (error) {
+        if (error.message && error.message.includes('column "is_archived"')) {
+          showToast('error', 'Database needs updating. The is_archived column is missing.');
+        } else {
+          throw error;
+        }
+      } else {
+        showToast('success', `Material ${isArchiving ? 'archived' : 'restored'} successfully`);
+        fetchMaterials();
+      }
     } catch (err) {
-      console.error('Delete error:', err);
-      showToast('error', err.message || 'Failed to delete material');
-    } finally {
-      setIsDeleting(false);
+      console.error(err);
+      showToast('error', `Failed to ${isArchiving ? 'archive' : 'restore'} material`);
     }
   };
 
@@ -416,6 +324,8 @@ export default function AdminMaterials() {
     }
   };
 
+  const filteredMaterials = materials.filter(m => showArchived ? true : !m.is_archived);
+
   return (
     <div className="min-h-full w-full bg-[#F9F9FB] p-6 lg:p-8">
       {toast && <ToastNotification {...toast} onDismiss={dismissToast} />}
@@ -428,6 +338,15 @@ export default function AdminMaterials() {
           </div>
           
           <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-[#6B7280] select-none">
+              <input 
+                type="checkbox" 
+                checked={showArchived} 
+                onChange={(e) => setShowArchived(e.target.checked)}
+                className="rounded border-[#E2E8F0] text-[#C5A059] focus:ring-[#C5A059]"
+              />
+              Show Archived
+            </label>
             <button
               onClick={openAddModal}
               className="flex items-center gap-2 bg-[#C5A059] hover:brightness-110 text-[#FFFFFF] py-2.5 px-4 rounded-xl font-medium transition-all shadow-sm"
@@ -442,7 +361,7 @@ export default function AdminMaterials() {
             <Loader2 className="animate-spin text-[#C5A059] mb-4" size={32} />
             <p className="text-[#6B7280]">Loading materials...</p>
           </div>
-        ) : materials.length === 0 ? (
+        ) : filteredMaterials.length === 0 ? (
           <div className="flex flex-col items-center justify-center bg-[#FFFFFF] border border-[#E2E8F0] rounded-2xl p-12 text-center shadow-sm">
             <ImageIcon size={48} className="text-[#9CA3AF] mb-4" />
             <h3 className="text-lg font-semibold text-[#232B32] mb-2">No materials found</h3>
@@ -458,15 +377,15 @@ export default function AdminMaterials() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {materials.map(material => (
+            {filteredMaterials.map(material => (
               <MaterialCard 
                 key={material.id} 
                 material={material} 
                 onEdit={openEditModal}
-                onDelete={(m) => setDeleteTarget(m)}
+                onArchive={(m) => handleArchiveToggle(m, true)}
+                onRestore={(m) => handleArchiveToggle(m, false)}
               />
             ))}
-
           </div>
         )}
       </div>
@@ -559,10 +478,7 @@ export default function AdminMaterials() {
                     required={true}
                     accept="image/webp,image/png,image/jpeg"
                     file={formData.color_file}
-                    onChange={(file) => {
-                      setFormData({...formData, color_file: file});
-                      extractDominantColor(file);
-                    }}
+                    onChange={(file) => setFormData({...formData, color_file: file})}
                     onRemove={() => setFormData({...formData, color_file: null})}
                   />
                 </div>
@@ -595,16 +511,6 @@ export default function AdminMaterials() {
             </form>
           </div>
         </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {deleteTarget && (
-        <DeleteConfirmModal
-          material={deleteTarget}
-          onConfirm={handleDeleteConfirm}
-          onCancel={() => setDeleteTarget(null)}
-          isDeleting={isDeleting}
-        />
       )}
     </div>
   );
