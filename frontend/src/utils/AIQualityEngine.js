@@ -85,53 +85,43 @@ function extractFeatures(hex1, hex2) {
     ];
 }
 
-let rfModel = null;
-
 /**
- * Predicts the Design Quality Score (0-100%) for two colors.
+ * Predicts the Design Quality Score (0-100%) for two colors by calling the Python Serverless API.
  * @param {string} graniteHex - The primary hex color of the granite (e.g., "#3C3C3C")
  * @param {string} cabinetHex - The primary hex color of the cabinet
  * @returns {Promise<number>} - The AI score
  */
 export async function evaluateDesignQuality(graniteHex, cabinetHex) {
-    // 1. Load the model JSON file once and keep it in memory
-    if (!rfModel) {
-        try {
-            const response = await fetch('/ai-model/rf_model.json');
-            if (!response.ok) throw new Error("File not found");
-            rfModel = await response.json();
-            console.log("✅ AI Model Loaded Successfully from Static JSON");
-        } catch (error) {
-            console.error("❌ Failed to load AI model. Ensure rf_model.json is in public/ai-model/", error);
-            return 50; // Fallback score if it fails
-        }
-    }
+    if (!graniteHex || !cabinetHex) return null;
 
-    // 2. Extract features from the two colors
+    // 1. Get the raw features
     const features = extractFeatures(graniteHex, cabinetHex);
+    if (!features) return null;
 
-    // 3. Traverse all 100 Decision Trees
-    let sum = 0;
-    for (const tree of rfModel) {
-        let node = tree;
-        
-        // Follow the if/else rules down the tree
-        while (node.left !== undefined && node.right !== undefined) {
-            if (features[node.feature] <= node.threshold) {
-                node = node.left;
-            } else {
-                node = node.right;
-            }
+    try {
+        // 2. Send the features across the internet to our Vercel Python Server
+        const response = await fetch('/api/predict', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ features: features })
+        });
+
+        if (!response.ok) {
+            throw new Error('API prediction failed');
         }
-        // Add the final leaf value
-        sum += node.value;
+
+        // 3. Receive the calculated score from the server
+        const data = await response.json();
+        
+        // 4. Cap safely between 0 and 100 just in case
+        return Math.max(0, Math.min(100, Math.round(data.prediction)));
+        
+    } catch (error) {
+        console.error("AI Server Error:", error);
+        return 50; // Fallback score if it fails
     }
-
-    // 4. Calculate final average score from all 100 trees
-    const averageScore = sum / rfModel.length;
-
-    // 5. Cap safely between 0 and 100 just in case
-    return Math.max(0, Math.min(100, Math.round(averageScore)));
 }
 
 /**
