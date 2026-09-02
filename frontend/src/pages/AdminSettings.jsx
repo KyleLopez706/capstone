@@ -18,6 +18,11 @@ const AdminSettings = () => {
   const [unitTypes, setUnitTypes] = useState({});
   const [vat, setVat] = useState(12);
   const [vatId, setVatId] = useState(null);
+  const [termsAndConditions, setTermsAndConditions] = useState(
+    "PAYMENT TERMS:\n- 60% of Total Contract Amount as down payment\n- 30% upon delivery\n- 10% balance upon completion of work\n\nOTHER TERMS:\n- Price quoted includes VAT\n- Warranty: 1 year on workmanship, manufacturer warranty on materials"
+  );
+  const [termsId, setTermsId] = useState(null);
+  const [isSavingTerms, setIsSavingTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingRates, setIsSavingRates] = useState(false);
   const [isSavingVat, setIsSavingVat] = useState(false);
@@ -37,11 +42,17 @@ const AdminSettings = () => {
       const unitsData = {};
       let vatData = 12;
       let vId = null;
+      let termsText = "PAYMENT TERMS:\n- 60% of Total Contract Amount as down payment\n- 30% upon delivery\n- 10% balance upon completion of work\n\nOTHER TERMS:\n- Price quoted includes VAT\n- Warranty: 1 year on workmanship, manufacturer warranty on materials";
+      let tId = null;
       
       data.forEach(item => {
         if (item.item_name === 'vat_percentage') {
           vatData = item.rate_amount;
           vId = item.id;
+        } else if (item.item_name === 'terms_and_conditions') {
+          // terms_and_conditions is stored in unit_type as a text blob
+          termsText = item.unit_type || termsText;
+          tId = item.id;
         } else if (RATE_MAPPING[item.item_name]) {
           ratesData[item.item_name] = item.rate_amount;
           idsData[item.item_name] = item.id;
@@ -64,6 +75,8 @@ const AdminSettings = () => {
       setUnitTypes(unitsData);
       setVat(vatData);
       setVatId(vId);
+      setTermsAndConditions(termsText);
+      setTermsId(tId);
     } catch (error) {
       console.error('Error fetching settings:', error);
       showToast('error', 'Failed to load settings');
@@ -134,6 +147,27 @@ const AdminSettings = () => {
       showToast('error', `Failed: ${error.message || 'Unknown error'}`);
     } finally {
       setIsSavingVat(false);
+    }
+  };
+
+  // Save Terms & Conditions — stored in labor_rates using unit_type as text blob
+  const saveTerms = async () => {
+    setIsSavingTerms(true);
+    try {
+      const payload = {
+        item_name: 'terms_and_conditions',
+        rate_amount: 0,
+        unit_type: termsAndConditions  // reuse unit_type column to store the text
+      };
+      if (termsId) payload.id = termsId;
+      const { error } = await supabase.from('labor_rates').upsert([payload]);
+      if (error) throw error;
+      showToast('Terms & Conditions updated successfully', 'success');
+      fetchSettings();
+    } catch (error) {
+      showToast(error.message || 'Failed to save terms', 'error');
+    } finally {
+      setIsSavingTerms(false);
     }
   };
 
@@ -266,6 +300,31 @@ const AdminSettings = () => {
                   Save Tax
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+        {/* Terms & Conditions Card */}
+        <div className="bg-[#FFFFFF] border border-[#E2E8F0] rounded-2xl shadow-sm mb-8 overflow-hidden">
+          <div className="px-6 py-5 border-b border-[#E2E8F0] bg-[#FFFFFF]">
+            <h2 className="text-lg font-semibold text-[#232B32]">Terms &amp; Conditions</h2>
+            <p className="text-sm text-[#6B7280]">This text will appear on every PDF quotation sent to clients.</p>
+          </div>
+          <div className="p-6">
+            <textarea
+              rows={10}
+              value={termsAndConditions}
+              onChange={(e) => setTermsAndConditions(e.target.value)}
+              className="w-full px-4 py-3 bg-[#F9F9FB] border border-[#E2E8F0] rounded-xl text-sm text-[#232B32] font-mono focus:outline-none focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] transition-colors resize-y"
+              placeholder="Enter your quotation terms and conditions..."
+            />
+            <div className="mt-6 pt-6 border-t border-[#E2E8F0] flex justify-end">
+              <button
+                onClick={saveTerms}
+                disabled={isSavingTerms}
+                className="px-6 py-2.5 bg-[#C5A059] text-white text-sm font-medium rounded-lg hover:brightness-110 transition-all disabled:opacity-50 min-w-[150px]"
+              >
+                {isSavingTerms ? 'Saving...' : 'Save Terms'}
+              </button>
             </div>
           </div>
         </div>

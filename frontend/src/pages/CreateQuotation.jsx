@@ -125,11 +125,17 @@ export default function CreateQuotation() {
 
         // Read dynamic VAT from DB, fallback to 12%
         const dbVat = getRateAmount('vat_percentage');
+        // Read terms from DB (stored in unit_type field of the terms row)
+        const termsRow = rates.find(r => r.item_name === 'terms_and_conditions');
+        const dbTerms = termsRow?.unit_type || null;
+
         if (dbVat > 0) {
           setVatRate(dbVat);
           setTerms(
-            `PAYMENT TERMS:\n- 60% of Total Contract Amount as down payment\n- 30% upon delivery\n- 10% balance upon completion of work\n\nOTHER TERMS:\n- Price quoted includes VAT (${dbVat}%)\n- Warranty: 1 year on workmanship, manufacturer warranty on materials`
+            dbTerms || `PAYMENT TERMS:\n- 60% of Total Contract Amount as down payment\n- 30% upon delivery\n- 10% balance upon completion of work\n\nOTHER TERMS:\n- Price quoted includes VAT (${dbVat}%)\n- Warranty: 1 year on workmanship, manufacturer warranty on materials`
           );
+        } else if (dbTerms) {
+          setTerms(dbTerms);
         }
 
         const prod = (reqData.product_type || '').toLowerCase();
@@ -323,18 +329,38 @@ export default function CreateQuotation() {
       doc.text("Total Amount Due", 14, y);
       doc.text(`PHP ${Number(totalDue).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, pageWidth - 14, y, { align: 'right' });
 
-      // Terms
-      y += 20;
+      // Terms & Conditions — add new page if not enough space
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const termsLineHeight = 5;
+      const splitTerms = doc.splitTextToSize(terms, pageWidth - 28);
+      // Estimate height needed: header (12pt) + gap + lines
+      const termsBlockHeight = 14 + (splitTerms.length * termsLineHeight);
+
+      // If remaining space is less than what we need, start a new page
+      if (y + termsBlockHeight > pageHeight - 20) {
+        doc.addPage();
+        y = 20;
+      }
+
+      y += 14;
       doc.setFontSize(12);
+      doc.setFont(undefined, 'bold');
       doc.setTextColor(35, 43, 50);
       doc.text("Terms & Conditions", 14, y);
       y += 8;
       doc.setFontSize(9);
-      doc.setTextColor(107, 114, 128);
       doc.setFont(undefined, 'normal');
-      
-      const splitTerms = doc.splitTextToSize(terms, pageWidth - 28);
-      doc.text(splitTerms, 14, y);
+      doc.setTextColor(107, 114, 128);
+
+      // Render each line, adding new pages when needed
+      for (const line of splitTerms) {
+        if (y > pageHeight - 15) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.text(line, 14, y);
+        y += termsLineHeight;
+      }
 
       // Generate Blob and Upload to Supabase
       const pdfBlob = doc.output('blob');
