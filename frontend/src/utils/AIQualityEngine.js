@@ -69,7 +69,6 @@ function ciede2000Approx(lab1, lab2) {
 function extractFeatures(hex1, hex2) {
   const lab1 = rgbToLab(hexToRGB(hex1));
   const lab2 = rgbToLab(hexToRGB(hex2));
-
   const delta_L = Math.abs(lab1.L - lab2.L);
   const chroma1 = Math.sqrt(Math.pow(lab1.a, 2) + Math.pow(lab1.b, 2));
   const chroma2 = Math.sqrt(Math.pow(lab2.a, 2) + Math.pow(lab2.b, 2));
