@@ -118,8 +118,38 @@ export default function Configurator3D() {
           .order('name'),
         supabase
           .from('labor_rates')
-          .select('item_name, rate_amount'),
+          .select('item_name, rate_amount')
       ]);
+
+      // Array of active URLs to keep in cache
+      const activeUrls = new Set();
+      
+      const processUrls = (data, key) => {
+        if (data && Array.isArray(data)) {
+          data.forEach(item => {
+            if (item[key]) activeUrls.add(item[key].split('?')[0]);
+          });
+        }
+      };
+
+      processUrls(structuresResult.data, 'model_url');
+      processUrls(materialsResult.data, 'color_url');
+      processUrls(cabinetMaterialsResult.data, 'color_url');
+
+      // Purge orphaned files from cache
+      try {
+        const cache = await caches.open('sixsigma-assets-v3');
+        const keys = await cache.keys();
+        for (let req of keys) {
+          const baseUrl = req.url.split('?')[0];
+          // Delete anything in the cache that isn't in our activeUrls set
+          if (!activeUrls.has(baseUrl)) {
+            await cache.delete(req);
+          }
+        }
+      } catch (err) {
+        console.warn('[Configurator3D] Failed to purge old cache entries:', err);
+      }
 
       /* ── Handle structures ── */
       if (structuresResult.error) {

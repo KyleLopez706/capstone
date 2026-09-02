@@ -53,6 +53,8 @@ export default function CreateQuotation() {
 
   // Dynamic VAT rate from DB (defaults to 12% if not found)
   const [vatRate, setVatRate] = useState(12);
+  // Admin-applied discount percentage (0 by default, e.g. 2, 5, 10)
+  const [discountPercent, setDiscountPercent] = useState(0);
 
   const [validUntil, setValidUntil] = useState(getDefaultValidUntil);
   const [terms, setTerms] = useState(
@@ -153,9 +155,15 @@ export default function CreateQuotation() {
     }));
   };
 
-  const subtotal = Object.values(costs).reduce((sum, cost) => sum + cost, 0);
-  const vat = subtotal * (vatRate / 100);
-  const totalDue = subtotal + vat;
+  const discountableCosts = costs.material + costs.fabrication + costs.installation + costs.edgePolishing + costs.mitering;
+  const nonDiscountableCosts = costs.delivery + costs.mobilization;
+  
+  const discountAmount = discountableCosts * (discountPercent / 100);
+  const netAmount = discountableCosts - discountAmount;
+  
+  const finalSubtotal = netAmount + nonDiscountableCosts;
+  const vat = finalSubtotal * (vatRate / 100);
+  const totalDue = finalSubtotal + vat;
 
   const fmt = (n) => `₱${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -225,9 +233,8 @@ export default function CreateQuotation() {
          if(isBold) doc.setFont(undefined, 'bold');
          else doc.setFont(undefined, 'normal');
          doc.text(label, 14, y);
-         // Strip the peso sign for the PDF since jsPDF standard fonts don't support it natively well
-         // We will just use 'PHP' instead of the peso sign symbol in the PDF to prevent rendering bugs
-         doc.text(`PHP ${Number(val).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, pageWidth - 14, y, { align: 'right' });
+         const displayVal = typeof val === 'string' ? val : Number(val).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+         doc.text(`PHP ${displayVal}`, pageWidth - 14, y, { align: 'right' });
          y += 8;
       };
 
@@ -247,6 +254,27 @@ export default function CreateQuotation() {
       }
       drawCostRow("Edge Polishing", costs.edgePolishing);
       drawCostRow("Mitering", costs.mitering);
+
+      y += 4;
+      doc.setDrawColor(226, 232, 240);
+      doc.line(14, y, pageWidth - 14, y);
+      y += 10;
+
+      drawRow("Total Amount", discountableCosts, true);
+
+      // Only show discount row if a discount was applied
+      if (discountPercent > 0) {
+        doc.setTextColor(220, 38, 38); // red-600 to highlight discount
+        drawRow(`Less ${discountPercent}% discount`, `(${Number(discountAmount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`);
+        doc.setTextColor(107, 114, 128);
+        drawRow("Net amount", netAmount, true);
+        
+        y += 4;
+        doc.setDrawColor(226, 232, 240);
+        doc.line(14, y, pageWidth - 14, y);
+        y += 10;
+      }
+
       drawCostRow("Delivery Cost", costs.delivery);
       drawCostRow("Mobilization Cost", costs.mobilization);
 
@@ -255,7 +283,6 @@ export default function CreateQuotation() {
       doc.line(14, y, pageWidth - 14, y);
       y += 10;
 
-      drawRow("Subtotal", subtotal);
       drawRow("VAT (" + vatRate + "%)", vat);
       
       y += 4;
@@ -305,7 +332,10 @@ export default function CreateQuotation() {
         product_type: request.product_type,
         design: request.design,
         area: request.area,
-        subtotal: fmt(subtotal),
+        subtotal: fmt(discountableCosts),
+        discount_percent: discountPercent,
+        discount_amount: discountPercent > 0 ? fmt(discountAmount) : 'N/A',
+        discounted_subtotal: discountPercent > 0 ? fmt(netAmount) : fmt(discountableCosts),
         vat: fmt(vat),
         total_due: fmt(totalDue),
         valid_until: validUntil,
@@ -448,6 +478,38 @@ export default function CreateQuotation() {
             <InputRow label="Delivery Cost" field="delivery" costs={costs} onChange={handleCostChange} />
             <InputRow label="Mobilization Cost" field="mobilization" costs={costs} onChange={handleCostChange} />
 
+            {/* Less Discount Row */}
+            <div className="flex justify-between items-center py-4 border-b border-[#F3F4F6]">
+              <div className="flex flex-col gap-1">
+                <span className="text-[13px] text-[#6B7280] font-medium">Less: Discount</span>
+                <span className="text-[11px] text-[#9CA3AF]">Applied to materials and services</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Custom % input */}
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.5"
+                    value={discountPercent}
+                    onChange={(e) => {
+                      const val = Math.min(100, Math.max(0, Number(e.target.value)));
+                      setDiscountPercent(val);
+                    }}
+                    className="w-20 pr-6 pl-3 py-2 bg-white border border-[#E2E8F0] rounded-lg text-right font-semibold text-[#232B32] focus:outline-none focus:border-[#C5A059] transition-colors"
+                  />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[12px] text-[#6B7280] font-semibold">%</span>
+                </div>
+                {/* Show discount amount */}
+                {discountPercent > 0 && (
+                  <span className="text-[13px] font-semibold text-red-500 min-w-[80px] text-right">
+                    -{fmt(discountAmount)}
+                  </span>
+                )}
+              </div>
+            </div>
+
             {/* VAT */}
             <div className="flex justify-between items-center py-4 bg-[#F8FAFC] rounded-lg px-4 mt-4 border border-[#E2E8F0]">
               <span className="text-[13px] font-bold text-[#232B32]">Value Added Tax ({vatRate}%)</span>
@@ -459,20 +521,42 @@ export default function CreateQuotation() {
           <div className="mt-8 flex justify-end">
             <div className="w-full md:w-1/2 bg-white border border-[#E2E8F0] rounded-xl p-6 shadow-sm">
               <div className="flex justify-between items-center mb-3">
-                <span className="text-[13px] text-[#6B7280]">Subtotal (before tax):</span>
-                <span className="text-[13px] font-semibold text-[#232B32]">{fmt(subtotal)}</span>
+                <span className="text-[13px] text-[#6B7280]">Total Amount:</span>
+                <span className="text-[13px] font-semibold text-[#232B32]">{fmt(discountableCosts)}</span>
+              </div>
+              {discountPercent > 0 && (
+                <>
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-[13px] text-red-500">Less {discountPercent}% discount:</span>
+                    <span className="text-[13px] font-semibold text-red-500">({fmt(discountAmount)})</span>
+                  </div>
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-[13px] font-semibold text-[#232B32]">Net amount:</span>
+                    <span className="text-[13px] font-semibold text-[#232B32]">{fmt(netAmount)}</span>
+                  </div>
+                </>
+              )}
+              <div className="flex justify-between items-center mb-3 mt-4 border-t border-[#F3F4F6] pt-4">
+                <span className="text-[13px] text-[#6B7280]">Delivery Cost:</span>
+                <span className="text-[13px] font-semibold text-[#232B32]">{fmt(costs.delivery)}</span>
+              </div>
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-[13px] text-[#6B7280]">Mobilization Cost:</span>
+                <span className="text-[13px] font-semibold text-[#232B32]">{fmt(costs.mobilization)}</span>
               </div>
               <div className="flex justify-between items-center mb-6 pb-6 border-b border-[#F3F4F6]">
                 <span className="text-[13px] text-[#6B7280]">Value Added Tax ({vatRate}%):</span>
                 <span className="text-[13px] font-semibold text-[#232B32]">{fmt(vat)}</span>
               </div>
               <div className="flex justify-between items-center">
+
                 <span className="text-[16px] font-bold text-[#232B32]">Total Amount Due:</span>
                 <span className="text-[24px] font-bold text-[#D97706]">{fmt(totalDue)}</span>
               </div>
             </div>
           </div>
         </div>
+
 
         {/* Additional Information Card */}
         <div className="bg-white rounded-2xl p-6 md:p-8 shadow-sm border border-[#E2E8F0]">

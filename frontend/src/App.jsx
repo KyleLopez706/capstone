@@ -12,6 +12,7 @@ const QuotationRequest = lazy(() => import("./pages/QuotationRequest"));
 const CreateQuotation = lazy(() => import("./pages/CreateQuotation"));
 const AdminSettings = lazy(() => import("./pages/AdminSettings"));
 const AdminMaterials = lazy(() => import("./pages/AdminMaterials"));
+const AdminModels = lazy(() => import("./pages/AdminModels"));
 const AdminMessages = lazy(() => import("./pages/AdminMessages"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const About = lazy(() => import("./pages/About"));
@@ -234,6 +235,7 @@ function App() {
           <Route path="/messages" element={<AdminMessages />} />
           <Route path="/admin/settings" element={<AdminSettings />} />
           <Route path="/admin/materials" element={<AdminMaterials />} />
+          <Route path="/admin/models" element={<AdminModels />} />
         </Route>
         <Route path="/admin/quotation/:id" element={<CreateQuotation />} />
       </Routes>

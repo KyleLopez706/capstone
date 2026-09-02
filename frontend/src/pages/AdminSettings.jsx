@@ -8,8 +8,8 @@ const RATE_MAPPING = {
   cutting: { label: "Cutting / Fabrication", unit: "per linear meter" },
   edge_polishing: { label: "Edge Polishing", unit: "per linear meter" },
   mitering: { label: "Mitering", unit: "per linear meter" },
-  delivery_cost: { label: "Delivery Fee", unit: "flat rate" },
-  mobilization_cost: { label: "Mobilization Fee", unit: "flat rate" }
+  delivery_cost: { label: "Delivery Fee", unit: "base rate" },
+  mobilization_cost: { label: "Mobilization Fee", unit: "base rate" }
 };
 
 const AdminSettings = () => {
