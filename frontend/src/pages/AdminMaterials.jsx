@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Plus, Image as ImageIcon, Trash2, Edit2, UploadCloud, X, Loader2, AlertTriangle } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useToast, ToastNotification } from '../utils/toast';
-import ColorThief from 'colorthief';
+import { getColor } from 'colorthief';
 
 const FileUploadZone = ({ label, required, accept, file, onChange, onRemove }) => {
   const [objectUrl, setObjectUrl] = useState(null);
@@ -182,17 +182,13 @@ export default function AdminMaterials() {
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
-      img.onload = () => {
+      img.onload = async () => {
         try {
-          const colorThief = new ColorThief();
-          const rgb = colorThief.getColor(img);
-          const hex = '#' + rgb.map(x => {
-            const hexStr = x.toString(16);
-            return hexStr.length === 1 ? '0' + hexStr : hexStr;
-          }).join('');
-          
-          setFormData(prev => ({ ...prev, hex_code: hex.toUpperCase() }));
-          showToast('success', 'AI auto-detected the dominant color!');
+          const color = await getColor(img);
+          if (color) {
+            setFormData(prev => ({ ...prev, hex_code: color.hex().toUpperCase() }));
+            showToast('success', 'AI auto-detected the dominant color!');
+          }
         } catch (error) {
           console.error("Color extraction failed:", error);
         }
