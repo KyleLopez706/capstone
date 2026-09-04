@@ -23,7 +23,7 @@
  *   (Matches MODEL_VERSION in Configurator3D.jsx — keep them in sync.)
  */
 
-const CACHE_VERSION   = 'sixsigma-assets-v3';
+const CACHE_VERSION   = 'sixsigma-assets-v4';
 const STORAGE_PATTERN = /https:\/\/[a-z0-9]+\.supabase\.co\/storage\/v1\/object\/public\//;
 
 /* ── Install: activate immediately, no waiting for old tabs to close ── */
@@ -55,15 +55,24 @@ self.addEventListener('fetch', (event) => {
     caches.open(CACHE_VERSION).then(async (cache) => {
       /* 1. Try cache first */
       const cached = await cache.match(request);
-      if (cached) return cached;
+      if (cached) {
+        // WebGL textures (Three.js) require CORS headers.
+        // Never return an opaque (no-cors) response to a CORS request.
+        if (request.mode === 'cors' && cached.type === 'opaque') {
+          // Bypass cache and fetch fresh with CORS headers
+        } else {
+          return cached;
+        }
+      }
 
       /* 2. Cache miss — fetch from network */
       try {
         const networkResponse = await fetch(request);
 
-        /* Only cache successful, non-opaque responses */
-        if (networkResponse.ok && networkResponse.status === 200) {
-          /* Clone before consuming — a Response body can only be read once */
+        /* Only cache 200 OK or non-CORS opaque responses */
+        if (networkResponse.status === 200) {
+          cache.put(request, networkResponse.clone());
+        } else if (networkResponse.type === 'opaque' && request.mode !== 'cors') {
           cache.put(request, networkResponse.clone());
         }
 

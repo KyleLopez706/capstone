@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
+import { supabase } from "../supabaseClient";
 import lobbyCounterImg from "../assets/lobby counter.jpg";
 import lobbyWallCladdingImg from "../assets/lobby wall cladding.jpg";
 import lobbyWallImg from "../assets/lobby wall.jpg";
@@ -75,7 +77,39 @@ const GALLERY_ITEMS = [
 ];
 
 export default function Gallery() {
+  const [galleryProjects, setGalleryProjects] = useState(GALLERY_ITEMS);
   const [selectedItem, setSelectedItem] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchGallery = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("gallery_items")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (!error && data && data.length > 0) {
+          const formatted = data.map((d) => ({
+            id: d.id,
+            name: d.name,
+            description: d.description,
+            image: d.image_url,
+          }));
+          if (isMounted) {
+            setGalleryProjects(formatted);
+          }
+        }
+      } catch (err) {
+        console.warn("Using fallback gallery items:", err);
+      }
+    };
+
+    fetchGallery();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <div className="min-h-screen w-full" style={{ backgroundColor: "#F5F5F5" }}>
@@ -156,7 +190,7 @@ export default function Gallery() {
 
           {/* Masonry-style responsive grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 mt-12">
-            {GALLERY_ITEMS.map((item) => (
+            {galleryProjects.map((item) => (
               <div
                 key={item.id}
                 className="group relative rounded-2xl overflow-hidden cursor-pointer"
@@ -229,9 +263,9 @@ export default function Gallery() {
           <p className="text-base mb-8" style={{ color: "#9CA3AF" }}>
             Don't just imagine it. Use our interactive 3D configurator to visualize any stone on custom structures.
           </p>
-          <a
-            href="/configurator-3d"
-            className="inline-flex items-center justify-center px-8 py-4 rounded-full text-sm font-bold tracking-widest uppercase transition-all duration-300"
+          <Link
+            to="/configurator-3d"
+            className="inline-flex items-center justify-center px-8 py-4 rounded-full text-sm font-bold tracking-widest uppercase transition-all duration-300 cursor-pointer"
             style={{ backgroundColor: "#C5A059", color: "#1A1F24" }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = "translateY(-2px)";
@@ -243,7 +277,7 @@ export default function Gallery() {
             }}
           >
             Launch Configurator
-          </a>
+          </Link>
         </div>
       </section>
       {/* ════════════════════════════════════════

@@ -1,4 +1,7 @@
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import useConfiguratorStore from "../store/configuratorStore";
+import { supabase } from "../supabaseClient";
 import Navbar from "../components/Navbar";
 import kitchenImg from "../assets/kitchen.png";
 import blackMarquinaImg from "../assets/Black Marquina.jpg";
@@ -50,11 +53,171 @@ const STONE_DESIGNS = [
   },
 ];
 
+const STONE_DESCRIPTIONS = {
+  saltpepper:
+    "A timeless, understated classic. Finely dispersed silver and charcoal minerals create a balanced, architecturally versatile texture.",
+  rossoparino:
+    "An Italian-inspired masterpiece featuring deep terracotta reds intertwined with earthy beige and ivory crystalline veins.",
+  travertinegray:
+    "A sophisticated blend of cool ash grays and linear sedimentary bands, delivering a sleek modern architectural aesthetic.",
+  travertinebeige:
+    "Warm Mediterranean elegance featuring soft honey striations and delicate porous texturing for sunlit, inviting interiors.",
+  imperialred:
+    "A dramatic, ruby-toned granite imbued with crystalline depth that commands presence and exudes royal prestige.",
+  blackmarquina:
+    "A bold statement of contrast — rich obsidian stone laced with delicate white veins that evoke old-world Italian marble prestige.",
+  blackgalaxy:
+    "Midnight black canvas peppered with shimmering gold and bronze crystals. A cosmic luxury reserved for statement countertops.",
+  calacattaquartz:
+    "The pinnacle of refined elegance. Broad sweeping veins of champagne gold cascade across a pristine white canvas.",
+  whitequartz:
+    "Immaculate and luminous. This engineered quartz radiates pure brightness, making spaces feel open, airy, and effortlessly luxurious.",
+  verdefiorito:
+    "Rich emerald forest depths highlighted with pale jade crystalline waves for an enchanting natural centerpiece.",
+  tigerorange:
+    "Vibrant autumnal tones with dynamic swirling rust, amber, and cream bands that create a bold architectural focal point.",
+  bluepearl:
+    "An iridescent Norwegian granite gleaming with shimmering silver-blue feldspar crystals that capture ambient light.",
+  cremamarfil:
+    "A revered Spanish marble celebrated for its creamy beige warmth, subtle golden veining, and serene luminosity.",
+  emperadorbrown:
+    "Rich dark chocolate stone laced with an intricate spiderwebbing of caramel and crystal calcite veins.",
+  marigold:
+    "Luminous golden amber hues kissed with warm sunset striations that energize any contemporary countertop.",
+  babypink:
+    "A delicate pastel blush stone offering subtle elegance and soft warmth for tranquil, refined interior spaces.",
+};
+
 /* ─────────────────────────────────────────
    MAIN HOME COMPONENT
 ───────────────────────────────────────── */
 export default function Home() {
   const navigate = useNavigate();
+  const setAppMode = useConfiguratorStore((s) => s.setAppMode);
+  const [popularStones, setPopularStones] = useState(STONE_DESIGNS);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchPopularStones = async () => {
+      try {
+        let popularList = [];
+
+        // 1. Try public aggregate view `popular_stone_designs` (works for all visitors without leaking customer data)
+        const { data: viewData, error: viewError } = await supabase
+          .from('popular_stone_designs')
+          .select('*')
+          .limit(5);
+
+        if (!viewError && viewData && viewData.length > 0) {
+          popularList = viewData.map((v) => ({
+            name: v.name || v.design,
+            count: Number(v.count) || 0,
+          }));
+        } else {
+          // 2. Direct fallback: query quotation_requests (works when admin is logged in)
+          const { data: quotesData } = await supabase
+            .from('quotation_requests')
+            .select('design');
+
+          if (quotesData && quotesData.length > 0) {
+            const counts = {};
+            quotesData.forEach((q) => {
+              if (q.design && typeof q.design === 'string') {
+                const trimmed = q.design.trim();
+                if (trimmed) counts[trimmed] = (counts[trimmed] || 0) + 1;
+              }
+            });
+            popularList = Object.entries(counts)
+              .map(([name, count]) => ({ name, count }))
+              .sort((a, b) => b.count - a.count)
+              .slice(0, 5);
+          }
+        }
+
+        // 3. Fetch materials table to grab public high-res texture URLs
+        const { data: matsData } = await supabase
+          .from('materials')
+          .select('id, name, color_url, hex_code');
+
+        const materials = matsData || [];
+
+        if (popularList.length === 0) {
+          // Keep default 5 stones if no quotes exist yet
+          return;
+        }
+
+        const cleanStr = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+        const results = [];
+        const usedKeys = new Set();
+
+        // 4. Map top popular designs to stone cards
+        popularList.forEach((item) => {
+          if (results.length >= 5) return;
+          const key = cleanStr(item.name);
+          if (!key || usedKeys.has(key)) return;
+
+          // Match built-in asset if available (e.g. Salt & Pepper, Calacatta Quartz)
+          const builtIn = STONE_DESIGNS.find(
+            (s) => cleanStr(s.name) === key || cleanStr(s.id) === key
+          );
+
+          // Match material in DB for texture image URL
+          const dbMat = materials.find((m) => cleanStr(m.name) === key);
+
+          const richDescription =
+            STONE_DESCRIPTIONS[key] ||
+            builtIn?.description ||
+            "A celebrated architectural favorite chosen by our clients for bespoke countertops and custom luxury installations.";
+
+          if (builtIn) {
+            results.push({
+              ...builtIn,
+              description: richDescription,
+              orderCount: item.count,
+              image: builtIn.image || dbMat?.color_url,
+            });
+          } else {
+            results.push({
+              id: `popular-${key}`,
+              name: item.name,
+              description: richDescription,
+              image: dbMat?.color_url || blackMarquinaImg,
+              orderCount: item.count,
+            });
+          }
+          usedKeys.add(key);
+        });
+
+        // 5. Backfill with remaining STONE_DESIGNS to always maintain 5 complete cards
+        STONE_DESIGNS.forEach((stone) => {
+          const key = cleanStr(stone.name);
+          if (results.length < 5 && !usedKeys.has(key)) {
+            results.push(stone);
+            usedKeys.add(key);
+          }
+        });
+
+        if (isMounted && results.length > 0) {
+          setPopularStones(results);
+        }
+      } catch (err) {
+        console.warn("Failed to load dynamic popular stones:", err);
+      }
+    };
+
+    fetchPopularStones();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleLaunchShowroom = () => {
+    setAppMode("showroom");
+    navigate("/configurator-3d");
+  };
   return (
     <div className="min-h-screen w-full" style={{ backgroundColor: "#F5F5F5" }}>
       {/* Shared navbar — handles auth, nav links, and hamburger */}
@@ -113,7 +276,7 @@ export default function Home() {
             {/* Hero CTAs */}
             <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
               <button
-                onClick={() => navigate("/configurator-3d")}
+                onClick={handleLaunchShowroom}
                 className="inline-flex items-center justify-center px-8 py-4 rounded-full text-sm font-bold tracking-widest uppercase cursor-pointer transition-all duration-300 relative overflow-hidden group"
                 style={{ backgroundColor: "#C5A059", color: "#1A1F24", boxShadow: "0 8px 32px rgba(197,160,89,0.25)" }}
                 onMouseEnter={(e) => {
@@ -356,7 +519,7 @@ export default function Home() {
 
               {/* CTA Button */}
               <button
-                onClick={() => navigate("/configurator-3d")}
+                onClick={handleLaunchShowroom}
                 className="inline-flex items-center justify-center gap-3 w-full sm:w-auto px-8 py-4 rounded-xl text-sm font-semibold tracking-widest uppercase cursor-pointer transition-all duration-200"
                 style={{ backgroundColor: "#C5A059", color: "#ffffff" }}
                 onMouseEnter={(e) => {
@@ -408,7 +571,7 @@ export default function Home() {
 
           {/* Stone Cards — flex-wrap with justify-center so the last 2 of 5 center */}
           <div className="flex flex-wrap justify-center gap-6 lg:gap-8">
-            {STONE_DESIGNS.map((stone, index) => (
+            {popularStones.map((stone, index) => (
               <div
                 key={stone.id}
                 className="group rounded-2xl overflow-hidden flex flex-col w-full md:w-[calc(50%-12px)] lg:w-[calc(33.333%-22px)]"

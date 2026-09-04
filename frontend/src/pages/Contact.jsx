@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Navbar from "../components/Navbar";
 import { useToast, ToastNotification } from "../utils/toast";
 import kitchenImg from "../assets/kitchen.png";
@@ -7,7 +7,55 @@ export default function Contact() {
   const [form, setForm] = useState({ name: "", email: "", phone: "", subject: "", message: "" });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [contactInfo, setContactInfo] = useState({
+    phone: "0919 585 9959",
+    email: "rolkoh@yahoo.com.ph",
+    facebook: "facebook.com/sixsigmaphil",
+    viber: "0919 585 9959"
+  });
   const { toast, showToast, dismissToast } = useToast();
+
+  useEffect(() => {
+    const fetchContactInfo = async () => {
+      try {
+        // 1. Check app_settings first
+        const { data: settingsData, error: settingsError } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('key', 'contact_info')
+          .single();
+
+        if (!settingsError && settingsData?.value) {
+          setContactInfo(prev => ({
+            phone: settingsData.value.phone || prev.phone,
+            email: settingsData.value.email || prev.email,
+            facebook: settingsData.value.facebook || prev.facebook,
+            viber: settingsData.value.viber || prev.viber,
+          }));
+          return;
+        }
+
+        // 2. Fallback to labor_rates
+        const { data, error } = await supabase
+          .from('labor_rates')
+          .select('unit_type')
+          .eq('item_name', 'contact_info')
+          .single();
+        if (!error && data?.unit_type) {
+          const parsed = JSON.parse(data.unit_type);
+          setContactInfo(prev => ({
+            phone: parsed.phone || prev.phone,
+            email: parsed.email || prev.email,
+            facebook: parsed.facebook || prev.facebook,
+            viber: parsed.viber || prev.viber,
+          }));
+        }
+      } catch (err) {
+        console.warn("Using default contact information:", err);
+      }
+    };
+    fetchContactInfo();
+  }, []);
 
   const handleChange = (e) =>
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -130,10 +178,10 @@ export default function Contact() {
 
                 <div className="flex flex-col gap-8">
                   {[
-                    { label: "Phone", value: "0919 585 9959" },
-                    { label: "Email", value: "rolkoh@yahoo.com.ph" },
-                    { label: "Facebook Page", value: "facebook.com/sixsigmaphil" },
-                    { label: "Viber", value: "0919 585 9959" },
+                    { label: "Phone", value: contactInfo.phone },
+                    { label: "Email", value: contactInfo.email },
+                    { label: "Facebook Page", value: contactInfo.facebook },
+                    { label: "Viber", value: contactInfo.viber },
                   ].map((item) => (
                     <div key={item.label} className="flex flex-col">
                       <p

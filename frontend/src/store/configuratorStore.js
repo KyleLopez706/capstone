@@ -117,6 +117,14 @@ const useConfiguratorStore = create(
     {
       name:    'sixsigma-configurator',
       storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        selectedMaterial:        state.selectedMaterial,
+        selectedCabinetMaterial: state.selectedCabinetMaterial,
+        dimensions:              state.dimensions,
+        canvasTheme:             state.canvasTheme,
+        lightingRig:             state.lightingRig,
+        lowEndMode:              state.lowEndMode,
+      }),
     }
   )
 );
