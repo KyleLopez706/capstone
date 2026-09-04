@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import useConfiguratorStore from "../store/configuratorStore";
 import Navbar from "../components/Navbar";
 import kitchenImg from "../assets/kitchen.png";
 import blackMarquinaImg from "../assets/Black Marquina.jpg";
@@ -55,6 +56,12 @@ const STONE_DESIGNS = [
 ───────────────────────────────────────── */
 export default function Home() {
   const navigate = useNavigate();
+  const setAppMode = useConfiguratorStore((s) => s.setAppMode);
+
+  const handleLaunchShowroom = () => {
+    setAppMode("showroom");
+    navigate("/configurator-3d");
+  };
   return (
     <div className="min-h-screen w-full" style={{ backgroundColor: "#F5F5F5" }}>
       {/* Shared navbar — handles auth, nav links, and hamburger */}
@@ -113,7 +120,7 @@ export default function Home() {
             {/* Hero CTAs */}
             <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
               <button
-                onClick={() => navigate("/configurator-3d")}
+                onClick={handleLaunchShowroom}
                 className="inline-flex items-center justify-center px-8 py-4 rounded-full text-sm font-bold tracking-widest uppercase cursor-pointer transition-all duration-300 relative overflow-hidden group"
                 style={{ backgroundColor: "#C5A059", color: "#1A1F24", boxShadow: "0 8px 32px rgba(197,160,89,0.25)" }}
                 onMouseEnter={(e) => {
@@ -356,7 +363,7 @@ export default function Home() {
 
               {/* CTA Button */}
               <button
-                onClick={() => navigate("/configurator-3d")}
+                onClick={handleLaunchShowroom}
                 className="inline-flex items-center justify-center gap-3 w-full sm:w-auto px-8 py-4 rounded-xl text-sm font-semibold tracking-widest uppercase cursor-pointer transition-all duration-200"
                 style={{ backgroundColor: "#C5A059", color: "#ffffff" }}
                 onMouseEnter={(e) => {

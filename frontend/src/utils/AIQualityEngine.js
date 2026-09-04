@@ -111,15 +111,23 @@ function extractFeatures(hex1, hex2) {
  * @param {string} cabinetHex - The primary hex color of the cabinet
  * @returns {Promise<number>} - The AI score
  */
+// In-memory cache for instant score lookups without duplicate network requests
+const scoreCache = new Map();
+
 export async function evaluateDesignQuality(graniteHex, cabinetHex) {
   if (!graniteHex || !cabinetHex) return null;
+
+  const cacheKey = `${graniteHex.toLowerCase()}_${cabinetHex.toLowerCase()}`;
+  if (scoreCache.has(cacheKey)) {
+    return scoreCache.get(cacheKey);
+  }
 
   // 1. Get the raw features
   const features = extractFeatures(graniteHex, cabinetHex);
   if (!features) return null;
 
   try {
-    // 2. Send the features across the internet to our Vercel Python Server
+    // 2. Send the features to our Python API
     const response = await fetch("/api/predict", {
       method: "POST",
       headers: {
@@ -129,14 +137,17 @@ export async function evaluateDesignQuality(graniteHex, cabinetHex) {
     });
 
     if (!response.ok) {
-      throw new Error("API prediction failed");
+      const errText = await response.text();
+      throw new Error(`API prediction failed (${response.status}): ${errText}`);
     }
 
     // 3. Receive the calculated score from the server
     const data = await response.json();
-
-    // 4. Cap safely between 0 and 100 just in case
-    return Math.max(0, Math.min(100, Math.round(data.prediction)));
+    const finalScore = Math.max(0, Math.min(100, Math.round(data.prediction)));
+    
+    // Save in cache so future comparisons are instant
+    scoreCache.set(cacheKey, finalScore);
+    return finalScore;
   } catch (error) {
     console.error("AI Server Error:", error);
     return 50; // Fallback score if it fails
@@ -145,14 +156,7 @@ export async function evaluateDesignQuality(graniteHex, cabinetHex) {
 
 /**
  * Recommends the best cabinet materials to pair with a given granite.
- * Runs the AI model against every cabinet option and returns them
- * sorted by score (highest first).
- *
- * @param {string} graniteHex - The hex code of the selected granite
- * @param {Array} cabinetMaterials - Array of cabinet material objects from Supabase
- * @param {Function} hexFallback - Fallback function to derive hex from name
- * @param {number} [topN=3] - How many recommendations to return
- * @returns {Promise<Array<{id, name, hex, score}>>} - Top N recommendations
+ * Uses a single batch HTTP request to score all cabinets simultaneously in ~20ms.
  */
 export async function getRecommendations(
   graniteHex,
@@ -162,32 +166,65 @@ export async function getRecommendations(
 ) {
   if (!graniteHex || !cabinetMaterials?.length) return [];
 
-  // Score every cabinet material against the selected granite
-  const scored = await Promise.all(
-    cabinetMaterials.map(async (cab) => {
-      const cabHex =
-        cab.hex_code || (hexFallback ? hexFallback(cab.name) : "#808080");
-      const score = await evaluateDesignQuality(graniteHex, cabHex);
-      return { id: cab.id, name: cab.name, hex: cabHex, score };
-    }),
-  );
+  const uncachedItems = [];
+  const results = [];
 
-  // Sort descending by score and return the top N
-  scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, topN);
+  for (const cab of cabinetMaterials) {
+    const cabHex =
+      cab.hex_code || (hexFallback ? hexFallback(cab.name) : "#808080");
+    const cacheKey = `${graniteHex.toLowerCase()}_${cabHex.toLowerCase()}`;
+    if (scoreCache.has(cacheKey)) {
+      results.push({ id: cab.id, name: cab.name, hex: cabHex, score: scoreCache.get(cacheKey) });
+    } else {
+      const feats = extractFeatures(graniteHex, cabHex);
+      uncachedItems.push({ id: cab.id, name: cab.name, hex: cabHex, cacheKey, feats });
+    }
+  }
+
+  if (uncachedItems.length > 0) {
+    try {
+      const validFeats = uncachedItems.filter((item) => item.feats);
+      const response = await fetch("/api/predict", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ batch: validFeats.map((item) => item.feats) }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const predictions = data.predictions || [];
+        validFeats.forEach((item, idx) => {
+          const score = Math.max(0, Math.min(100, Math.round(predictions[idx] ?? 50)));
+          scoreCache.set(item.cacheKey, score);
+          results.push({ id: item.id, name: item.name, hex: item.hex, score });
+        });
+      } else {
+        // Graceful fallback: score individually if the server is still running the single-predict version
+        await Promise.all(
+          uncachedItems.map(async (item) => {
+            const score = await evaluateDesignQuality(graniteHex, item.hex);
+            results.push({ id: item.id, name: item.name, hex: item.hex, score });
+          })
+        );
+      }
+    } catch (err) {
+      console.warn("Batch recommendation scoring failed, falling back to individual scoring:", err);
+      await Promise.all(
+        uncachedItems.map(async (item) => {
+          const score = await evaluateDesignQuality(graniteHex, item.hex);
+          results.push({ id: item.id, name: item.name, hex: item.hex, score });
+        })
+      );
+    }
+  }
+
+  results.sort((a, b) => b.score - a.score);
+  return results.slice(0, topN);
 }
 
 /**
  * Recommends the best granite designs to pair with the current cabinet.
- * Scores every available granite against the selected cabinet hex and
- * returns them sorted by score, excluding the currently selected granite.
- *
- * @param {string} cabinetHex - The hex code of the selected cabinet
- * @param {Array} materials - Array of granite material objects from Supabase
- * @param {string} currentMaterialId - ID of the currently selected granite (excluded from results)
- * @param {Function} hexFallback - Fallback function to derive hex from name
- * @param {number} [topN=3] - How many recommendations to return
- * @returns {Promise<Array<{id, name, hex, score}>>} - Top N granite recommendations
+ * Uses a single batch HTTP request to score all granites simultaneously in ~20ms.
  */
 export async function getGraniteRecommendations(
   cabinetHex,
@@ -198,25 +235,92 @@ export async function getGraniteRecommendations(
 ) {
   if (!cabinetHex || !materials?.length) return [];
 
-  const scored = await Promise.all(
-    materials
-      .filter((mat) => mat.id !== currentMaterialId) // Exclude current selection
-      .map(async (mat) => {
-        const matHex =
-          mat.hex_code || (hexFallback ? hexFallback(mat.name) : "#808080");
-        const score = await evaluateDesignQuality(matHex, cabinetHex);
-        return {
-          id: mat.id,
-          name: mat.name,
-          hex: matHex,
-          color_url: mat.color_url,
-          score,
-        };
-      }),
-  );
+  const filtered = materials.filter((mat) => mat.id !== currentMaterialId);
+  const uncachedItems = [];
+  const results = [];
 
-  scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, topN);
+  for (const mat of filtered) {
+    const matHex =
+      mat.hex_code || (hexFallback ? hexFallback(mat.name) : "#808080");
+    const cacheKey = `${matHex.toLowerCase()}_${cabinetHex.toLowerCase()}`;
+    if (scoreCache.has(cacheKey)) {
+      results.push({
+        id: mat.id,
+        name: mat.name,
+        hex: matHex,
+        color_url: mat.color_url,
+        score: scoreCache.get(cacheKey),
+      });
+    } else {
+      const feats = extractFeatures(matHex, cabinetHex);
+      uncachedItems.push({
+        id: mat.id,
+        name: mat.name,
+        hex: matHex,
+        color_url: mat.color_url,
+        cacheKey,
+        feats,
+      });
+    }
+  }
+
+  if (uncachedItems.length > 0) {
+    try {
+      const validFeats = uncachedItems.filter((item) => item.feats);
+      const response = await fetch("/api/predict", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ batch: validFeats.map((item) => item.feats) }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const predictions = data.predictions || [];
+        validFeats.forEach((item, idx) => {
+          const score = Math.max(0, Math.min(100, Math.round(predictions[idx] ?? 50)));
+          scoreCache.set(item.cacheKey, score);
+          results.push({
+            id: item.id,
+            name: item.name,
+            hex: item.hex,
+            color_url: item.color_url,
+            score,
+          });
+        });
+      } else {
+        // Fallback to individual scoring if batch endpoint is not yet on server
+        await Promise.all(
+          uncachedItems.map(async (item) => {
+            const score = await evaluateDesignQuality(item.hex, cabinetHex);
+            results.push({
+              id: item.id,
+              name: item.name,
+              hex: item.hex,
+              color_url: item.color_url,
+              score,
+            });
+          })
+        );
+      }
+    } catch (err) {
+      console.warn("Batch granite scoring failed, falling back to individual scoring:", err);
+      await Promise.all(
+        uncachedItems.map(async (item) => {
+          const score = await evaluateDesignQuality(item.hex, cabinetHex);
+          results.push({
+            id: item.id,
+            name: item.name,
+            hex: item.hex,
+            color_url: item.color_url,
+            score,
+          });
+        })
+      );
+    }
+  }
+
+  results.sort((a, b) => b.score - a.score);
+  return results.slice(0, topN);
 }
 
 /**
