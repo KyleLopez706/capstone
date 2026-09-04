@@ -61,8 +61,8 @@ self.addEventListener('fetch', (event) => {
       try {
         const networkResponse = await fetch(request);
 
-        /* Only cache successful, non-opaque responses */
-        if (networkResponse.ok && networkResponse.status === 200) {
+        /* Cache 200 OK and opaque responses (standard <img> tag requests) */
+        if (networkResponse.status === 200 || networkResponse.type === 'opaque') {
           /* Clone before consuming — a Response body can only be read once */
           cache.put(request, networkResponse.clone());
         }
