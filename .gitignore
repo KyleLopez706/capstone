@@ -1,8 +1,42 @@
+# Dependencies
 node_modules/
-AGENTS.md
+
+# Production builds
+dist/
+
+# Environment variables
 .env
 .env.*
-dist/
+
+# Local Vercel cache
 .vercel/
+
+# Python cache & virtual environments
 __pycache__/
 *.pyc
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+
+# Internal maintenance scripts (local utility only)
+scripts/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE & Editor settings
+.vscode/
+.idea/
+
+# Log files
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Internal Agent instructions
+AGENTS.md
