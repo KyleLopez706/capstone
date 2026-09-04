@@ -3,3 +3,5 @@ AGENTS.md
 .env
 .env.*
 dist/
+.vercel/
+__pycache__/
