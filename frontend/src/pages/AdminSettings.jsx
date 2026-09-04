@@ -23,6 +23,12 @@ const AdminSettings = () => {
   );
   const [termsId, setTermsId] = useState(null);
   const [isSavingTerms, setIsSavingTerms] = useState(false);
+  const [contactPhone, setContactPhone] = useState("0919 585 9959");
+  const [contactEmail, setContactEmail] = useState("rolkoh@yahoo.com.ph");
+  const [contactFacebook, setContactFacebook] = useState("facebook.com/sixsigmaphil");
+  const [contactViber, setContactViber] = useState("0919 585 9959");
+  const [contactInfoId, setContactInfoId] = useState(null);
+  const [isSavingContact, setIsSavingContact] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingRates, setIsSavingRates] = useState(false);
   const [isSavingVat, setIsSavingVat] = useState(false);
@@ -44,6 +50,11 @@ const AdminSettings = () => {
       let vId = null;
       let termsText = "PAYMENT TERMS:\n- 60% of Total Contract Amount as down payment\n- 30% upon delivery\n- 10% balance upon completion of work\n\nOTHER TERMS:\n- Price quoted includes VAT\n- Warranty: 1 year on workmanship, manufacturer warranty on materials";
       let tId = null;
+      let contactPhoneData = "0919 585 9959";
+      let contactEmailData = "rolkoh@yahoo.com.ph";
+      let contactFacebookData = "facebook.com/sixsigmaphil";
+      let contactViberData = "0919 585 9959";
+      let cId = null;
       
       data.forEach(item => {
         if (item.item_name === 'vat_percentage') {
@@ -53,6 +64,17 @@ const AdminSettings = () => {
           // terms_and_conditions is stored in unit_type as a text blob
           termsText = item.unit_type || termsText;
           tId = item.id;
+        } else if (item.item_name === 'contact_info') {
+          try {
+            const parsed = JSON.parse(item.unit_type);
+            if (parsed.phone) contactPhoneData = parsed.phone;
+            if (parsed.email) contactEmailData = parsed.email;
+            if (parsed.facebook) contactFacebookData = parsed.facebook;
+            if (parsed.viber) contactViberData = parsed.viber;
+          } catch (e) {
+            console.warn("Failed to parse contact_info:", e);
+          }
+          cId = item.id;
         } else if (RATE_MAPPING[item.item_name]) {
           ratesData[item.item_name] = item.rate_amount;
           idsData[item.item_name] = item.id;
@@ -77,6 +99,11 @@ const AdminSettings = () => {
       setVatId(vId);
       setTermsAndConditions(termsText);
       setTermsId(tId);
+      setContactPhone(contactPhoneData);
+      setContactEmail(contactEmailData);
+      setContactFacebook(contactFacebookData);
+      setContactViber(contactViberData);
+      setContactInfoId(cId);
     } catch (error) {
       console.error('Error fetching settings:', error);
       showToast('error', 'Failed to load settings');
@@ -168,6 +195,33 @@ const AdminSettings = () => {
       showToast(error.message || 'Failed to save terms', 'error');
     } finally {
       setIsSavingTerms(false);
+    }
+  };
+
+  // Save Contact Information — stored in labor_rates as JSON in unit_type
+  const saveContactInfo = async () => {
+    setIsSavingContact(true);
+    try {
+      const payload = {
+        item_name: 'contact_info',
+        rate_amount: 0,
+        unit_type: JSON.stringify({
+          phone: contactPhone.trim(),
+          email: contactEmail.trim(),
+          facebook: contactFacebook.trim(),
+          viber: contactViber.trim()
+        })
+      };
+      if (contactInfoId) payload.id = contactInfoId;
+      const { error } = await supabase.from('labor_rates').upsert([payload]);
+      if (error) throw error;
+      showToast('Contact information updated successfully', 'success');
+      fetchSettings();
+    } catch (error) {
+      console.error('Error saving contact info:', error);
+      showToast(error.message || 'Failed to save contact info', 'error');
+    } finally {
+      setIsSavingContact(false);
     }
   };
 
@@ -324,6 +378,68 @@ const AdminSettings = () => {
                 className="px-6 py-2.5 bg-[#C5A059] text-white text-sm font-medium rounded-lg hover:brightness-110 transition-all disabled:opacity-50 min-w-[150px]"
               >
                 {isSavingTerms ? 'Saving...' : 'Save Terms'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Company Contact Information Card */}
+        <div className="bg-[#FFFFFF] border border-[#E2E8F0] rounded-2xl shadow-sm mb-8 overflow-hidden">
+          <div className="px-6 py-5 border-b border-[#E2E8F0] bg-[#FFFFFF]">
+            <h2 className="text-lg font-semibold text-[#232B32]">Company Contact Information</h2>
+            <p className="text-sm text-[#6B7280]">Update the contact details displayed publicly on the Contact page.</p>
+          </div>
+          <div className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-[#232B32] mb-1.5">Phone Number</label>
+                <input
+                  type="text"
+                  value={contactPhone}
+                  onChange={(e) => setContactPhone(e.target.value)}
+                  placeholder="e.g. 0919 585 9959"
+                  className="w-full px-4 py-2.5 bg-[#F9F9FB] border border-[#E2E8F0] rounded-lg text-sm text-[#232B32] focus:outline-none focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#232B32] mb-1.5">Email Address</label>
+                <input
+                  type="email"
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                  placeholder="e.g. rolkoh@yahoo.com.ph"
+                  className="w-full px-4 py-2.5 bg-[#F9F9FB] border border-[#E2E8F0] rounded-lg text-sm text-[#232B32] focus:outline-none focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#232B32] mb-1.5">Facebook Page</label>
+                <input
+                  type="text"
+                  value={contactFacebook}
+                  onChange={(e) => setContactFacebook(e.target.value)}
+                  placeholder="e.g. facebook.com/sixsigmaphil"
+                  className="w-full px-4 py-2.5 bg-[#F9F9FB] border border-[#E2E8F0] rounded-lg text-sm text-[#232B32] focus:outline-none focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#232B32] mb-1.5">Viber Number</label>
+                <input
+                  type="text"
+                  value={contactViber}
+                  onChange={(e) => setContactViber(e.target.value)}
+                  placeholder="e.g. 0919 585 9959"
+                  className="w-full px-4 py-2.5 bg-[#F9F9FB] border border-[#E2E8F0] rounded-lg text-sm text-[#232B32] focus:outline-none focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] transition-colors"
+                />
+              </div>
+            </div>
+
+            <div className="mt-8 pt-6 border-t border-[#E2E8F0] flex justify-end">
+              <button
+                onClick={saveContactInfo}
+                disabled={isSavingContact}
+                className="px-6 py-2.5 bg-[#C5A059] text-white text-sm font-medium rounded-lg hover:brightness-110 transition-all disabled:opacity-50 min-w-[170px]"
+              >
+                {isSavingContact ? 'Saving...' : 'Save Contact Info'}
               </button>
             </div>
           </div>

@@ -1,5 +1,7 @@
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useConfiguratorStore from "../store/configuratorStore";
+import { supabase } from "../supabaseClient";
 import Navbar from "../components/Navbar";
 import kitchenImg from "../assets/kitchen.png";
 import blackMarquinaImg from "../assets/Black Marquina.jpg";
@@ -57,6 +59,102 @@ const STONE_DESIGNS = [
 export default function Home() {
   const navigate = useNavigate();
   const setAppMode = useConfiguratorStore((s) => s.setAppMode);
+  const [popularStones, setPopularStones] = useState(STONE_DESIGNS);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchPopularStones = async () => {
+      try {
+        const [quotesRes, matsRes] = await Promise.all([
+          supabase
+            .from('quotation_requests')
+            .select('design'),
+          supabase
+            .from('materials')
+            .select('id, name, color_url, hex_code')
+        ]);
+
+        const quotes = quotesRes.data || [];
+        const materials = matsRes.data || [];
+
+        // Aggregate design frequencies from quotation requests (mirroring admin analytics)
+        const designCounts = {};
+        quotes.forEach((q) => {
+          if (q.design && typeof q.design === 'string') {
+            const trimmed = q.design.trim();
+            if (trimmed) {
+              designCounts[trimmed] = (designCounts[trimmed] || 0) + 1;
+            }
+          }
+        });
+
+        const sortedPopular = Object.entries(designCounts)
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count);
+
+        if (sortedPopular.length === 0) {
+          // No quotations yet, retain default 5 stones
+          return;
+        }
+
+        const results = [];
+        const usedNames = new Set();
+
+        // 1. Prioritize top customer-selected stones
+        sortedPopular.forEach((item) => {
+          if (results.length >= 5) return;
+          const lower = item.name.toLowerCase();
+
+          // Check if stone matches existing built-in high-res assets
+          const matchedBuiltIn = STONE_DESIGNS.find(
+            (s) => s.name.toLowerCase() === lower || s.id.toLowerCase() === lower
+          );
+
+          if (matchedBuiltIn) {
+            results.push({
+              ...matchedBuiltIn,
+              orderCount: item.count
+            });
+            usedNames.add(matchedBuiltIn.name.toLowerCase());
+          } else {
+            // Check materials table from database
+            const matchedMat = materials.find(
+              (m) => m.name.toLowerCase() === lower
+            );
+            results.push({
+              id: `custom-${item.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+              name: item.name,
+              description: `A celebrated architectural surface chosen by our clients for bespoke countertops and custom luxury installations.`,
+              image: matchedMat?.color_url || blackMarquinaImg,
+              orderCount: item.count
+            });
+            usedNames.add(lower);
+          }
+        });
+
+        // 2. Backfill with remaining STONE_DESIGNS up to exactly 5 items
+        STONE_DESIGNS.forEach((stone) => {
+          if (results.length < 5 && !usedNames.has(stone.name.toLowerCase())) {
+            results.push(stone);
+            usedNames.add(stone.name.toLowerCase());
+          }
+        });
+
+        if (isMounted && results.length > 0) {
+          setPopularStones(results);
+        }
+      } catch (err) {
+        console.warn("Failed to load dynamic popular stones:", err);
+      }
+    };
+
+    fetchPopularStones();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleLaunchShowroom = () => {
     setAppMode("showroom");
@@ -415,7 +513,7 @@ export default function Home() {
 
           {/* Stone Cards — flex-wrap with justify-center so the last 2 of 5 center */}
           <div className="flex flex-wrap justify-center gap-6 lg:gap-8">
-            {STONE_DESIGNS.map((stone, index) => (
+            {popularStones.map((stone, index) => (
               <div
                 key={stone.id}
                 className="group rounded-2xl overflow-hidden flex flex-col w-full md:w-[calc(50%-12px)] lg:w-[calc(33.333%-22px)]"

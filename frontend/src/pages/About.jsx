@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import aboutImage from "../assets/about-history.jpg";
 
@@ -117,9 +118,9 @@ export default function About() {
           <p className="text-base mb-8" style={{ color: "#9CA3AF" }}>
             Let our experts guide you through material selection and custom fabrication.
           </p>
-          <a
-            href="/services"
-            className="inline-flex items-center justify-center px-8 py-4 rounded-full text-sm font-bold tracking-widest uppercase transition-all duration-300"
+          <Link
+            to="/services"
+            className="inline-flex items-center justify-center px-8 py-4 rounded-full text-sm font-bold tracking-widest uppercase transition-all duration-300 cursor-pointer"
             style={{ backgroundColor: "#C5A059", color: "#1A1F24" }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = "translateY(-2px)";
@@ -131,7 +132,7 @@ export default function About() {
             }}
           >
             See Our Services
-          </a>
+          </Link>
         </div>
       </section>
     </div>

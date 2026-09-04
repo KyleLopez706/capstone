@@ -14,6 +14,7 @@ const AdminSettings = lazy(() => import("./pages/AdminSettings"));
 const AdminMaterials = lazy(() => import("./pages/AdminMaterials"));
 const AdminModels = lazy(() => import("./pages/AdminModels"));
 const AdminCabinetColors = lazy(() => import("./pages/AdminCabinetColors"));
+const AdminGallery = lazy(() => import("./pages/AdminGallery"));
 const AdminMessages = lazy(() => import("./pages/AdminMessages"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const About = lazy(() => import("./pages/About"));
@@ -238,6 +239,7 @@ function App() {
           <Route path="/admin/materials" element={<AdminMaterials />} />
           <Route path="/admin/models" element={<AdminModels />} />
           <Route path="/admin/cabinet-colors" element={<AdminCabinetColors />} />
+          <Route path="/admin/gallery" element={<AdminGallery />} />
         </Route>
         <Route path="/admin/quotation/:id" element={<CreateQuotation />} />
       </Routes>
