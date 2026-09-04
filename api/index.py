@@ -1,4 +1,6 @@
 import os
+import warnings
+warnings.filterwarnings("ignore")
 import joblib
 from fastapi import FastAPI
 from pydantic import BaseModel
