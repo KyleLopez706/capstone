@@ -66,78 +66,96 @@ export default function Home() {
 
     const fetchPopularStones = async () => {
       try {
-        const [quotesRes, matsRes] = await Promise.all([
-          supabase
+        let popularList = [];
+
+        // 1. Try public aggregate view `popular_stone_designs` (works for all visitors without leaking customer data)
+        const { data: viewData, error: viewError } = await supabase
+          .from('popular_stone_designs')
+          .select('name, count, design')
+          .limit(5);
+
+        if (!viewError && viewData && viewData.length > 0) {
+          popularList = viewData.map((v) => ({
+            name: v.name || v.design,
+            count: Number(v.count) || 0,
+          }));
+        } else {
+          // 2. Direct fallback: query quotation_requests (works when admin is logged in)
+          const { data: quotesData } = await supabase
             .from('quotation_requests')
-            .select('design'),
-          supabase
-            .from('materials')
-            .select('id, name, color_url, hex_code')
-        ]);
+            .select('design');
 
-        const quotes = quotesRes.data || [];
-        const materials = matsRes.data || [];
-
-        // Aggregate design frequencies from quotation requests (mirroring admin analytics)
-        const designCounts = {};
-        quotes.forEach((q) => {
-          if (q.design && typeof q.design === 'string') {
-            const trimmed = q.design.trim();
-            if (trimmed) {
-              designCounts[trimmed] = (designCounts[trimmed] || 0) + 1;
-            }
+          if (quotesData && quotesData.length > 0) {
+            const counts = {};
+            quotesData.forEach((q) => {
+              if (q.design && typeof q.design === 'string') {
+                const trimmed = q.design.trim();
+                if (trimmed) counts[trimmed] = (counts[trimmed] || 0) + 1;
+              }
+            });
+            popularList = Object.entries(counts)
+              .map(([name, count]) => ({ name, count }))
+              .sort((a, b) => b.count - a.count)
+              .slice(0, 5);
           }
-        });
+        }
 
-        const sortedPopular = Object.entries(designCounts)
-          .map(([name, count]) => ({ name, count }))
-          .sort((a, b) => b.count - a.count);
+        // 3. Fetch materials table to grab public high-res texture URLs
+        const { data: matsData } = await supabase
+          .from('materials')
+          .select('id, name, color_url, hex_code');
 
-        if (sortedPopular.length === 0) {
-          // No quotations yet, retain default 5 stones
+        const materials = matsData || [];
+
+        if (popularList.length === 0) {
+          // Keep default 5 stones if no quotes exist yet
           return;
         }
 
+        const cleanStr = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
         const results = [];
-        const usedNames = new Set();
+        const usedKeys = new Set();
 
-        // 1. Prioritize top customer-selected stones
-        sortedPopular.forEach((item) => {
+        // 4. Map top popular designs to stone cards
+        popularList.forEach((item) => {
           if (results.length >= 5) return;
-          const lower = item.name.toLowerCase();
+          const key = cleanStr(item.name);
+          if (!key || usedKeys.has(key)) return;
 
-          // Check if stone matches existing built-in high-res assets
-          const matchedBuiltIn = STONE_DESIGNS.find(
-            (s) => s.name.toLowerCase() === lower || s.id.toLowerCase() === lower
+          // Match built-in asset if available (e.g. Salt & Pepper, Calacatta Quartz)
+          const builtIn = STONE_DESIGNS.find(
+            (s) => cleanStr(s.name) === key || cleanStr(s.id) === key
           );
 
-          if (matchedBuiltIn) {
+          // Match material in DB for texture image URL
+          const dbMat = materials.find((m) => cleanStr(m.name) === key);
+
+          if (builtIn) {
             results.push({
-              ...matchedBuiltIn,
-              orderCount: item.count
+              ...builtIn,
+              orderCount: item.count,
+              image: builtIn.image || dbMat?.color_url,
             });
-            usedNames.add(matchedBuiltIn.name.toLowerCase());
           } else {
-            // Check materials table from database
-            const matchedMat = materials.find(
-              (m) => m.name.toLowerCase() === lower
-            );
             results.push({
-              id: `custom-${item.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+              id: `popular-${key}`,
               name: item.name,
-              description: `A celebrated architectural surface chosen by our clients for bespoke countertops and custom luxury installations.`,
-              image: matchedMat?.color_url || blackMarquinaImg,
-              orderCount: item.count
+              description:
+                "A celebrated architectural favorite chosen by our clients for bespoke countertops and custom luxury installations.",
+              image: dbMat?.color_url || blackMarquinaImg,
+              orderCount: item.count,
             });
-            usedNames.add(lower);
           }
+          usedKeys.add(key);
         });
 
-        // 2. Backfill with remaining STONE_DESIGNS up to exactly 5 items
+        // 5. Backfill with remaining STONE_DESIGNS to always maintain 5 complete cards
         STONE_DESIGNS.forEach((stone) => {
-          if (results.length < 5 && !usedNames.has(stone.name.toLowerCase())) {
+          const key = cleanStr(stone.name);
+          if (results.length < 5 && !usedKeys.has(key)) {
             results.push(stone);
-            usedNames.add(stone.name.toLowerCase());
+            usedKeys.add(key);
           }
         });
 

@@ -125,9 +125,26 @@ export default function CreateQuotation() {
 
         // Read dynamic VAT from DB, fallback to 12%
         const dbVat = getRateAmount('vat_percentage');
-        // Read terms from DB (stored in unit_type field of the terms row)
-        const termsRow = rates.find(r => r.item_name === 'terms_and_conditions');
-        const dbTerms = termsRow?.unit_type || null;
+        
+        // Read terms from app_settings first, then fallback to labor_rates
+        let dbTerms = null;
+        try {
+          const { data: termsSetting } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('key', 'terms_and_conditions')
+            .single();
+          if (termsSetting?.value?.text) {
+            dbTerms = termsSetting.value.text;
+          }
+        } catch (e) {
+          console.warn('Could not read terms from app_settings:', e);
+        }
+
+        if (!dbTerms) {
+          const termsRow = rates.find(r => r.item_name === 'terms_and_conditions');
+          dbTerms = termsRow?.unit_type || null;
+        }
 
         if (dbVat > 0) {
           setVatRate(dbVat);

@@ -82,16 +82,25 @@ const AdminSettings = () => {
         }
       });
       
-      // Merge with default mapped values in case some aren't in DB yet
-      Object.keys(RATE_MAPPING).forEach(key => {
-        if (ratesData[key] === undefined) {
-          ratesData[key] = 0;
+      // Load custom settings from app_settings if available
+      try {
+        const { data: settingsData } = await supabase.from('app_settings').select('*');
+        if (settingsData && settingsData.length > 0) {
+          settingsData.forEach(item => {
+            if (item.key === 'contact_info' && item.value) {
+              if (item.value.phone) contactPhoneData = item.value.phone;
+              if (item.value.email) contactEmailData = item.value.email;
+              if (item.value.facebook) contactFacebookData = item.value.facebook;
+              if (item.value.viber) contactViberData = item.value.viber;
+            } else if (item.key === 'terms_and_conditions' && item.value?.text) {
+              termsText = item.value.text;
+            }
+          });
         }
-        if (!unitsData[key]) {
-          unitsData[key] = 'flat'; // safe default
-        }
-      });
-      
+      } catch (e) {
+        console.warn('app_settings query error (table might need creation):', e);
+      }
+
       setRates(ratesData);
       setRateIds(idsData);
       setUnitTypes(unitsData);
@@ -177,17 +186,16 @@ const AdminSettings = () => {
     }
   };
 
-  // Save Terms & Conditions — stored in labor_rates using unit_type as text blob
+  // Save Terms & Conditions — stored in app_settings table
   const saveTerms = async () => {
     setIsSavingTerms(true);
     try {
       const payload = {
-        item_name: 'terms_and_conditions',
-        rate_amount: 0,
-        unit_type: termsAndConditions  // reuse unit_type column to store the text
+        key: 'terms_and_conditions',
+        value: { text: termsAndConditions },
+        updated_at: new Date().toISOString()
       };
-      if (termsId) payload.id = termsId;
-      const { error } = await supabase.from('labor_rates').upsert([payload]);
+      const { error } = await supabase.from('app_settings').upsert(payload, { onConflict: 'key' });
       if (error) throw error;
       showToast('Terms & Conditions updated successfully', 'success');
       fetchSettings();
@@ -198,22 +206,21 @@ const AdminSettings = () => {
     }
   };
 
-  // Save Contact Information — stored in labor_rates as JSON in unit_type
+  // Save Contact Information — stored in app_settings table
   const saveContactInfo = async () => {
     setIsSavingContact(true);
     try {
       const payload = {
-        item_name: 'contact_info',
-        rate_amount: 0,
-        unit_type: JSON.stringify({
+        key: 'contact_info',
+        value: {
           phone: contactPhone.trim(),
           email: contactEmail.trim(),
           facebook: contactFacebook.trim(),
           viber: contactViber.trim()
-        })
+        },
+        updated_at: new Date().toISOString()
       };
-      if (contactInfoId) payload.id = contactInfoId;
-      const { error } = await supabase.from('labor_rates').upsert([payload]);
+      const { error } = await supabase.from('app_settings').upsert(payload, { onConflict: 'key' });
       if (error) throw error;
       showToast('Contact information updated successfully', 'success');
       fetchSettings();

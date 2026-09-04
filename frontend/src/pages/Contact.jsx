@@ -18,6 +18,24 @@ export default function Contact() {
   useEffect(() => {
     const fetchContactInfo = async () => {
       try {
+        // 1. Check app_settings first
+        const { data: settingsData, error: settingsError } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('key', 'contact_info')
+          .single();
+
+        if (!settingsError && settingsData?.value) {
+          setContactInfo(prev => ({
+            phone: settingsData.value.phone || prev.phone,
+            email: settingsData.value.email || prev.email,
+            facebook: settingsData.value.facebook || prev.facebook,
+            viber: settingsData.value.viber || prev.viber,
+          }));
+          return;
+        }
+
+        // 2. Fallback to labor_rates
         const { data, error } = await supabase
           .from('labor_rates')
           .select('unit_type')
