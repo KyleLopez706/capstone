@@ -53,6 +53,41 @@ const STONE_DESIGNS = [
   },
 ];
 
+const STONE_DESCRIPTIONS = {
+  saltpepper:
+    "A timeless, understated classic. Finely dispersed silver and charcoal minerals create a balanced, architecturally versatile texture.",
+  rossoparino:
+    "An Italian-inspired masterpiece featuring deep terracotta reds intertwined with earthy beige and ivory crystalline veins.",
+  travertinegray:
+    "A sophisticated blend of cool ash grays and linear sedimentary bands, delivering a sleek modern architectural aesthetic.",
+  travertinebeige:
+    "Warm Mediterranean elegance featuring soft honey striations and delicate porous texturing for sunlit, inviting interiors.",
+  imperialred:
+    "A dramatic, ruby-toned granite imbued with crystalline depth that commands presence and exudes royal prestige.",
+  blackmarquina:
+    "A bold statement of contrast — rich obsidian stone laced with delicate white veins that evoke old-world Italian marble prestige.",
+  blackgalaxy:
+    "Midnight black canvas peppered with shimmering gold and bronze crystals. A cosmic luxury reserved for statement countertops.",
+  calacattaquartz:
+    "The pinnacle of refined elegance. Broad sweeping veins of champagne gold cascade across a pristine white canvas.",
+  whitequartz:
+    "Immaculate and luminous. This engineered quartz radiates pure brightness, making spaces feel open, airy, and effortlessly luxurious.",
+  verdefiorito:
+    "Rich emerald forest depths highlighted with pale jade crystalline waves for an enchanting natural centerpiece.",
+  tigerorange:
+    "Vibrant autumnal tones with dynamic swirling rust, amber, and cream bands that create a bold architectural focal point.",
+  bluepearl:
+    "An iridescent Norwegian granite gleaming with shimmering silver-blue feldspar crystals that capture ambient light.",
+  cremamarfil:
+    "A revered Spanish marble celebrated for its creamy beige warmth, subtle golden veining, and serene luminosity.",
+  emperadorbrown:
+    "Rich dark chocolate stone laced with an intricate spiderwebbing of caramel and crystal calcite veins.",
+  marigold:
+    "Luminous golden amber hues kissed with warm sunset striations that energize any contemporary countertop.",
+  babypink:
+    "A delicate pastel blush stone offering subtle elegance and soft warmth for tranquil, refined interior spaces.",
+};
+
 /* ─────────────────────────────────────────
    MAIN HOME COMPONENT
 ───────────────────────────────────────── */
@@ -71,7 +106,7 @@ export default function Home() {
         // 1. Try public aggregate view `popular_stone_designs` (works for all visitors without leaking customer data)
         const { data: viewData, error: viewError } = await supabase
           .from('popular_stone_designs')
-          .select('name, count, design')
+          .select('*')
           .limit(5);
 
         if (!viewError && viewData && viewData.length > 0) {
@@ -131,9 +166,15 @@ export default function Home() {
           // Match material in DB for texture image URL
           const dbMat = materials.find((m) => cleanStr(m.name) === key);
 
+          const richDescription =
+            STONE_DESCRIPTIONS[key] ||
+            builtIn?.description ||
+            "A celebrated architectural favorite chosen by our clients for bespoke countertops and custom luxury installations.";
+
           if (builtIn) {
             results.push({
               ...builtIn,
+              description: richDescription,
               orderCount: item.count,
               image: builtIn.image || dbMat?.color_url,
             });
@@ -141,8 +182,7 @@ export default function Home() {
             results.push({
               id: `popular-${key}`,
               name: item.name,
-              description:
-                "A celebrated architectural favorite chosen by our clients for bespoke countertops and custom luxury installations.",
+              description: richDescription,
               image: dbMat?.color_url || blackMarquinaImg,
               orderCount: item.count,
             });
