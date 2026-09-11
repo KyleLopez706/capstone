@@ -75,6 +75,7 @@ export default function UserLogin() {
       // RLS permission denial or profile trigger delay
       console.error("Role check failed:", error.message);
       if (returnTo) {
+        localStorage.removeItem("sixsigma_return_to");
         sessionStorage.removeItem("returnTo");
         navigate(returnTo);
       } else {
@@ -87,6 +88,7 @@ export default function UserLogin() {
       navigate("/dashboard");
     } else {
       if (returnTo) {
+        localStorage.removeItem("sixsigma_return_to");
         sessionStorage.removeItem("returnTo");
         navigate(returnTo);
       } else {

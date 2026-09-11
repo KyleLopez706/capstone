@@ -148,9 +148,21 @@ export default function QuotationRequest() {
 
   useEffect(() => {
     const guard = async () => {
+      /* 1. Ensure Zustand persist has finished hydrating from localStorage */
+      if (useConfiguratorStore.persist && !useConfiguratorStore.persist.hasHydrated()) {
+        await new Promise((resolve) => {
+          const unsub = useConfiguratorStore.persist.onFinishHydration(() => {
+            unsub();
+            resolve();
+          });
+        });
+      }
+
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        /* Unauthenticated — bounce to login */
+        /* Unauthenticated — save return destination and bounce to login */
+        sessionStorage.setItem("returnTo", "/quotation-request");
+        localStorage.setItem("sixsigma_return_to", "/quotation-request");
         navigate('/login', { replace: true });
         return;
       }
@@ -158,10 +170,29 @@ export default function QuotationRequest() {
       /* Pre-fill email from the authenticated session */
       setForm((prev) => ({ ...prev, email: session.user.email ?? '' }));
 
-      /* If store has no configuration (e.g. page refreshed), go back to configurator */
-      if (!selectedStructure || !selectedMaterial) {
+      const currentStructure = useConfiguratorStore.getState().selectedStructure;
+      const currentMaterial  = useConfiguratorStore.getState().selectedMaterial;
+
+      /* If store has no configuration (e.g. page refreshed without selection), go back to configurator */
+      if (!currentStructure || !currentMaterial) {
         navigate('/configurator-3d', { replace: true });
         return;
+      }
+
+      /* If labor rates aren't loaded yet, fetch from Supabase to guarantee accurate pricing */
+      if (!useConfiguratorStore.getState().laborRates) {
+        try {
+          const { data: ratesData } = await supabase
+            .from('labor_rates')
+            .select('item_name, rate_amount');
+          if (ratesData?.length) {
+            const ratesMap = {};
+            ratesData.forEach((r) => { ratesMap[r.item_name] = r.rate_amount; });
+            useConfiguratorStore.getState().setLaborRates(ratesMap);
+          }
+        } catch (ratesErr) {
+          console.warn('[QuotationRequest] Could not fetch fresh labor rates:', ratesErr.message);
+        }
       }
 
       setVerifying(false);

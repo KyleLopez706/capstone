@@ -81,11 +81,12 @@ function preloadMaterialTextures(materials = []) {
 }
 
 export default function Configurator3D() {
-  const appMode      = useConfiguratorStore((s) => s.appMode);
-  const setStructure = useConfiguratorStore((s) => s.setStructure);
-  const setAppMode   = useConfiguratorStore((s) => s.setAppMode);
-  const setMaterials = useConfiguratorStore((s) => s.setMaterials);
-  const setMaterial  = useConfiguratorStore((s) => s.setMaterial);
+  const appMode           = useConfiguratorStore((s) => s.appMode);
+  const selectedStructure = useConfiguratorStore((s) => s.selectedStructure);
+  const setStructure      = useConfiguratorStore((s) => s.setStructure);
+  const setAppMode        = useConfiguratorStore((s) => s.setAppMode);
+  const setMaterials      = useConfiguratorStore((s) => s.setMaterials);
+  const setMaterial       = useConfiguratorStore((s) => s.setMaterial);
   const setCabinetMaterials = useConfiguratorStore((s) => s.setCabinetMaterials);
   const setCabinetMaterial  = useConfiguratorStore((s) => s.setCabinetMaterial);
   const setLaborRates       = useConfiguratorStore((s) => s.setLaborRates);
@@ -240,7 +241,7 @@ export default function Configurator3D() {
           </p>
         </div>
 
-      ) : appMode === 'showroom' ? (
+      ) : (appMode === 'showroom' || !selectedStructure) ? (
         /* ─────────── SHOWROOM MODE ─────────── */
         <div className="flex-1 overflow-hidden relative">
           <ShowroomCanvas

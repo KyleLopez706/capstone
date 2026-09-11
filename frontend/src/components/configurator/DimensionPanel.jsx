@@ -387,11 +387,18 @@ export default function DimensionPanel() {
             setCheckingAuth(true);
             setAuthMsg('');
 
+            /* Flush any pending debounced slider dimension commit immediately */
+            clearTimeout(lenTimerRef.current);
+            setDimension('length', localLen);
+            setDimension('width', localWid);
+
+            let shouldResetChecking = true;
             try {
               /* Check active Supabase session — user must be signed in */
               const { data: { session } } = await supabase.auth.getSession();
               if (!session) {
                 /* Not signed in — store return intent and redirect to login */
+                shouldResetChecking = false;
                 sessionStorage.setItem("returnTo", "/quotation-request");
                 localStorage.setItem("sixsigma_return_to", "/quotation-request");
                 setAuthMsg('Please sign in to request a quote.');
@@ -404,7 +411,9 @@ export default function DimensionPanel() {
               console.error('[DimensionPanel] Auth check error:', err.message);
               setAuthMsg('Something went wrong. Please try again.');
             } finally {
-              setCheckingAuth(false);
+              if (shouldResetChecking) {
+                setCheckingAuth(false);
+              }
             }
           }}
           className="w-full py-3 rounded-xl text-sm font-semibold tracking-widest uppercase"
