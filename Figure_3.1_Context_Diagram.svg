@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 1350" width="100%" height="100%" style="background-color:#ffffff; font-family: Arial, sans-serif;">
+<defs>
+  <marker id="arrow-right" viewBox="0 0 18 12" refX="18" refY="6" markerWidth="11" markerHeight="8" orient="auto-start-reverse">
+    <path d="M 0 0 L 18 6 L 0 12 z" fill="#1E293B"/>
+  </marker>
+  <marker id="arrow-left" viewBox="0 0 18 12" refX="0" refY="6" markerWidth="11" markerHeight="8" orient="auto">
+    <path d="M 18 0 L 0 6 L 18 12 z" fill="#1E293B"/>
+  </marker>
+  <marker id="arrow-up" viewBox="0 0 12 18" refX="6" refY="0" markerWidth="8" markerHeight="11" orient="auto">
+    <path d="M 0 18 L 6 0 L 12 18 z" fill="#1E293B"/>
+  </marker>
+</defs>
+<style>
+  .ent-box  { fill: #FFFFFF; stroke: #1E293B; stroke-width: 3px; }
+  .ent-text { font-family: Arial, sans-serif; font-size: 44px; font-weight: bold; fill: #0F172A; text-anchor: middle; }
+  .ds-text  { font-family: Arial, sans-serif; font-size: 38px; font-weight: bold; fill: #0F172A; text-anchor: middle; }
+  .proc-num { font-family: Arial, sans-serif; font-size: 52px; font-weight: bold; fill: #0F172A; text-anchor: middle; }
+  .proc-lbl { font-family: Arial, sans-serif; font-size: 33px; font-weight: bold; fill: #0F172A; text-anchor: middle; }
+  .flow-lbl { font-family: Arial, sans-serif; font-size: 28px; font-weight: bold; fill: #0F172A; text-anchor: middle; }
+  .conn     { stroke: #1E293B; stroke-width: 3px; fill: none; }
+</style>
+<rect x="955" y="130" width="490" height="460" class="ent-box"/>
+<line x1="955" y1="195" x2="1445" y2="195" stroke="#1E293B" stroke-width="3"/>
+<text x="1200" y="180" class="proc-num">0</text>
+<text x="1200" y="241" class="proc-lbl">Interactive 3D Granite</text>
+<text x="1200" y="287" class="proc-lbl">Configurator with</text>
+<text x="1200" y="333" class="proc-lbl">Design Quality</text>
+<text x="1200" y="379" class="proc-lbl">Prediction and</text>
+<text x="1200" y="425" class="proc-lbl">Quotation</text>
+<text x="1200" y="471" class="proc-lbl">Management System</text>
+<rect x="110" y="255" width="290" height="200" class="ent-box"/>
+<text x="255" y="371" class="ent-text">User</text>
+<rect x="1980" y="255" width="310" height="200" class="ent-box"/>
+<text x="2135" y="371" class="ent-text">Admin/Staff</text>
+<rect x="1020" y="1000" width="360" height="150" class="ent-box"/>
+<text x="1200" y="1065" class="ds-text">COLOURlovers</text>
+<text x="1200" y="1115" class="ds-text">Dataset</text>
+<line x1="400" y1="305" x2="955" y2="305" class="conn" marker-end="url(#arrow-right)"/>
+<line x1="955" y1="445" x2="400" y2="445" class="conn" marker-end="url(#arrow-left)"/>
+<line x1="1980" y1="305" x2="1445" y2="305" class="conn" marker-end="url(#arrow-left)"/>
+<line x1="1445" y1="445" x2="1980" y2="445" class="conn" marker-end="url(#arrow-right)"/>
+<line x1="1200" y1="1000" x2="1200" y2="590" class="conn" marker-end="url(#arrow-up)"/>
+<text x="677" y="247" class="flow-lbl">Design, Dimensions &</text>
+<text x="677" y="283" class="flow-lbl">Quotation Requests</text>
+<text x="677" y="387" class="flow-lbl">3D Preview, AI Score &</text>
+<text x="677" y="423" class="flow-lbl">Price Quotation</text>
+<text x="1712" y="247" class="flow-lbl">Catalog Updates &</text>
+<text x="1712" y="283" class="flow-lbl">Inquiry Responses</text>
+<text x="1712" y="387" class="flow-lbl">Quotation Requests &</text>
+<text x="1712" y="423" class="flow-lbl">Summary Reports</text>
+<rect x="1000" y="767" width="400" height="56" fill="#FFFFFF"/>
+<text x="1200" y="805.0" class="flow-lbl">Color Combinations Data</text>
+</svg>

@@ -103,35 +103,45 @@ export default function Home() {
       try {
         let popularList = [];
 
-        // 1. Try public aggregate view `popular_stone_designs` (works for all visitors without leaking customer data)
-        const { data: viewData, error: viewError } = await supabase
-          .from('popular_stone_designs')
-          .select('*')
-          .limit(5);
+        // 1. Try secure RPC function `get_popular_stone_designs` (recommended by Supabase, clears Security Advisor warning)
+        const { data: rpcData, error: rpcError } = await supabase.rpc('get_popular_stone_designs');
 
-        if (!viewError && viewData && viewData.length > 0) {
-          popularList = viewData.map((v) => ({
-            name: v.name || v.design,
+        if (!rpcError && Array.isArray(rpcData) && rpcData.length > 0) {
+          popularList = rpcData.map((v) => ({
+            name: v.name,
             count: Number(v.count) || 0,
           }));
         } else {
-          // 2. Direct fallback: query quotation_requests (works when admin is logged in)
-          const { data: quotesData } = await supabase
-            .from('quotation_requests')
-            .select('design');
+          // 2. Fallback to public aggregate view `popular_stone_designs`
+          const { data: viewData, error: viewError } = await supabase
+            .from('popular_stone_designs')
+            .select('*')
+            .limit(5);
 
-          if (quotesData && quotesData.length > 0) {
-            const counts = {};
-            quotesData.forEach((q) => {
-              if (q.design && typeof q.design === 'string') {
-                const trimmed = q.design.trim();
-                if (trimmed) counts[trimmed] = (counts[trimmed] || 0) + 1;
-              }
-            });
-            popularList = Object.entries(counts)
-              .map(([name, count]) => ({ name, count }))
-              .sort((a, b) => b.count - a.count)
-              .slice(0, 5);
+          if (!viewError && viewData && viewData.length > 0) {
+            popularList = viewData.map((v) => ({
+              name: v.name || v.design,
+              count: Number(v.count) || 0,
+            }));
+          } else {
+            // 3. Direct fallback: query quotation_requests (works when admin is logged in)
+            const { data: quotesData } = await supabase
+              .from('quotation_requests')
+              .select('design');
+
+            if (quotesData && quotesData.length > 0) {
+              const counts = {};
+              quotesData.forEach((q) => {
+                if (q.design && typeof q.design === 'string') {
+                  const trimmed = q.design.trim();
+                  if (trimmed) counts[trimmed] = (counts[trimmed] || 0) + 1;
+                }
+              });
+              popularList = Object.entries(counts)
+                .map(([name, count]) => ({ name, count }))
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 5);
+            }
           }
         }
 
