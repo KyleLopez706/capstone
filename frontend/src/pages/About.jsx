@@ -93,7 +93,7 @@ export default function About() {
                 className="text-base sm:text-lg leading-relaxed mb-6"
                 style={{ color: "#6B7280" }}
               >
-                Founded in the early 2000s by Rolando Koh, SixSigmaPhil Enterprise Corporation is engaged in the supply fabrication and installation of high quality granite, marble, limestone, sandstone, quartz & slates. Roland, an engineer by profession and a visionary by nature, was deeply inspired by the Six Sigma methodology, a systematic approach to eliminating waste, reducing errors, and optimizing performance in organizations.
+                Founded in 2005 by Rolando Koh, SixSigmaPhil Enterprise Corporation is engaged in the supply fabrication and installation of high quality granite, marble, limestone, sandstone, quartz & slates. Roland, an engineer by profession and a visionary by nature, was deeply inspired by the Six Sigma methodology, a systematic approach to eliminating waste, reducing errors, and optimizing performance in organizations.
               </p>
               <p
                 className="text-base sm:text-lg leading-relaxed"

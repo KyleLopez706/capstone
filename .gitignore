@@ -40,3 +40,6 @@ yarn-debug.log*
 
 # Internal Agent instructions
 AGENTS.md
+
+# Academic paper & questionnaire documents
+paper/
