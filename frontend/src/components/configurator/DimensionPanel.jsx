@@ -34,10 +34,12 @@ export default function DimensionPanel() {
 
   /* ── Dynamic Bounds Calculation ──
      Limits size modifications to a realistic range to prevent 3D distortion.
-     Shrinking is limited to -20%, Growing is limited to +50%. */
+     Shrinking is limited to -20%, Growing is limited to +50%.
+     Rounded to 1 decimal place so min and max are exact multiples of 0.05 step,
+     guaranteeing the slider always reaches its absolute minimum and maximum without truncation. */
   const baseLen = selectedStructure?.base_length || 1.2;
-  const minLen  = Number((baseLen * 0.8).toFixed(2));
-  const maxLen  = Number((baseLen * 1.5).toFixed(2));
+  const minLen  = Number((Math.round(baseLen * 0.8 * 10) / 10).toFixed(2));
+  const maxLen  = Number((Math.round(baseLen * 1.5 * 10) / 10).toFixed(2));
 
   /* Tracks whether we're mid-auth-check to prevent button double-click */
   const [checkingAuth, setCheckingAuth] = useState(false);
@@ -79,7 +81,7 @@ export default function DimensionPanel() {
   const lenTimerRef = useRef(null);
 
   const handleLengthSlider = useCallback((e) => {
-    const val = parseFloat(e.target.value);
+    const val = Number(parseFloat(e.target.value).toFixed(2));
     setLenStr(String(val));
     
     // In the real world, a vanity or island's depth (width) remains standard

@@ -90,8 +90,8 @@ const useConfiguratorStore = create(
           const baseLen = state.selectedStructure?.base_length || 1.2;
           const baseWid = state.selectedStructure?.base_width  || 0.6;
           
-          const minLen  = Number((baseLen * 0.8).toFixed(2)); // Max 20% shrink
-          const maxLen  = Number((baseLen * 1.5).toFixed(2)); // Max 50% grow
+          const minLen  = Number((Math.round(baseLen * 0.8 * 10) / 10).toFixed(2)); // Max 20% shrink (rounded to 1 decimal)
+          const maxLen  = Number((Math.round(baseLen * 1.5 * 10) / 10).toFixed(2)); // Max 50% grow (rounded to 1 decimal)
           const minWid  = baseWid;       // Locked to standard
           const maxWid  = baseWid;       // Locked to standard
 
