@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { useTexture }         from '@react-three/drei';
-import Navbar                 from '../components/Navbar';
-import ShowroomCanvas         from '../components/configurator/ShowroomCanvas';
-import ConfiguratorLayout     from '../components/configurator/ConfiguratorLayout';
-import useConfiguratorStore   from '../store/configuratorStore';
-import { supabase }           from '../supabaseClient';
+import { useLocation }          from 'react-router-dom';
+import { useTexture }           from '@react-three/drei';
+import Navbar                   from '../components/Navbar';
+import ShowroomCanvas           from '../components/configurator/ShowroomCanvas';
+import ConfiguratorLayout       from '../components/configurator/ConfiguratorLayout';
+import useConfiguratorStore     from '../store/configuratorStore';
+import { supabase }             from '../supabaseClient';
+import { useToast, ToastNotification } from '../utils/toast';
 
 /* ─────────────────────────────────────────
    CONFIGURATOR 3D PAGE
@@ -81,6 +83,9 @@ function preloadMaterialTextures(materials = []) {
 }
 
 export default function Configurator3D() {
+  const location          = useLocation();
+  const { toast, showToast, dismissToast } = useToast();
+
   const appMode           = useConfiguratorStore((s) => s.appMode);
   const selectedStructure = useConfiguratorStore((s) => s.selectedStructure);
   const setStructure      = useConfiguratorStore((s) => s.setStructure);
@@ -94,6 +99,19 @@ export default function Configurator3D() {
   // All available structures fetched from Supabase
   const [structures, setStructures] = useState([]);
   const [loading,    setLoading]    = useState(true);
+
+  /* ── Check for quote submission redirect from QuotationRequest page ── */
+  useEffect(() => {
+    if (location.state?.quoteSubmitted) {
+      const refId = location.state.requestId;
+      showToast(
+        `Quotation request ${refId ? `(${refId}) ` : ''}submitted successfully! Our team will contact you shortly.`,
+        'success'
+      );
+      // Clean up browser history state so re-renders/refresh don't replay the toast
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, showToast]);
 
   /* ── Fetch structures AND materials in parallel on first render ──────────
      Using Promise.all means both API calls go out simultaneously instead
@@ -221,6 +239,7 @@ export default function Configurator3D() {
       className="w-full h-screen flex flex-col overflow-hidden"
       style={{ backgroundColor: '#000000' }}
     >
+      <ToastNotification toast={toast} onDismiss={dismissToast} />
       <Navbar />
 
       {/* Spacer for fixed navbar */}

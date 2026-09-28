@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
 import { supabase } from '../supabaseClient';
@@ -152,6 +152,34 @@ export default function QuotationRequest() {
   const [isLoading, setIsLoading]   = useState(false);
   const [submitted, setSubmitted]   = useState(false);
   const { toast, showToast, dismissToast } = useToast();
+
+  /* ── Auto-redirect countdown after submission ── */
+  const [countdown, setCountdown]   = useState(3);
+  const redirectedRef               = useRef(false);
+
+  const handleReturnToConfigurator = useCallback(() => {
+    if (redirectedRef.current) return;
+    redirectedRef.current = true;
+    useConfiguratorStore.getState().setAppMode('configurator');
+    navigate('/configurator-3d', { state: { quoteSubmitted: true, requestId } });
+  }, [navigate, requestId]);
+
+  useEffect(() => {
+    if (!submitted) return;
+
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          handleReturnToConfigurator();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [submitted, handleReturnToConfigurator]);
 
   /* ── Guard: verify session on mount; redirect to /login if unauthenticated ── */
   const [verifying, setVerifying] = useState(true);
@@ -610,32 +638,103 @@ export default function QuotationRequest() {
             }}
           >
             {submitted ? (
-              /* ── Success state ── */
-              <div style={{ textAlign: 'center', padding: '20px 0' }}>
+              /* ── Success state with auto-redirect ── */
+              <div style={{ textAlign: 'center', padding: '16px 0' }}>
                 <div
                   style={{
-                    width: '72px', height: '72px', borderRadius: '50%',
+                    width: '68px', height: '68px', borderRadius: '50%',
                     backgroundColor: 'rgba(197,160,89,0.12)',
+                    border: '1.5px solid rgba(197,160,89,0.35)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    margin: '0 auto 20px',
+                    margin: '0 auto 18px',
                   }}
                 >
                   <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C5A059" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
-                    <polyline points="22 4 12 14.01 9 11.01"/>
+                    <polyline points="20 6 9 17 4 12" />
                   </svg>
                 </div>
 
-                <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#232B32', marginBottom: '10px' }}>
+                <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#232B32', marginBottom: '8px' }}>
                   Request Sent Successfully!
                 </h2>
-                <p style={{ fontSize: '14px', color: '#6B7280', lineHeight: 1.6, marginBottom: '8px' }}>
+                <p style={{ fontSize: '13px', color: '#6B7280', lineHeight: 1.6, marginBottom: '20px' }}>
                   Your quotation request{' '}
-                  <strong style={{ color: '#232B32' }}>{requestId}</strong>{' '}
+                  <strong style={{ color: '#232B32', fontFamily: 'monospace' }}>{requestId}</strong>{' '}
                   has been submitted. Our team will contact you within 1&ndash;2 business days.
                 </p>
 
-                {/* PDF generation temporarily removed as requested */}
+                {/* Auto-redirect countdown panel */}
+                <div
+                  style={{
+                    backgroundColor: 'rgba(197,160,89,0.08)',
+                    border: '1px solid rgba(197,160,89,0.25)',
+                    borderRadius: '12px',
+                    padding: '16px',
+                    marginBottom: '18px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '10px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div
+                      style={{
+                        width: '14px', height: '14px', borderRadius: '50%',
+                        border: '2px solid #C5A059', borderTopColor: 'transparent',
+                        animation: 'qr-spin 0.7s linear infinite',
+                      }}
+                    />
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#232B32' }}>
+                      Redirecting to 3D Configurator in{' '}
+                      <span style={{ color: '#C5A059', fontWeight: 700 }}>{countdown}s</span>…
+                    </span>
+                  </div>
+
+                  {/* Progress bar track */}
+                  <div style={{ width: '100%', height: '4px', backgroundColor: 'rgba(226,232,240,0.8)', borderRadius: '2px', overflow: 'hidden' }}>
+                    <div
+                      style={{
+                        height: '100%',
+                        backgroundColor: '#C5A059',
+                        width: `${Math.max(0, Math.min(100, ((3 - countdown) / 3) * 100))}%`,
+                        transition: 'width 1s linear',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Immediate Return button */}
+                <button
+                  id="return-to-configurator-btn"
+                  type="button"
+                  onClick={handleReturnToConfigurator}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    backgroundColor: '#C5A059',
+                    color: '#FFFFFF',
+                    fontWeight: 700,
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    letterSpacing: '0.03em',
+                    transition: 'background-color 0.18s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#b08d47'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#C5A059'; }}
+                >
+                  Return to 3D Configurator Now
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                    <polyline points="12 5 19 12 12 19" />
+                  </svg>
+                </button>
               </div>
             ) : (
               /* ── Form ── */
