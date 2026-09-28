@@ -53,7 +53,7 @@ const FALLBACK_STRUCTURES = [
  * (e.g. '1' → '2').  All users will then fetch the new file once, after
  * which it is cached again.  Never use Date.now() here.
  */
-const MODEL_VERSION = '5';
+const MODEL_VERSION = '13';
 function addCacheVersion(url) {
   if (!url) return url;
   const separator = url.includes('?') ? '&' : '?';
@@ -107,7 +107,7 @@ export default function Configurator3D() {
       const [structuresResult, materialsResult, cabinetMaterialsResult, laborRatesResult] = await Promise.all([
         supabase
           .from('structures')
-          .select('id, name, base_length, base_width, model_url')
+          .select('id, name, base_length, base_width, model_url, structure_type')
           .order('name'),
         supabase
           .from('materials')

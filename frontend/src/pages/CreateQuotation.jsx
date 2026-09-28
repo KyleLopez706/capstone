@@ -4,6 +4,7 @@ import { supabase } from "../supabaseClient";
 import emailjs from '@emailjs/browser';
 import { jsPDF } from "jspdf";
 import { useToast, ToastNotification } from "../utils/toast";
+import { isCountertopStructure, isWallStructure } from "../utils/pricingEngine";
 
 
 /* ── Compute default valid-until date (30 days from now) ── */
@@ -169,8 +170,11 @@ export default function CreateQuotation() {
         defaultCosts.delivery = getRateAmount('delivery_cost') || 3000;
         defaultCosts.mobilization = getRateAmount('mobilization_cost') || 2000;
 
+        const isWall = isWallStructure(prod, reqData.structure_type);
+        const isCountertop = isCountertopStructure(prod, reqData.structure_type);
+
         // 2. Installation (sqm)
-        if (prod.includes('wall') || prod.includes('cladding')) {
+        if (isWall) {
           const wallRate = getRateAmount('wall_cladding') || 2600;
           defaultCosts.installation = wallRate * area;
         } else {
@@ -182,8 +186,8 @@ export default function CreateQuotation() {
         const cutRate = getRateAmount('cutting') || 250;
         defaultCosts.fabrication = cutRate * perimeter;
 
-        // 4. Edge Polishing & Mitering (lm) - Applies mostly to Countertops
-        if (prod.includes('counter') || prod.includes('top')) {
+        // 4. Edge Polishing & Mitering (lm) - Applies to Countertops, Islands & Vanities
+        if (isCountertop) {
           const edgeRate = getRateAmount('edge_polishing') || 800;
           const miteringRate = getRateAmount('mitering') || 900;
           

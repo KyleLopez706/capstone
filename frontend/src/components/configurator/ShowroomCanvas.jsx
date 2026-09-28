@@ -6,10 +6,12 @@ import {
   useEffect,
   useRef,
   useCallback,
+  useMemo,
   memo,
 } from "react";
 import * as THREE from "three";
 import useConfiguratorStore from "../../store/configuratorStore";
+import { processSceneMeshes, parseStructureConfig } from "../../utils/meshSegmentation";
 
 /* ─────────────────────────────────────────
    SHOWROOM CANVAS — Carousel Edition
@@ -129,17 +131,20 @@ function meshZone(name = "") {
 
 /* Static shared materials — instantiated once at module load, never recreated */
 const SHOWROOM_MATERIALS = {
-  stone: new THREE.MeshStandardMaterial({
+  stone: new THREE.MeshPhysicalMaterial({
     color: "#DBDBDB",
-    roughness: 0.55,
-    metalness: 0.03,
-    envMapIntensity: 0.4,
+    roughness: 0.18,
+    metalness: 0.0,
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.0,
+    ior: 1.5,
+    envMapIntensity: 1.2,
   }),
   metal: new THREE.MeshStandardMaterial({
-    color: "#BEC6CE",
+    color: "#ECEFF2",
     roughness: 0.15,
-    metalness: 0.92,
-    envMapIntensity: 0.6,
+    metalness: 0.80,
+    envMapIntensity: 2.5,
   }),
   cabinet: new THREE.MeshStandardMaterial({
     color: "#7F5112", // Updated cabinet base color
@@ -191,17 +196,47 @@ const ShowroomModel = memo(function ShowroomModel({ structure, position }) {
   const { scene } = useGLTF(structure.model_url, true);
   const spinRef = useRef();
 
-  /* Apply zone materials once the scene graph is available */
-  useEffect(() => {
-    scene.traverse((n) => {
-      if (!n.isMesh) return;
-      n.castShadow = true;
-      n.receiveShadow = true;
-      let zone = meshZone(n.name);
-      if (zone === "default" && n.parent?.name) zone = meshZone(n.parent.name);
-      n.material = SHOWROOM_MATERIALS[zone];
+  /* Clone and segment the scene for showroom turntable display */
+  const displayScene = useMemo(() => {
+    if (!scene) return null;
+    const cloned = scene.clone(true);
+    const meshes = [];
+    cloned.traverse((n) => {
+      if (n.isMesh) {
+        n.castShadow = true;
+        n.receiveShadow = true;
+        meshes.push(n);
+      }
     });
-  }, [scene]);
+
+    // Check if there are pre-separated Blender meshes
+    const hasNamedStone = meshes.some((m) => meshZone(m.name) === 'stone');
+    if (hasNamedStone) {
+      meshes.forEach((n) => {
+        let zone = meshZone(n.name);
+        if (zone === "default" && n.parent?.name) zone = meshZone(n.parent.name);
+        n.material = SHOWROOM_MATERIALS[zone] || SHOWROOM_MATERIALS.default;
+      });
+      return cloned;
+    }
+
+    // Single-mesh model (Meshy AI): auto-segment for showroom presentation
+    const structureConfig = parseStructureConfig(structure);
+    const result = processSceneMeshes(cloned, structureConfig);
+    if (result.isAutoSegmented) {
+      result.stoneMeshes.forEach((m) => { m.material = SHOWROOM_MATERIALS.stone; });
+      result.cabinetMeshes.forEach((m) => { m.material = SHOWROOM_MATERIALS.cabinet; });
+      result.metalMeshes?.forEach((m) => { m.material = SHOWROOM_MATERIALS.metal; });
+    } else {
+      meshes.forEach((n) => {
+        let zone = meshZone(n.name);
+        if (zone === "default" && n.parent?.name) zone = meshZone(n.parent.name);
+        n.material = SHOWROOM_MATERIALS[zone] || SHOWROOM_MATERIALS.default;
+      });
+    }
+
+    return cloned;
+  }, [scene, structure]);
 
   /* Slow elegant turntable — ~1 full revolution every 22 seconds */
   useFrame((_, delta) => {
@@ -212,7 +247,7 @@ const ShowroomModel = memo(function ShowroomModel({ structure, position }) {
     <group position={position}>
       {/* Spinning model sub-group */}
       <group ref={spinRef}>
-        <primitive object={scene} />
+        {displayScene && <primitive object={displayScene} />}
       </group>
 
       {/* 3-tier product display stand (static) */}

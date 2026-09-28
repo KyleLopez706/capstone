@@ -10,6 +10,7 @@ import {
 import { Suspense, useEffect, useMemo, useRef, Component } from "react";
 import * as THREE from "three";
 import useConfiguratorStore from "../../store/configuratorStore";
+import { processSceneMeshes, parseStructureConfig } from "../../utils/meshSegmentation";
 
 function CameraOffset() {
   const { camera, size } = useThree();
@@ -90,10 +91,10 @@ const ZONE_MATERIALS = {
     metalness: 0.05,
   }),
   metal: new THREE.MeshStandardMaterial({
-    color:            '#C0C8D0', // cool silver
-    roughness:        0.15,     // low → mirror-like reflections
-    metalness:        0.92,     // high → physically-based chrome
-    envMapIntensity:  1.2,
+    color:            '#ECEFF2', // Radiant silver metallic
+    roughness:        0.15,      // Smooth polished stainless steel sheen
+    metalness:        0.80,      // Balanced metallic reflection for brilliant highlights
+    envMapIntensity:  2.5,
   }),
   socket: new THREE.MeshStandardMaterial({
     color:     '#3A3D42', // dark charcoal
@@ -191,8 +192,9 @@ function TextureApplicator({ material, targetNodes, onApplied, scaleFactors }) {
     const colorMap = textures.map?.clone();
     if (colorMap) colorMap.colorSpace = THREE.SRGBColorSpace;
 
-    const repeatX = scaleFactors?.x ?? 1;
-    const repeatZ = scaleFactors?.z ?? 1;
+    // Maintain 1:1 isometric aspect ratio for natural marble/granite veins
+    // Use uniform scale to prevent texture stretching or squishing across X/Z
+    const uniformScale = Math.max(scaleFactors?.x ?? 1, scaleFactors?.z ?? 1);
 
     if (colorMap) {
       colorMap.flipY = false;
@@ -201,16 +203,16 @@ function TextureApplicator({ material, targetNodes, onApplied, scaleFactors }) {
       colorMap.anisotropy = 16;
       colorMap.wrapS = THREE.RepeatWrapping;
       colorMap.wrapT = THREE.RepeatWrapping;
-      colorMap.repeat.set(repeatX, repeatZ);
+      colorMap.repeat.set(uniformScale, uniformScale);
       colorMap.needsUpdate = true;
     }
 
     const mat = new THREE.MeshPhysicalMaterial({
       map: material.color_url ? colorMap : null,
       // Base roughness before the clearcoat
-      roughness: 0.2,
+      roughness: 0.18,
       metalness: 0.0,
-      envMapIntensity: 1.0,
+      envMapIntensity: 1.2,
       // The magic sauce for polished stone: a thick, perfectly smooth glassy layer on top
       clearcoat: 1.0,
       clearcoatRoughness: 0.0,
@@ -249,8 +251,7 @@ function CabinetTextureApplicator({ material, targetNodes, scaleFactors }) {
     const colorMap = textures.map?.clone();
     if (colorMap) colorMap.colorSpace = THREE.SRGBColorSpace;
 
-    const repeatX = scaleFactors?.x ?? 1;
-    const repeatZ = scaleFactors?.z ?? 1;
+    const uniformScale = Math.max(scaleFactors?.x ?? 1, scaleFactors?.z ?? 1);
 
     if (colorMap) {
       colorMap.flipY = false;
@@ -258,7 +259,7 @@ function CabinetTextureApplicator({ material, targetNodes, scaleFactors }) {
       colorMap.minFilter = THREE.LinearMipmapLinearFilter;
       colorMap.wrapS = THREE.RepeatWrapping;
       colorMap.wrapT = THREE.RepeatWrapping;
-      colorMap.repeat.set(repeatX, repeatZ);
+      colorMap.repeat.set(uniformScale, uniformScale);
       colorMap.needsUpdate = true;
     }
 
@@ -292,6 +293,12 @@ function CountertopWithMaterial({ modelUrl, onTextureApplied, theme, lowEndMode 
   const dimensions        = useConfiguratorStore((s) => s.dimensions);
   const selectedStructure = useConfiguratorStore((s) => s.selectedStructure);
 
+  // Parse structure segmentation config from URL params or structure_type
+  const structureConfig = useMemo(() => {
+    if (!selectedStructure) return null;
+    return parseStructureConfig(selectedStructure);
+  }, [selectedStructure]);
+
   /* ── Derive non-uniform scale factors ──
      The model's GLB geometry represents the structure's base dimensions.
      When the user inputs larger/smaller dimensions, we scale the scene
@@ -306,18 +313,17 @@ function CountertopWithMaterial({ modelUrl, onTextureApplied, theme, lowEndMode 
   // Prevents unnecessary re-runs of the TextureApplicator effect.
   const scaleFactors = useMemo(() => ({ x: scaleX, z: scaleZ }), [scaleX, scaleZ]);
 
-  // Clone so we don't mutate the shared cached GLTF
-  const clonedScene = useMemo(() => scene.clone(true), [scene]);
-
-  // Traverse the cloned scene once:
-  //   • stone meshes are collected for TextureApplicator
-  //   • cabinet meshes are collected for CabinetTextureApplicator
-  //   • all other meshes receive a static zone material immediately
-  const { stoneMeshes, cabinetMeshes } = useMemo(() => {
+  // Clone and segment the scene:
+  //   • If already divided in Blender into named zones, use them
+  //   • If single-mesh (Meshy AI), auto-segment into stone, cabinet, and metal fixtures
+  const { displayScene, stoneMeshes, cabinetMeshes } = useMemo(() => {
+    if (!scene) return { displayScene: null, stoneMeshes: [], cabinetMeshes: [] };
+    const cloned = scene.clone(true);
     const s = [];
     const c = [];
+    const m = [];
 
-    clonedScene.traverse((n) => {
+    cloned.traverse((n) => {
       if (!n.isMesh) return;
       n.castShadow    = true;
       n.receiveShadow = true;
@@ -331,31 +337,53 @@ function CountertopWithMaterial({ modelUrl, onTextureApplied, theme, lowEndMode 
         s.push(n);
       } else if (zone === 'cabinet') {
         c.push(n);
+      } else if (zone === 'metal') {
+        m.push(n);
+        n.material = ZONE_MATERIALS.metal;
       } else {
         n.material = ZONE_MATERIALS[zone] ?? ZONE_MATERIALS.default;
       }
     });
 
+    // If single monolithic mesh (no Blender 'stone' mesh found)
     if (!s.length) {
-      clonedScene.traverse((n) => { if (n.isMesh) s.push(n); });
+      const result = processSceneMeshes(cloned, structureConfig || { preset: 'countertop', cutoff: 0.82 });
+      if (result.isAutoSegmented && result.stoneMeshes.length > 0) {
+        // Ensure metal fixtures (sink, faucet, stove) receive shiny metallic chrome
+        result.metalMeshes?.forEach((node) => {
+          node.material = ZONE_MATERIALS.metal;
+        });
+        return {
+          displayScene: cloned,
+          stoneMeshes: result.stoneMeshes,
+          cabinetMeshes: result.cabinetMeshes.length > 0 ? result.cabinetMeshes : c,
+        };
+      }
+    }
+
+    if (!s.length) {
+      cloned.traverse((n) => { if (n.isMesh) s.push(n); });
       console.warn(
         '[Configurator] No stone mesh matched — PBR applied to all meshes. '
         + 'Add the correct Blender name to EXACT_ZONE_MAP in ConfiguratorCanvas.jsx.',
       );
     }
 
-    return { stoneMeshes: s, cabinetMeshes: c };
-  }, [clonedScene]);
+    return { displayScene: cloned, stoneMeshes: s, cabinetMeshes: c };
+  }, [scene, structureConfig]);
 
   // Dynamically compute the model's lowest point so the floor never clips
   const minY = useMemo(() => {
-    const box = new THREE.Box3().setFromObject(clonedScene);
+    if (!displayScene) return 0;
+    const box = new THREE.Box3().setFromObject(displayScene);
     return isFinite(box.min.y) ? box.min.y : 0;
-  }, [clonedScene]);
+  }, [displayScene]);
+
+  if (!displayScene) return null;
 
   return (
     <>
-      <primitive object={clonedScene} scale={[scaleX, 1, scaleZ]} />
+      <primitive object={displayScene} scale={[scaleX, 1, scaleZ]} />
       
       <group position={[0, minY, 0]}>
         {!lowEndMode && (

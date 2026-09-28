@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import useConfiguratorStore from '../../store/configuratorStore';
+import { calculatePricing } from '../../utils/pricingEngine';
 
 
 /* ─────────────────────────────────────────
@@ -41,6 +42,7 @@ export default function DimensionPanel() {
   /* Tracks whether we're mid-auth-check to prevent button double-click */
   const [checkingAuth, setCheckingAuth] = useState(false);
   const [authMsg, setAuthMsg]           = useState('');
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   /* Local string state — allows free typing (no numeric coercion per keystroke) */
   const [lenStr, setLenStr] = useState(() => String(dimensions.length ?? 1.2));
@@ -108,21 +110,19 @@ export default function DimensionPanel() {
   const localWid    = Math.max(parseFloat(widStr) || 0, 0);
   const area        = localLen * localWid;
   
-  /* ── Installation rate: prefer DB values from Zustand, hardcoded fallback ── */
+  /* ── Live Pricing Calculation based on Supabase labor_rates & materials ── */
   const laborRates = useConfiguratorStore((s) => s.laborRates);
 
-  const getInstallRate = (nameStr) => {
-    const name = (nameStr ?? '').toLowerCase();
-    if (name.includes('wall') || name.includes('cladding')) {
-      return laborRates?.wall_cladding ?? 2600;
-    }
-    return laborRates?.base_installation ?? 1300;
-  };
+  const pricing = calculatePricing({
+    length: localLen,
+    width: localWid,
+    structureName: selectedStructure?.name,
+    structureType: selectedStructure?.structure_type,
+    pricePerSqm: selectedMaterial?.price_per_sqm,
+    laborRates,
+  });
 
-  const pricePerSqm  = selectedMaterial?.price_per_sqm ?? 0;
-  const materialCost = area * pricePerSqm;
-  const installCost  = area * getInstallRate(selectedStructure?.name);
-  const total        = materialCost + installCost;
+  const total = pricing.total;
 
   /* ── Proportional shape indicator ──
      Renders a small rectangle that reflects the current length:width ratio
@@ -335,12 +335,24 @@ export default function DimensionPanel() {
           className="rounded-xl p-4"
           style={{ backgroundColor: 'rgba(0,0,0,0.2)', border: '1px solid rgba(226,232,240,0.1)' }}
         >
-          <p
-            className="text-xs tracking-widest uppercase mb-2"
-            style={{ color: '#9CA3AF' }}
-          >
-            Total Estimate
-          </p>
+          <div className="flex items-center justify-between mb-1">
+            <p
+              className="text-xs tracking-widest uppercase"
+              style={{ color: '#9CA3AF' }}
+            >
+              Total Estimate
+            </p>
+            <span
+              className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded"
+              style={{
+                backgroundColor: 'rgba(197,160,89,0.15)',
+                color: '#C5A059',
+                border: '1px solid rgba(197,160,89,0.3)',
+              }}
+            >
+              VAT Inc.
+            </span>
+          </div>
           <p
             className="text-2xl font-bold"
             style={{
@@ -355,9 +367,75 @@ export default function DimensionPanel() {
               maximumFractionDigits: 2,
             })}
           </p>
-          <p className="text-xs mt-1" style={{ color: '#6B7280' }}>
-            Estimate only · Final price may vary.
+          <p className="text-[11px] mt-1" style={{ color: '#9CA3AF' }}>
+            Includes stone, fabrication, installation, logistics, & 12% VAT.
           </p>
+
+          {/* Collapsible / expandable breakdown */}
+          <button
+            type="button"
+            onClick={() => setShowBreakdown((prev) => !prev)}
+            className="mt-3 flex items-center justify-between w-full text-[11px] font-semibold uppercase tracking-wider py-1.5 px-2.5 rounded-lg transition-all"
+            style={{
+              color: '#C5A059',
+              backgroundColor: 'rgba(197,160,89,0.08)',
+              border: '1px solid rgba(197,160,89,0.2)',
+              cursor: 'pointer',
+            }}
+          >
+            <span>{showBreakdown ? 'Hide Rate Breakdown' : 'View Rate Breakdown'}</span>
+            <svg
+              className={`w-3.5 h-3.5 transform transition-transform duration-200 ${showBreakdown ? 'rotate-180' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {showBreakdown && (
+            <div className="mt-3 pt-3 border-t border-[rgba(226,232,240,0.1)] flex flex-col gap-1.5 text-xs">
+              <div className="flex justify-between" style={{ color: '#9CA3AF' }}>
+                <span>Stone Material ({pricing.area.toFixed(2)}m²):</span>
+                <span className="font-medium" style={{ color: '#F9F9FB' }}>
+                  ₱{pricing.materialCost.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex justify-between" style={{ color: '#9CA3AF' }}>
+                <span>Fabrication / Cutting ({pricing.perimeter.toFixed(2)}lm):</span>
+                <span className="font-medium" style={{ color: '#F9F9FB' }}>
+                  ₱{pricing.fabricationCost.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              {pricing.isCountertop && (pricing.edgePolishingCost + pricing.miteringCost > 0) && (
+                <div className="flex justify-between" style={{ color: '#9CA3AF' }}>
+                  <span>Edge Polishing & Mitering ({pricing.length.toFixed(2)}lm):</span>
+                  <span className="font-medium" style={{ color: '#F9F9FB' }}>
+                    ₱{(pricing.edgePolishingCost + pricing.miteringCost).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between" style={{ color: '#9CA3AF' }}>
+                <span>Installation ({pricing.isWall ? 'Wall Cladding' : 'Base'}):</span>
+                <span className="font-medium" style={{ color: '#F9F9FB' }}>
+                  ₱{pricing.installCost.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex justify-between" style={{ color: '#9CA3AF' }}>
+                <span>Delivery & Mobilization:</span>
+                <span className="font-medium" style={{ color: '#F9F9FB' }}>
+                  ₱{(pricing.deliveryCost + pricing.mobilizationCost).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex justify-between" style={{ color: '#9CA3AF' }}>
+                <span>VAT ({pricing.vatRate}%):</span>
+                <span className="font-medium" style={{ color: '#F9F9FB' }}>
+                  ₱{pricing.vatCost.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
 

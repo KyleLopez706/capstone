@@ -4,6 +4,7 @@ import { jsPDF } from 'jspdf';
 import { supabase } from '../supabaseClient';
 import useConfiguratorStore from '../store/configuratorStore';
 import { useToast, ToastNotification } from '../utils/toast';
+import { calculatePricing } from '../utils/pricingEngine';
 
 /* ─────────────────────────────────────────────────────────────
    QUOTATION REQUEST PAGE
@@ -125,13 +126,22 @@ export default function QuotationRequest() {
   const dimensions        = useConfiguratorStore((s) => s.dimensions);
   const laborRates        = useConfiguratorStore((s) => s.laborRates);
 
-  /* ── Computed values ── */
-  const area         = (dimensions.length ?? 0) * (dimensions.width ?? 0);
-  const ratePerSqm   = selectedMaterial?.price_per_sqm ?? 0;
-  const materialCost = area * ratePerSqm;
-  const installRate  = getInstallRate(selectedStructure?.name, laborRates);
-  const installCost  = area * installRate;
-  const totalCost    = materialCost + installCost;
+  /* ── Computed pricing breakdown from Supabase rates ── */
+  const pricing = calculatePricing({
+    length: dimensions.length,
+    width: dimensions.width,
+    structureName: selectedStructure?.name,
+    structureType: selectedStructure?.structure_type,
+    pricePerSqm: selectedMaterial?.price_per_sqm,
+    laborRates,
+  });
+
+  const area         = pricing.area;
+  const ratePerSqm   = pricing.pricePerSqm;
+  const materialCost = pricing.materialCost;
+  const installRate  = pricing.installRate;
+  const installCost  = pricing.installCost;
+  const totalCost    = pricing.total;
 
   /* ── Stable reference ID for this visit ── */
   const [requestId] = useState(() => generateRequestId());
@@ -294,19 +304,53 @@ export default function QuotationRequest() {
     /* Costs */
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(107, 114, 128);
-    doc.text('Material Cost:', margin, y);
+    doc.text('Stone Material:', margin, y);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(35, 43, 50);
-    doc.text(fmt(materialCost), 100, y);
-    y += 7;
+    doc.text(fmt(pricing.materialCost), 100, y);
+    y += 6;
 
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(107, 114, 128);
-    doc.text(`Installation Cost (${fmt(installRate)}/m\u00b2):`, margin, y);
+    doc.text(`Fabrication / Cutting (${pricing.perimeter.toFixed(2)} lm):`, margin, y);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(35, 43, 50);
-    doc.text(fmt(installCost), 100, y);
-    y += 10;
+    doc.text(fmt(pricing.fabricationCost), 100, y);
+    y += 6;
+
+    if (pricing.isCountertop && (pricing.edgePolishingCost + pricing.miteringCost > 0)) {
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(107, 114, 128);
+      doc.text(`Edge Polishing & Mitering (${pricing.length.toFixed(2)} lm):`, margin, y);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(35, 43, 50);
+      doc.text(fmt(pricing.edgePolishingCost + pricing.miteringCost), 100, y);
+      y += 6;
+    }
+
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 114, 128);
+    doc.text(`Installation (${fmt(pricing.installRate)}/m\u00b2):`, margin, y);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(35, 43, 50);
+    doc.text(fmt(pricing.installCost), 100, y);
+    y += 6;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 114, 128);
+    doc.text('Delivery & Mobilization:', margin, y);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(35, 43, 50);
+    doc.text(fmt(pricing.deliveryCost + pricing.mobilizationCost), 100, y);
+    y += 6;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 114, 128);
+    doc.text(`VAT (${pricing.vatRate}%):`, margin, y);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(35, 43, 50);
+    doc.text(fmt(pricing.vatCost), 100, y);
+    y += 8;
 
     /* Total box */
     doc.setFillColor(35, 43, 50);
@@ -314,9 +358,9 @@ export default function QuotationRequest() {
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(249, 249, 251);
-    doc.text('ESTIMATED TOTAL:', margin + 4, y + 8);
+    doc.text('ESTIMATED TOTAL (VAT INC.):', margin + 4, y + 8);
     doc.setTextColor(197, 160, 89);
-    doc.text(fmt(totalCost), 100 + 4, y + 8);
+    doc.text(fmt(pricing.total), 100 + 4, y + 8);
     y += 22;
 
     doc.setFontSize(8);
@@ -393,11 +437,12 @@ export default function QuotationRequest() {
         design:        selectedMaterial?.name  ?? 'Unknown',
         length:        dimensions.length ?? 0,
         width:         dimensions.width  ?? 0,
-        area:          parseFloat(area.toFixed(4)),
-        rate_per_sqm:  ratePerSqm,
-        material_cost: parseFloat(materialCost.toFixed(2)),
-        install_cost:  parseFloat(installCost.toFixed(2)),
-        total_cost:    parseFloat(totalCost.toFixed(2)),
+        area:          parseFloat(pricing.area.toFixed(4)),
+        rate_per_sqm:  pricing.pricePerSqm,
+        material_cost: parseFloat(pricing.materialCost.toFixed(2)),
+        install_cost:  parseFloat(pricing.installCost.toFixed(2)),
+        delivery_cost: parseFloat((pricing.deliveryCost + pricing.mobilizationCost).toFixed(2)),
+        total_cost:    parseFloat(pricing.total.toFixed(2)),
         status:        'pending',
       }]);
 
@@ -526,8 +571,14 @@ export default function QuotationRequest() {
 
             {/* Cost breakdown */}
             <div style={{ marginTop: '18px' }}>
-              <CostRow label="Material Cost"                               value={fmt(materialCost)} />
-              <CostRow label={`Installation Cost (${fmt(installRate)}/m\u00b2)`} value={fmt(installCost)} />
+              <CostRow label={`Stone Material (${pricing.area.toFixed(2)} m²)`} value={fmt(pricing.materialCost)} />
+              <CostRow label={`Fabrication / Cutting (${pricing.perimeter.toFixed(2)} lm)`} value={fmt(pricing.fabricationCost)} />
+              {pricing.isCountertop && (pricing.edgePolishingCost + pricing.miteringCost > 0) && (
+                <CostRow label={`Edge Polishing & Mitering (${pricing.length.toFixed(2)} lm)`} value={fmt(pricing.edgePolishingCost + pricing.miteringCost)} />
+              )}
+              <CostRow label={`Installation (${fmt(pricing.installRate)}/m²)`} value={fmt(pricing.installCost)} />
+              <CostRow label="Delivery & Mobilization" value={fmt(pricing.deliveryCost + pricing.mobilizationCost)} />
+              <CostRow label={`VAT (${pricing.vatRate}%)`} value={fmt(pricing.vatCost)} />
             </div>
 
             {/* Estimated total */}
@@ -539,10 +590,10 @@ export default function QuotationRequest() {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '15px', fontWeight: 700, color: '#232B32' }}>Estimated Total:</span>
-                <span style={{ fontSize: '26px', fontWeight: 800, color: '#C5A059' }}>{fmt(totalCost)}</span>
+                <span style={{ fontSize: '26px', fontWeight: 800, color: '#C5A059' }}>{fmt(pricing.total)}</span>
               </div>
               <p style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '8px', lineHeight: 1.5 }}>
-                *Final price may vary based on installation complexity and additional requirements.
+                Includes stone, fabrication, edge finishing, installation, logistics, and 12% VAT.
               </p>
             </div>
 
