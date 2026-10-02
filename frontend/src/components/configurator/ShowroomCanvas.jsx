@@ -11,7 +11,6 @@ import {
 } from "react";
 import * as THREE from "three";
 import useConfiguratorStore from "../../store/configuratorStore";
-import { processSceneMeshes, parseStructureConfig } from "../../utils/meshSegmentation";
 
 /* ─────────────────────────────────────────
    SHOWROOM CANVAS — Carousel Edition
@@ -65,68 +64,20 @@ function meshZone(name = "") {
   for (const [key, zone] of Object.entries(EXACT_ZONE_MAP)) {
     if (key.toLowerCase() === lower) return zone;
   }
-  if (
-    [
-      "wall",
-      "walls"
-    ].some((kw) => lower.includes(kw))
-  )
-    return "wall";
-  if (
-    [
-      "floor",
-      "ground"
-    ].some((kw) => lower.includes(kw))
-  )
-    return "floor";
-  if (
-    [
-      "top",
-      "surface",
-      "stone",
-      "counter",
-      "slab",
-      "granite",
-      "marble",
-      "quartz",
-    ].some((kw) => lower.includes(kw))
-  )
-    return "stone";
-  if (
-    [
-      "sink",
-      "faucet",
-      "tap",
-      "handle",
-      "spout",
-      "basin",
-      "drain",
-      "chrome",
-      "steel",
-      "metal",
-    ].some((kw) => lower.includes(kw))
-  )
-    return "metal";
-  if (
-    [
-      "cabinet",
-      "carcass",
-      "door",
-      "base",
-      "body",
-      "panel",
-      "drawer",
-      "frame",
-      "unit",
-      "box",
-    ].some((kw) => lower.includes(kw))
-  )
-    return "cabinet";
-  if (
-    ["socket", "outlet", "plug", "electrical"].some((kw) => lower.includes(kw))
-  )
-    return "socket";
-  return "default";
+  // 2. Keyword fallback (handles bar countertops, lobby counters, and all Blender variants)
+  if (['top','surface','stone','counter','bartop','bar_top','lobby_top','slab','granite','marble','quartz','wall','floor','table','desk'].some((kw) => lower.includes(kw)))
+    return 'stone';
+  if (['sink','faucet','tap','handle','spout','basin','drain','chrome','steel','metal','fixture','rail','footrest','bracket','pipe','brass'].some((kw) => lower.includes(kw)))
+    return 'metal';
+  if (['cabinet','carcass','door','base','body','panel','drawer','frame','unit','box','wood','front','stand','shelf','structure','bar_base','lobby_base'].some((kw) => lower.includes(kw)))
+    return 'cabinet';
+  if (['socket','outlet','plug','electrical'].some((kw) => lower.includes(kw)))
+    return 'socket';
+  if (['wall','walls'].some((kw) => lower.includes(kw)))
+    return 'wall';
+  if (['floor','ground'].some((kw) => lower.includes(kw)))
+    return 'floor';
+  return 'default';
 }
 
 /* Static shared materials — instantiated once at module load, never recreated */
@@ -196,47 +147,66 @@ const ShowroomModel = memo(function ShowroomModel({ structure, position }) {
   const { scene } = useGLTF(structure.model_url, true);
   const spinRef = useRef();
 
-  /* Clone and segment the scene for showroom turntable display */
-  const displayScene = useMemo(() => {
-    if (!scene) return null;
-    const cloned = scene.clone(true);
-    const meshes = [];
-    cloned.traverse((n) => {
-      if (n.isMesh) {
-        n.castShadow = true;
-        n.receiveShadow = true;
-        meshes.push(n);
+  /* Apply zone materials once the scene graph is available */
+  useEffect(() => {
+    const s = [];
+    const c = [];
+    const unassigned = [];
+
+    scene.traverse((n) => {
+      if (!n.isMesh) return;
+      n.castShadow = true;
+      n.receiveShadow = true;
+      let zone = meshZone(n.name);
+      if (zone === "default" && n.parent?.name) zone = meshZone(n.parent.name);
+
+      if (zone === "stone") {
+        s.push(n);
+        n.material = SHOWROOM_MATERIALS.stone;
+      } else if (zone === "cabinet") {
+        c.push(n);
+        n.material = SHOWROOM_MATERIALS.cabinet;
+      } else if (zone === "metal") {
+        n.material = SHOWROOM_MATERIALS.metal;
+      } else if (zone === "socket") {
+        n.material = SHOWROOM_MATERIALS.socket;
+      } else if (zone === "wall") {
+        n.material = SHOWROOM_MATERIALS.wall;
+      } else if (zone === "floor") {
+        n.material = SHOWROOM_MATERIALS.floor;
+      } else {
+        unassigned.push(n);
       }
     });
 
-    // Check if there are pre-separated Blender meshes
-    const hasNamedStone = meshes.some((m) => meshZone(m.name) === 'stone');
-    if (hasNamedStone) {
-      meshes.forEach((n) => {
-        let zone = meshZone(n.name);
-        if (zone === "default" && n.parent?.name) zone = meshZone(n.parent.name);
-        n.material = SHOWROOM_MATERIALS[zone] || SHOWROOM_MATERIALS.default;
-      });
-      return cloned;
-    }
-
-    // Single-mesh model (Meshy AI): auto-segment for showroom presentation
-    const structureConfig = parseStructureConfig(structure);
-    const result = processSceneMeshes(cloned, structureConfig);
-    if (result.isAutoSegmented) {
-      result.stoneMeshes.forEach((m) => { m.material = SHOWROOM_MATERIALS.stone; });
-      result.cabinetMeshes.forEach((m) => { m.material = SHOWROOM_MATERIALS.cabinet; });
-      result.metalMeshes?.forEach((m) => { m.material = SHOWROOM_MATERIALS.metal; });
+    // Smart Mesh Detection & Geometric Height Fallback:
+    if (!s.length) {
+      const candidates = [...unassigned, ...c];
+      if (candidates.length <= 1) {
+        scene.traverse((n) => {
+          if (n.isMesh) n.material = SHOWROOM_MATERIALS.stone;
+        });
+      } else {
+        const bounds = candidates.map((m) => {
+          m.geometry?.computeBoundingBox?.();
+          const box = new THREE.Box3().setFromObject(m);
+          return {
+            mesh: m,
+            centerY: box.getCenter(new THREE.Vector3()).y,
+          };
+        });
+        bounds.sort((a, b) => b.centerY - a.centerY);
+        bounds[0].mesh.material = SHOWROOM_MATERIALS.stone;
+        for (let i = 1; i < bounds.length; i++) {
+          bounds[i].mesh.material = SHOWROOM_MATERIALS.cabinet;
+        }
+      }
     } else {
-      meshes.forEach((n) => {
-        let zone = meshZone(n.name);
-        if (zone === "default" && n.parent?.name) zone = meshZone(n.parent.name);
-        n.material = SHOWROOM_MATERIALS[zone] || SHOWROOM_MATERIALS.default;
+      unassigned.forEach((n) => {
+        n.material = SHOWROOM_MATERIALS.cabinet;
       });
     }
-
-    return cloned;
-  }, [scene, structure]);
+  }, [scene]);
 
   /* Slow elegant turntable — ~1 full revolution every 22 seconds */
   useFrame((_, delta) => {
@@ -247,7 +217,7 @@ const ShowroomModel = memo(function ShowroomModel({ structure, position }) {
     <group position={position}>
       {/* Spinning model sub-group */}
       <group ref={spinRef}>
-        {displayScene && <primitive object={displayScene} />}
+        <primitive object={scene} />
       </group>
 
       {/* 3-tier product display stand (static) */}

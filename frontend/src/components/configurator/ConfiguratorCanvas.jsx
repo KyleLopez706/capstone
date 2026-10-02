@@ -10,7 +10,6 @@ import {
 import { Suspense, useEffect, useMemo, useRef, Component } from "react";
 import * as THREE from "three";
 import useConfiguratorStore from "../../store/configuratorStore";
-import { processSceneMeshes, parseStructureConfig } from "../../utils/meshSegmentation";
 
 function CameraOffset() {
   const { camera, size } = useThree();
@@ -63,12 +62,12 @@ function meshZone(name = '') {
     if (key.toLowerCase() === lower) return zone;
   }
 
-  // 2. Keyword fallback (future-proofs against renamed meshes)
-  if (['top','surface','stone','counter','slab','granite','marble','quartz','wall','floor'].some((kw) => lower.includes(kw)))
+  // 2. Keyword fallback (handles bar countertops, lobby counters, and all Blender variants)
+  if (['top','surface','stone','counter','bartop','bar_top','lobby_top','slab','granite','marble','quartz','wall','floor','table','desk'].some((kw) => lower.includes(kw)))
     return 'stone';
-  if (['sink','faucet','tap','handle','spout','basin','drain','chrome','steel','metal','fixture'].some((kw) => lower.includes(kw)))
+  if (['sink','faucet','tap','handle','spout','basin','drain','chrome','steel','metal','fixture','rail','footrest','bracket','pipe','brass'].some((kw) => lower.includes(kw)))
     return 'metal';
-  if (['cabinet','carcass','door','base','body','panel','drawer','frame','unit','box'].some((kw) => lower.includes(kw)))
+  if (['cabinet','carcass','door','base','body','panel','drawer','frame','unit','box','wood','front','stand','shelf','structure','bar_base','lobby_base'].some((kw) => lower.includes(kw)))
     return 'cabinet';
   if (['socket','outlet','plug','electrical'].some((kw) => lower.includes(kw)))
     return 'socket';
@@ -293,12 +292,6 @@ function CountertopWithMaterial({ modelUrl, onTextureApplied, theme, lowEndMode 
   const dimensions        = useConfiguratorStore((s) => s.dimensions);
   const selectedStructure = useConfiguratorStore((s) => s.selectedStructure);
 
-  // Parse structure segmentation config from URL params or structure_type
-  const structureConfig = useMemo(() => {
-    if (!selectedStructure) return null;
-    return parseStructureConfig(selectedStructure);
-  }, [selectedStructure]);
-
   /* ── Derive non-uniform scale factors ──
      The model's GLB geometry represents the structure's base dimensions.
      When the user inputs larger/smaller dimensions, we scale the scene
@@ -313,17 +306,20 @@ function CountertopWithMaterial({ modelUrl, onTextureApplied, theme, lowEndMode 
   // Prevents unnecessary re-runs of the TextureApplicator effect.
   const scaleFactors = useMemo(() => ({ x: scaleX, z: scaleZ }), [scaleX, scaleZ]);
 
-  // Clone and segment the scene:
-  //   • If already divided in Blender into named zones, use them
-  //   • If single-mesh (Meshy AI), auto-segment into stone, cabinet, and metal fixtures
-  const { displayScene, stoneMeshes, cabinetMeshes } = useMemo(() => {
-    if (!scene) return { displayScene: null, stoneMeshes: [], cabinetMeshes: [] };
-    const cloned = scene.clone(true);
+  // Clone so we don't mutate the shared cached GLTF
+  const clonedScene = useMemo(() => scene.clone(true), [scene]);
+
+  // Traverse the cloned scene once:
+  //   • stone meshes (separated in Blender) are collected for TextureApplicator
+  //   • cabinet meshes (separated in Blender) are collected for CabinetTextureApplicator
+  //   • metal fixtures receive stainless steel chrome
+  //   • all other meshes receive their respective zone material
+  const { stoneMeshes, cabinetMeshes } = useMemo(() => {
     const s = [];
     const c = [];
-    const m = [];
+    const unassigned = [];
 
-    cloned.traverse((n) => {
+    clonedScene.traverse((n) => {
       if (!n.isMesh) return;
       n.castShadow    = true;
       n.receiveShadow = true;
@@ -337,53 +333,72 @@ function CountertopWithMaterial({ modelUrl, onTextureApplied, theme, lowEndMode 
         s.push(n);
       } else if (zone === 'cabinet') {
         c.push(n);
+        n.material = ZONE_MATERIALS.cabinet;
       } else if (zone === 'metal') {
-        m.push(n);
         n.material = ZONE_MATERIALS.metal;
+      } else if (zone === 'socket') {
+        n.material = ZONE_MATERIALS.socket;
       } else {
-        n.material = ZONE_MATERIALS[zone] ?? ZONE_MATERIALS.default;
+        unassigned.push(n);
       }
     });
 
-    // If single monolithic mesh (no Blender 'stone' mesh found)
+    // Smart Mesh Detection & Geometric Height Fallback:
+    // If meshes were separated in Blender:
+    // 1. If stone meshes matched by name -> assign any unassigned mesh to cabinet base
+    // 2. If NO stone meshes matched by name (e.g. default names like Cube, Cube.001) ->
+    //    analyze bounding box heights: highest mesh = countertop (stone), lower meshes = cabinet base.
     if (!s.length) {
-      const result = processSceneMeshes(cloned, structureConfig || { preset: 'countertop', cutoff: 0.82 });
-      if (result.isAutoSegmented && result.stoneMeshes.length > 0) {
-        // Ensure metal fixtures (sink, faucet, stove) receive shiny metallic chrome
-        result.metalMeshes?.forEach((node) => {
-          node.material = ZONE_MATERIALS.metal;
+      const candidates = [...unassigned, ...c];
+      if (candidates.length <= 1) {
+        // Single mesh model: apply stone texture to entire model
+        clonedScene.traverse((n) => { if (n.isMesh) s.push(n); });
+      } else {
+        // Multiple separated meshes: sort by Y-center descending
+        const bounds = candidates.map((m) => {
+          m.geometry?.computeBoundingBox?.();
+          const box = new THREE.Box3().setFromObject(m);
+          return {
+            mesh: m,
+            centerY: box.getCenter(new THREE.Vector3()).y,
+          };
         });
-        return {
-          displayScene: cloned,
-          stoneMeshes: result.stoneMeshes,
-          cabinetMeshes: result.cabinetMeshes.length > 0 ? result.cabinetMeshes : c,
-        };
+        bounds.sort((a, b) => b.centerY - a.centerY);
+
+        // Top-most mesh is the countertop
+        s.push(bounds[0].mesh);
+
+        // Lower meshes are cabinet base
+        for (let i = 1; i < bounds.length; i++) {
+          const lower = bounds[i].mesh;
+          if (!c.includes(lower)) {
+            c.push(lower);
+          }
+          lower.material = ZONE_MATERIALS.cabinet;
+        }
       }
+    } else {
+      // Stone was identified by name; assign any leftover unassigned meshes to cabinet
+      unassigned.forEach((n) => {
+        if (!c.includes(n)) {
+          c.push(n);
+        }
+        n.material = ZONE_MATERIALS.cabinet;
+      });
     }
 
-    if (!s.length) {
-      cloned.traverse((n) => { if (n.isMesh) s.push(n); });
-      console.warn(
-        '[Configurator] No stone mesh matched — PBR applied to all meshes. '
-        + 'Add the correct Blender name to EXACT_ZONE_MAP in ConfiguratorCanvas.jsx.',
-      );
-    }
-
-    return { displayScene: cloned, stoneMeshes: s, cabinetMeshes: c };
-  }, [scene, structureConfig]);
+    return { stoneMeshes: s, cabinetMeshes: c };
+  }, [clonedScene]);
 
   // Dynamically compute the model's lowest point so the floor never clips
   const minY = useMemo(() => {
-    if (!displayScene) return 0;
-    const box = new THREE.Box3().setFromObject(displayScene);
+    const box = new THREE.Box3().setFromObject(clonedScene);
     return isFinite(box.min.y) ? box.min.y : 0;
-  }, [displayScene]);
-
-  if (!displayScene) return null;
+  }, [clonedScene]);
 
   return (
     <>
-      <primitive object={displayScene} scale={[scaleX, 1, scaleZ]} />
+      <primitive object={clonedScene} scale={[scaleX, 1, scaleZ]} />
       
       <group position={[0, minY, 0]}>
         {!lowEndMode && (
