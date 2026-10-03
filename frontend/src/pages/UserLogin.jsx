@@ -47,7 +47,9 @@ export default function UserLogin() {
 
   /* ── Forgot Password state machine ──
      forgotStep: null | "request" | "verify" */
-  const [forgotStep, setForgotStep] = useState(null);
+  const [forgotStep, setForgotStep] = useState(() => {
+    return new URLSearchParams(window.location.search).get("mode") === "forgot" ? "request" : null;
+  });
   const [resetEmail, setResetEmail] = useState("");
 
   const [forgotLoading, setForgotLoading] = useState(false);
@@ -55,6 +57,13 @@ export default function UserLogin() {
   const navigate = useNavigate();
   const { toast, showToast, dismissToast } = useToast();
   const isRouting = useRef(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("mode") === "forgot") {
+      setForgotStep("request");
+    }
+  }, []);
 
   /* ── Role-based routing helper ──
      Queries only the 'role' column to keep the query lean (AGENTS.md §A).

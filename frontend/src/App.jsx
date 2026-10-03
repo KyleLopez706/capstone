@@ -31,8 +31,27 @@ function App() {
   // Prevents UI flashing (showing the Home page for a split second)
   // while Supabase is processing the Google login code in the background.
   const [isProcessingOAuth, setIsProcessingOAuth] = useState(() => {
-    return window.location.search.includes("code=") || localStorage.getItem("sixsigma_oauth_remember") !== null;
+    // Never show OAuth loader on password reset route
+    if (window.location.pathname === "/reset-password") return false;
+    // Explicit auth errors in URL means auth failed, don't show OAuth loader
+    if (window.location.search.includes("error=") || window.location.hash.includes("error=")) {
+      localStorage.removeItem("sixsigma_oauth_remember");
+      return false;
+    }
+    const hasCodeInUrl = window.location.search.includes("code=");
+    const hasOAuthPending = localStorage.getItem("sixsigma_oauth_remember") !== null;
+    return hasCodeInUrl || hasOAuthPending;
   });
+
+  // Safety timeout: OAuth loader should never hang indefinitely
+  useEffect(() => {
+    if (!isProcessingOAuth) return;
+    const timeout = setTimeout(() => {
+      setIsProcessingOAuth(false);
+      localStorage.removeItem("sixsigma_oauth_remember");
+    }, 4000);
+    return () => clearTimeout(timeout);
+  }, [isProcessingOAuth]);
 
   // Prevents the OAuth routing block from executing more than once.
   // Both SIGNED_IN and INITIAL_SESSION can fire during the same OAuth
@@ -67,6 +86,7 @@ function App() {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       /* ── Password Recovery ── */
       if (event === "PASSWORD_RECOVERY") {
+        setIsProcessingOAuth(false);
         sessionStorage.setItem("sixsigma_active", "1");
         navigate("/reset-password", { replace: true });
         return;
@@ -79,7 +99,10 @@ function App() {
 
         const oauthPendingStr = localStorage.getItem("sixsigma_oauth_remember");
         // Only act when the OAuth flag exists AND we have a valid session
-        if (oauthPendingStr === null || !session) return;
+        if (oauthPendingStr === null || !session) {
+          if (isProcessingOAuth) setIsProcessingOAuth(false);
+          return;
+        }
 
         // Mark as handled so the other event doesn't double-fire
         oauthHandled.current = true;
@@ -123,6 +146,7 @@ function App() {
 
       /* ── Sign Out — clean up everything ── */
       if (event === "SIGNED_OUT") {
+        setIsProcessingOAuth(false);
         sessionStorage.removeItem("sixsigma_active");
         localStorage.removeItem("sixsigma_remember");
         localStorage.removeItem("sixsigma_oauth_remember");
@@ -167,6 +191,9 @@ function App() {
         await supabase.auth.signOut();
         return;
       }
+
+      // If user is actively on reset password page, do not route away
+      if (isResetRoute) return;
 
       // Route by role
       const isOnAdminRoute = window.location.pathname === "/dashboard";

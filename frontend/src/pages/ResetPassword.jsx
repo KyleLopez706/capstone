@@ -30,9 +30,24 @@ import { useToast, ToastNotification } from "../utils/toast";
         → show "Link invalid or expired" error
 ─────────────────────────────────────────── */
 export default function ResetPassword() {
+  // Extract error params if Supabase redirected with an expired or invalid token
+  const searchParams = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const urlError = searchParams.get("error") || hashParams.get("error");
+  const urlErrorCode = searchParams.get("error_code") || hashParams.get("error_code");
+  const urlErrorDesc = searchParams.get("error_description") || hashParams.get("error_description");
+
+  const isInitiallyExpired = Boolean(urlError || urlErrorCode);
+
   /* ── UI state machine ──
      "verifying" | "ready" | "success" | "expired" */
-  const [stage, setStage] = useState("verifying");
+  const [stage, setStage] = useState(() => (isInitiallyExpired ? "expired" : "verifying"));
+  const [expiredMessage, setExpiredMessage] = useState(() => {
+    if (urlErrorDesc) {
+      return decodeURIComponent(urlErrorDesc.replace(/\+/g, " "));
+    }
+    return "This password reset link has expired or already been used. Please request a new one.";
+  });
 
   /* ── Form state ── */
   const [newPassword,     setNewPassword]     = useState("");
@@ -51,6 +66,8 @@ export default function ResetPassword() {
      tokens for a live session — no manual URL parsing needed,
      which prevents the "double tab" flicker. */
   useEffect(() => {
+    if (isInitiallyExpired) return;
+
     let expireTimer;
 
     // Check if the user already has a valid session on mount.
@@ -64,7 +81,7 @@ export default function ResetPassword() {
         // Only start the timer if no session is active yet
         expireTimer = setTimeout(() => {
           setStage((prev) => (prev === "verifying" ? "expired" : prev));
-        }, 6000);
+        }, 5000);
       }
     };
     checkInitialSession();
@@ -83,7 +100,7 @@ export default function ResetPassword() {
       if (expireTimer) clearTimeout(expireTimer);
       subscription.unsubscribe();
     };
-  }, []);
+  }, [isInitiallyExpired]);
 
   /* ── Handle new-password submission ── */
   const handleSubmit = async (e) => {
@@ -197,17 +214,28 @@ export default function ResetPassword() {
               Link Invalid or Expired
             </h2>
             <p className="text-sm mb-6" style={{ color: "#9CA3AF" }}>
-              This password reset link has expired or already been used. Please request a new one.
+              {expiredMessage}
             </p>
-            <button
-              onClick={() => navigate("/login")}
-              className="w-full font-semibold text-sm tracking-widest uppercase py-3.5 rounded-lg transition-all duration-200 cursor-pointer"
-              style={{ backgroundColor: "#C5A059", color: "#ffffff" }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#b08d47")}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#C5A059")}
-            >
-              Back to Sign In
-            </button>
+            <div className="space-y-3">
+              <button
+                onClick={() => navigate("/login?mode=forgot")}
+                className="w-full font-semibold text-sm tracking-widest uppercase py-3.5 rounded-lg transition-all duration-200 cursor-pointer"
+                style={{ backgroundColor: "#C5A059", color: "#ffffff" }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#b08d47")}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#C5A059")}
+              >
+                Request New Reset Link
+              </button>
+              <button
+                onClick={() => navigate("/login")}
+                className="w-full font-medium text-xs tracking-wider uppercase py-2 transition-colors duration-150 cursor-pointer"
+                style={{ color: "#9CA3AF" }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "#232B32")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "#9CA3AF")}
+              >
+                Back to Sign In
+              </button>
+            </div>
           </div>
         )}
 
