@@ -217,7 +217,6 @@ export default function UserLogin() {
   const handleForgotRequest = async (e) => {
     e.preventDefault();
 
-
     if (!resetEmail) {
       showToast('Please enter your email address.', 'error');
       return;
@@ -225,23 +224,6 @@ export default function UserLogin() {
 
     setForgotLoading(true);
     try {
-      /* ── Step 1: Verify the email belongs to an existing account ──────────
-         We call a SECURITY DEFINER Postgres function that checks auth.users.
-         This prevents reset emails from being sent to addresses that have
-         never registered — the user gets a clear, friendly error instead.
-         The check happens server-side so auth.users is never exposed publicly.
-      ────────────────────────────────────────────────────────────────────── */
-      const { data: emailExists, error: checkError } = await supabase
-        .rpc('check_email_exists', { email_input: resetEmail });
-
-      if (checkError) throw new Error(checkError.message);
-
-      if (!emailExists) {
-        showToast('No account found with this email address. Please sign up first.', 'error');
-        return;
-      }
-
-      /* ── Step 2: Email confirmed — safe to send the reset link ── */
       const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
         redirectTo: `${window.location.origin}/reset-password`,
       });

@@ -99,7 +99,7 @@ export default function About() {
                 className="text-base sm:text-lg leading-relaxed"
                 style={{ color: "#6B7280" }}
               >
-                Over the years, Six SigmaPhil expanded its expertise beyond traditional process improvement. Today, the company provides integrated business solutions that include process optimization, data analytics, digital transformation consulting, and corporate training programs. Through a team of dedicated professionals, the company continues to empower organizations to reach operational excellence while fostering a culture of continuous improvement.
+                Over the years, Six SigmaPhil expanded its expertise beyond traditional process improvement. The company implemented 3D models for product visualization, machine learning dynamic price estimate for projects, and a overall better experience for customers. Through a team of dedicated professionals, the company continues to empower organizations to reach operational excellence while fostering a culture of continuous improvement.
               </p>
             </div>
           </div>
