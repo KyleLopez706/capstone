@@ -107,8 +107,8 @@ export default function ResetPassword() {
     e.preventDefault();
 
     // Client-side validation
-    if (newPassword.length < 6) {
-      showToast("Password must be at least 6 characters.", "error");
+    if (newPassword.length < 8) {
+      showToast("Password must be at least 8 characters.", "error");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -273,7 +273,7 @@ export default function ResetPassword() {
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     required
-                    placeholder="Min. 6 characters"
+                    placeholder="Min. 8 characters"
                     className="w-full rounded-lg pl-11 pr-11 py-3 text-sm outline-none transition-all duration-200"
                     style={inputBase}
                     onFocus={onFocus}
