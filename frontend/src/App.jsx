@@ -34,12 +34,16 @@ function App() {
     // Never show OAuth loader on password reset route
     if (window.location.pathname === "/reset-password") return false;
     // Explicit auth errors in URL means auth failed, don't show OAuth loader
-    if (window.location.search.includes("error=") || window.location.hash.includes("error=")) {
+    if (
+      window.location.search.includes("error=") ||
+      window.location.hash.includes("error=")
+    ) {
       localStorage.removeItem("sixsigma_oauth_remember");
       return false;
     }
     const hasCodeInUrl = window.location.search.includes("code=");
-    const hasOAuthPending = localStorage.getItem("sixsigma_oauth_remember") !== null;
+    const hasOAuthPending =
+      localStorage.getItem("sixsigma_oauth_remember") !== null;
     return hasCodeInUrl || hasOAuthPending;
   });
 
@@ -174,7 +178,8 @@ function App() {
     const checkPersistence = async () => {
       // Bail out completely during OAuth — the listener above handles it
       const hasCodeInUrl = window.location.search.includes("code=");
-      const oauthPending = localStorage.getItem("sixsigma_oauth_remember") !== null;
+      const oauthPending =
+        localStorage.getItem("sixsigma_oauth_remember") !== null;
       if (hasCodeInUrl || oauthPending) return;
 
       // No OAuth in progress — safe to read the cached session
@@ -265,7 +270,10 @@ function App() {
           <Route path="/admin/settings" element={<AdminSettings />} />
           <Route path="/admin/materials" element={<AdminMaterials />} />
           <Route path="/admin/models" element={<AdminModels />} />
-          <Route path="/admin/cabinet-colors" element={<AdminCabinetColors />} />
+          <Route
+            path="/admin/cabinet-colors"
+            element={<AdminCabinetColors />}
+          />
           <Route path="/admin/gallery" element={<AdminGallery />} />
         </Route>
         <Route path="/admin/quotation/:id" element={<CreateQuotation />} />

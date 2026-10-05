@@ -10,13 +10,7 @@ import {
   Loader2,
   Trash2,
   AlertTriangle,
-  Info,
   CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  Sparkles,
-  Layers,
-  Scissors,
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useToast, ToastNotification } from '../utils/toast';
@@ -274,7 +268,6 @@ export default function AdminModels() {
     base_width: 0.6,
     model_file: null,
   });
-  const [showGuide, setShowGuide] = useState(true);
 
   const fetchModels = async () => {
     Promise.resolve().then(() => setLoading(true));
@@ -578,122 +571,6 @@ export default function AdminModels() {
                   </div>
                 )}
 
-                {/* 4. Blender 3D Preparation & UV Unwrapping Guide (Collapsible) */}
-                <div className="border border-[#E2E8F0] rounded-2xl bg-[#FFFFFF] overflow-hidden shadow-xs">
-                  <button
-                    type="button"
-                    onClick={() => setShowGuide(!showGuide)}
-                    className="w-full flex items-center justify-between p-4 bg-[#F9F9FB] hover:bg-[#F2F2F6] transition-colors text-left"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-[#FFFFFF] border border-[#E2E8F0] flex items-center justify-center text-[#C5A059] shrink-0">
-                        <Sparkles size={16} />
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-semibold text-[#232B32]">
-                          Blender Preparation Guide for New Models
-                        </h4>
-                        <p className="text-xs text-[#6B7280]">
-                          Bar Countertops, Lobby Desks, Islands & Kitchen Units
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-[#C5A059] shrink-0">
-                      <span>{showGuide ? 'Hide Instructions' : 'View Instructions'}</span>
-                      {showGuide ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                    </div>
-                  </button>
-
-                  {showGuide && (
-                    <div className="p-4 sm:p-5 flex flex-col gap-4 text-xs text-[#6B7280] leading-relaxed border-t border-[#E2E8F0] bg-[#FFFFFF]">
-                      <p className="text-[#232B32]">
-                        The 3D Configurator and Showroom automatically detect separated meshes to apply the client&apos;s chosen <strong>Granite / Stone texture</strong> to countertops and <strong>Wood finishes</strong> to base cabinets. Follow these steps in Blender before exporting:
-                      </p>
-
-                      {/* 3 Steps */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div className="p-3.5 rounded-xl border border-[#E2E8F0] bg-[#F9F9FB] flex flex-col gap-1.5">
-                          <div className="flex items-center gap-2 font-semibold text-[#232B32]">
-                            <Scissors size={14} className="text-[#C5A059]" />
-                            <span>1. Separate Meshes</span>
-                          </div>
-                          <p className="text-[11px] text-[#6B7280]">
-                            In Blender <strong>Edit Mode</strong>, select the top slab faces &rarr; press <kbd className="px-1 py-0.5 bg-white border border-[#E2E8F0] rounded text-[10px] font-mono text-[#232B32]">P</kbd> &rarr; <em>Selection</em>. Keep the stone top separated from the base carcass.
-                          </p>
-                        </div>
-
-                        <div className="p-3.5 rounded-xl border border-[#E2E8F0] bg-[#F9F9FB] flex flex-col gap-1.5">
-                          <div className="flex items-center gap-2 font-semibold text-[#232B32]">
-                            <Layers size={14} className="text-[#C5A059]" />
-                            <span>2. UV Unwrap Top</span>
-                          </div>
-                          <p className="text-[11px] text-[#6B7280]">
-                            Select the countertop mesh &rarr; press <kbd className="px-1 py-0.5 bg-white border border-[#E2E8F0] rounded text-[10px] font-mono text-[#232B32]">U</kbd> &rarr; <em>Smart UV Project</em> (Island Margin 0.01). This allows seamless marble and granite veins to map naturally without stretching.
-                          </p>
-                        </div>
-
-                        <div className="p-3.5 rounded-xl border border-[#E2E8F0] bg-[#F9F9FB] flex flex-col gap-1.5">
-                          <div className="flex items-center gap-2 font-semibold text-[#232B32]">
-                            <CheckCircle2 size={14} className="text-[#C5A059]" />
-                            <span>3. Name Meshes</span>
-                          </div>
-                          <p className="text-[11px] text-[#6B7280]">
-                            Name objects in the Blender Outliner for instant mapping across the showroom and 3D configurator.
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Auto-Detection Naming Table */}
-                      <div className="rounded-xl border border-[#E2E8F0] overflow-hidden">
-                        <div className="bg-[#F9F9FB] px-3.5 py-2 font-semibold text-[#232B32] text-[11px] border-b border-[#E2E8F0]">
-                          Mesh Naming Rules & Model Keywords:
-                        </div>
-                        <div className="p-3.5 flex flex-col gap-2.5 bg-[#FFFFFF]">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-2 border-b border-[#E2E8F0]">
-                            <div className="flex items-center gap-2">
-                              <span className="w-2.5 h-2.5 rounded-full bg-[#C5A059] shrink-0" />
-                              <strong className="text-[#232B32]">Countertop / Top Surface:</strong>
-                              <span className="text-[#6B7280]">(Granite / Marble / Quartz texture)</span>
-                            </div>
-                            <code className="text-[#C5A059] font-mono font-semibold bg-[#F9F9FB] px-2 py-0.5 rounded text-[11px]">
-                              stone, countertop, bartop, lobby_top, top
-                            </code>
-                          </div>
-
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-2 border-b border-[#E2E8F0]">
-                            <div className="flex items-center gap-2">
-                              <span className="w-2.5 h-2.5 rounded-full bg-[#7F5112] shrink-0" />
-                              <strong className="text-[#232B32]">Base / Cabinet / Desk:</strong>
-                              <span className="text-[#6B7280]">(Cabinet Wood colors)</span>
-                            </div>
-                            <code className="text-[#232B32] font-mono font-semibold bg-[#F9F9FB] px-2 py-0.5 rounded text-[11px]">
-                              cabinet, base, wood, front, stand, shelf
-                            </code>
-                          </div>
-
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                            <div className="flex items-center gap-2">
-                              <span className="w-2.5 h-2.5 rounded-full bg-[#94A3B8] shrink-0" />
-                              <strong className="text-[#232B32]">Fixtures & Hardware:</strong>
-                              <span className="text-[#6B7280]">(Polished Chrome Steel)</span>
-                            </div>
-                            <code className="text-[#232B32] font-mono font-semibold bg-[#F9F9FB] px-2 py-0.5 rounded text-[11px]">
-                              metal, rail, footrest, bracket, sink, faucet
-                            </code>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Smart Fail-Safe Notice */}
-                      <div className="p-3 bg-[#F9F9FB] rounded-xl border border-[#E2E8F0] flex items-start gap-2.5 text-[11px]">
-                        <Info size={15} className="text-[#C5A059] shrink-0 mt-0.5" />
-                        <span className="text-[#6B7280]">
-                          <strong className="text-[#232B32]">Smart Fail-Safe:</strong> Even if you keep default Blender mesh names (<code className="font-mono text-[#232B32]">Cube</code>, <code className="font-mono text-[#232B32]">Cube.001</code>), the configurator engine automatically measures 3D geometry heights and assigns the highest mesh as the stone countertop and lower meshes as the cabinet base!
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
 
               {/* Modal Footer */}
