@@ -49,9 +49,9 @@ export default function About() {
             className="text-lg sm:text-xl leading-relaxed max-w-2xl mx-auto"
             style={{ color: "#E2E8F0" }}
           >
-            Six Sigmaphil has been the Philippines' premier destination for
-            world-class granite and marble surfaces since our founding. We blend
-            craftsmanship with technology to bring your vision to life.
+            Six Sigmaphil has been the option for many clients in the Philippines as
+            we offer quality granite and marble surfaces. We blend craftsmanship
+            with technology to bring your vision to life.
           </p>
         </div>
       </section>
