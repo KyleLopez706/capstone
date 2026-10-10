@@ -43,3 +43,9 @@ AGENTS.md
 
 # Academic paper & questionnaire documents
 paper/
+
+# Excel / Evaluation documents
+excel/
+*.xlsx
+*.xlsx.bak
+
