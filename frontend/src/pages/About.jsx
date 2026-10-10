@@ -93,13 +93,13 @@ export default function About() {
                 className="text-base sm:text-lg leading-relaxed mb-6"
                 style={{ color: "#6B7280" }}
               >
-                Founded in 2005 by Roland Koh, SixSigmaPhil Enterprise Corporation is engaged in the supply fabrication and installation of high quality granite, marble, limestone, sandstone, quartz & slates. Roland, an engineer by profession and a visionary by nature, was deeply inspired by the Six Sigma methodology, a systematic approach to eliminating waste, reducing errors, and optimizing performance in organizations.
+                Founded in 2005 by Roland Koh, Six Sigmaphil Enterprise Corporation is engaged in the supply fabrication and installation of high quality granite, marble, limestone, sandstone, quartz & slates. Roland, an engineer by profession and a visionary by nature, was deeply inspired by the Six Sigma methodology, a systematic approach to eliminating waste, reducing errors, and optimizing performance in organizations.
               </p>
               <p
                 className="text-base sm:text-lg leading-relaxed"
                 style={{ color: "#6B7280" }}
               >
-                Over the years, Six SigmaPhil expanded its expertise beyond traditional process improvement. The company implemented 3D models for product visualization, machine learning dynamic price estimate for projects, and a overall better experience for customers. Through a team of dedicated professionals, the company continues to empower organizations to reach operational excellence while fostering a culture of continuous improvement.
+                Over the years, Six Sigmaphil expanded its expertise beyond traditional process improvement. The company implemented 3D models for product visualization, machine learning dynamic price estimate for projects, and a overall better experience for customers. Through a team of dedicated professionals, the company continues to empower organizations to reach operational excellence while fostering a culture of continuous improvement.
               </p>
             </div>
           </div>
