@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { createConfiguredGLTFLoader } from '../utils/gltfLoader';
 import {
   Plus,
   Box,
@@ -11,9 +11,11 @@ import {
   Trash2,
   AlertTriangle,
   CheckCircle2,
+  Eye,
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useToast, ToastNotification } from '../utils/toast';
+import Model3DPreview from '../components/Model3DPreview';
 
 const STRUCTURE_TYPE_LABELS = {
   countertop: 'Kitchen / Vanity Countertop',
@@ -31,7 +33,7 @@ const analyzeGlbFile = (file) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const loader = new GLTFLoader();
+        const loader = createConfiguredGLTFLoader();
         loader.parse(
           e.target.result,
           '',
@@ -163,16 +165,26 @@ const FileUploadZone = ({ label, required, accept, file, onChange, onRemove }) =
   );
 };
 
-const ModelCard = ({ model, onEdit, onDelete }) => {
+const ModelCard = ({ model, onEdit, onDelete, onInspect }) => {
   const typeLabel = STRUCTURE_TYPE_LABELS[model.structure_type] || 'Countertop';
 
   return (
     <div className="flex flex-col bg-[#FFFFFF] border border-[#E2E8F0] rounded-2xl shadow-sm overflow-hidden transition-all hover:shadow-md">
-      <div className="relative h-40 bg-[#F9F9FB] flex items-center justify-center border-b border-[#E2E8F0]">
-        <Box size={48} className="text-[#C5A059] opacity-70" />
+      {/* Thumbnail area with quick 3D inspect overlay */}
+      <div
+        onClick={() => onInspect(model)}
+        className="relative h-40 bg-[#F9F9FB] flex items-center justify-center border-b border-[#E2E8F0] cursor-pointer group"
+        title="Click to inspect 3D model"
+      >
+        <Box size={48} className="text-[#C5A059] opacity-70 group-hover:scale-110 transition-transform" />
         <div className="absolute top-3 right-3">
           <span className="text-[11px] font-semibold tracking-wide uppercase px-2.5 py-1 rounded-full bg-[#FFFFFF] border border-[#E2E8F0] text-[#232B32] shadow-xs">
             {typeLabel}
+          </span>
+        </div>
+        <div className="absolute inset-0 bg-[#232B32]/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <span className="px-3 py-1.5 rounded-lg bg-[#FFFFFF] text-xs font-semibold text-[#232B32] shadow-sm flex items-center gap-1.5">
+            <Eye size={14} className="text-[#C5A059]" /> Inspect 3D
           </span>
         </div>
       </div>
@@ -191,8 +203,16 @@ const ModelCard = ({ model, onEdit, onDelete }) => {
 
         <div className="flex items-center gap-2 mt-4 pt-4 border-t border-[#E2E8F0]">
           <button
+            onClick={() => onInspect(model)}
+            className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-[#F9F9FB] hover:bg-[#E2E8F0] text-[#232B32] rounded-xl text-sm font-medium transition-colors"
+            title="Inspect 3D model"
+          >
+            <Eye size={16} className="text-[#C5A059]" /> Inspect
+          </button>
+
+          <button
             onClick={() => onEdit(model)}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 bg-[#F9F9FB] hover:bg-[#E2E8F0] text-[#232B32] rounded-xl text-sm font-medium transition-colors"
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 bg-[#F9F9FB] hover:bg-[#E2E8F0] text-[#232B32] rounded-xl text-sm font-medium transition-colors"
           >
             <Edit2 size={16} /> Edit
           </button>
@@ -204,6 +224,91 @@ const ModelCard = ({ model, onEdit, onDelete }) => {
           >
             <Trash2 size={16} />
           </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const InspectModal = ({ model, onClose, onEdit }) => {
+  if (!model) return null;
+  const typeLabel = STRUCTURE_TYPE_LABELS[model.structure_type] || 'Countertop';
+
+  return (
+    <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-[#FFFFFF] w-full max-w-3xl rounded-2xl shadow-2xl border border-[#E2E8F0] flex flex-col overflow-hidden max-h-[92vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-[#E2E8F0] shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#F9F9FB] border border-[#E2E8F0] flex items-center justify-center text-[#C5A059]">
+              <Box size={22} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-bold text-[#232B32]">{model.name}</h3>
+                <span className="text-[11px] font-semibold tracking-wide uppercase px-2.5 py-0.5 rounded-full bg-[#F9F9FB] border border-[#E2E8F0] text-[#6B7280]">
+                  {typeLabel}
+                </span>
+              </div>
+              <p className="text-xs text-[#6B7280] mt-0.5">
+                Rotate, zoom, and inspect 3D model geometry
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-[#9CA3AF] hover:text-[#232B32] p-2 rounded-lg hover:bg-[#F9F9FB] transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* 3D Viewer */}
+        <div className="p-5 flex flex-col gap-4 overflow-y-auto">
+          <Model3DPreview
+            file={model.model_url}
+            className="w-full h-80 sm:h-96"
+          />
+
+          {/* Model Meta */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="p-3 bg-[#F9F9FB] rounded-xl border border-[#E2E8F0]">
+              <span className="text-xs text-[#6B7280]">Base Length</span>
+              <p className="text-sm font-semibold text-[#232B32] mt-0.5">{model.base_length}m</p>
+            </div>
+            <div className="p-3 bg-[#F9F9FB] rounded-xl border border-[#E2E8F0]">
+              <span className="text-xs text-[#6B7280]">Base Width</span>
+              <p className="text-sm font-semibold text-[#232B32] mt-0.5">{model.base_width}m</p>
+            </div>
+            <div className="col-span-2 sm:col-span-1 p-3 bg-[#F9F9FB] rounded-xl border border-[#E2E8F0]">
+              <span className="text-xs text-[#6B7280]">Structure Type</span>
+              <p className="text-sm font-semibold text-[#232B32] mt-0.5">{typeLabel}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-[#E2E8F0] bg-[#F9F9FB] flex items-center justify-between shrink-0">
+          <span className="text-xs text-[#6B7280]">
+            Stored in Supabase Storage
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2.5 text-sm font-medium text-[#232B32] hover:bg-[#E2E8F0] rounded-xl transition-colors"
+            >
+              Close
+            </button>
+            <button
+              onClick={() => {
+                onClose();
+                onEdit(model);
+              }}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-[#232B32] hover:bg-[#1a2025] text-white text-sm font-medium rounded-xl transition-colors"
+            >
+              <Edit2 size={14} /> Edit Model
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -260,6 +365,7 @@ export default function AdminModels() {
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [inspectTarget, setInspectTarget] = useState(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -484,6 +590,7 @@ export default function AdminModels() {
                 model={model}
                 onEdit={handleEdit}
                 onDelete={setDeleteTarget}
+                onInspect={setInspectTarget}
               />
             ))}
           </div>
@@ -492,7 +599,7 @@ export default function AdminModels() {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#FFFFFF] w-full max-w-2xl rounded-2xl shadow-xl flex flex-col my-auto border border-[#E2E8F0] max-h-[90vh]">
+          <div className="bg-[#FFFFFF] w-full max-w-2xl rounded-2xl shadow-xl flex flex-col my-auto border border-[#E2E8F0] max-h-[92vh]">
             <div className="flex items-center justify-between p-6 border-b border-[#E2E8F0] shrink-0">
               <div>
                 <h2 className="text-xl font-bold text-[#232B32]">
@@ -555,19 +662,44 @@ export default function AdminModels() {
                   onRemove={() => setFormData({ ...formData, model_file: null })}
                 />
 
-                {/* 3. Automatic Geometry Detection Summary (Transparent Feedback) */}
+                {/* 3. Interactive 3D Model Inspection & Verification */}
                 {formData.model_file && (
-                  <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-[#F9F9FB] rounded-xl border border-[#E2E8F0]">
-                    <div className="flex items-center gap-2 text-xs text-[#232B32]">
-                      <CheckCircle2 size={16} className="text-[#C5A059] shrink-0" />
-                      <span className="font-medium">Auto-measured Dimensions:</span>
-                      <span className="font-semibold text-[#232B32]">
-                        {formData.base_length}m (L) × {formData.base_width}m (W)
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium text-[#232B32] flex items-center gap-1.5">
+                        <Eye size={16} className="text-[#C5A059]" />
+                        3D Model Inspection
+                      </label>
+                      <span className="text-xs text-[#6B7280]">
+                        Drag to rotate • Scroll to zoom
                       </span>
                     </div>
-                    <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-[#FFFFFF] border border-[#E2E8F0] text-[#6B7280]">
-                      Auto-inferred Type: <strong className="text-[#232B32]">{STRUCTURE_TYPE_LABELS[inferStructureType(formData.name)] || 'Countertop'}</strong>
-                    </span>
+
+                    <Model3DPreview
+                      file={formData.model_file}
+                      className="w-full h-64 sm:h-72"
+                      onModelLoaded={(stats) => {
+                        setFormData((prev) => ({
+                          ...prev,
+                          base_length: stats.length,
+                          base_width: stats.width,
+                        }));
+                      }}
+                    />
+
+                    {/* Automatic Geometry Detection Summary */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-[#F9F9FB] rounded-xl border border-[#E2E8F0]">
+                      <div className="flex items-center gap-2 text-xs text-[#232B32]">
+                        <CheckCircle2 size={16} className="text-[#C5A059] shrink-0" />
+                        <span className="font-medium">Auto-measured Dimensions:</span>
+                        <span className="font-semibold text-[#232B32]">
+                          {formData.base_length}m (L) × {formData.base_width}m (W)
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-[#FFFFFF] border border-[#E2E8F0] text-[#6B7280]">
+                        Auto-inferred Type: <strong className="text-[#232B32]">{STRUCTURE_TYPE_LABELS[inferStructureType(formData.name)] || 'Countertop'}</strong>
+                      </span>
+                    </div>
                   </div>
                 )}
 
@@ -601,6 +733,14 @@ export default function AdminModels() {
             </form>
           </div>
         </div>
+      )}
+
+      {inspectTarget && (
+        <InspectModal
+          model={inspectTarget}
+          onClose={() => setInspectTarget(null)}
+          onEdit={handleEdit}
+        />
       )}
 
       {deleteTarget && (
