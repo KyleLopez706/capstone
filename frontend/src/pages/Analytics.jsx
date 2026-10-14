@@ -490,10 +490,11 @@ export default function Analytics() {
 
           {/* 2. Total Estimated Value */}
           <div className="bg-white rounded-2xl border border-[#E2E8F0] p-5 shadow-sm flex items-center gap-4">
-            <div className="p-3 bg-[#ECFDF5] rounded-xl shrink-0">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="1" x2="12" y2="23"></line>
-                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            <div className="p-3 bg-[#ECFDF5] rounded-xl shrink-0 flex items-center justify-center">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M7 21V4h7a5 5 0 0 1 0 10H7"></path>
+                <line x1="4" y1="7.5" x2="18" y2="7.5"></line>
+                <line x1="4" y1="10.5" x2="18" y2="10.5"></line>
               </svg>
             </div>
             <div>
