@@ -188,20 +188,17 @@ function App() {
       } = await supabase.auth.getSession();
       if (!session) return;
 
-      const rememberMe = localStorage.getItem("sixsigma_remember") === "1";
-      const activeSession = sessionStorage.getItem("sixsigma_active") === "1";
-      const isResetRoute = window.location.pathname === "/reset-password";
-
-      if (!rememberMe && !activeSession && !isResetRoute) {
-        await supabase.auth.signOut();
-        return;
-      }
+      // Maintain active session state across tabs for valid Supabase sessions
+      sessionStorage.setItem("sixsigma_active", "1");
 
       // If user is actively on reset password page, do not route away
       if (isResetRoute) return;
 
-      // Route by role
-      const isOnAdminRoute = window.location.pathname === "/dashboard";
+      // Check if current route is an admin destination
+      const isCurrentAdminPath =
+        window.location.pathname.startsWith("/admin/") ||
+        ["/dashboard", "/analytics", "/messages"].includes(window.location.pathname);
+
       const { data: profile } = await supabase
         .from("profiles")
         .select("role")
@@ -209,7 +206,7 @@ function App() {
         .single();
 
       if (profile?.role === "admin") {
-        if (!isOnAdminRoute) {
+        if (!isCurrentAdminPath && window.location.pathname === "/login") {
           navigate("/dashboard", { replace: true });
         }
         return;

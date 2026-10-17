@@ -370,6 +370,7 @@ export default function AdminModels() {
   // Form State
   const [formData, setFormData] = useState({
     name: '',
+    structure_type: 'countertop',
     base_length: 2.4,
     base_width: 0.6,
     model_file: null,
@@ -399,6 +400,7 @@ export default function AdminModels() {
     setEditingModel(null);
     setFormData({
       name: '',
+      structure_type: 'countertop',
       base_length: 2.4,
       base_width: 0.6,
       model_file: null,
@@ -409,6 +411,7 @@ export default function AdminModels() {
     setEditingModel(model);
     setFormData({
       name: model.name,
+      structure_type: model.structure_type || inferStructureType(model.name),
       base_length: model.base_length ?? 2.4,
       base_width: model.base_width ?? 0.6,
       model_file: model.model_url,
@@ -451,7 +454,22 @@ export default function AdminModels() {
         await purgeCacheForUrl(deleteTarget.model_url);
       }
 
-      showToast('Model deleted successfully', 'success');
+      // 3. Clean up / dissociate any quotations in Supabase referencing this deleted 3D model
+      if (deleteTarget.name) {
+        try {
+          const rawName = deleteTarget.name.trim();
+          const spacedName = rawName.replace(/[-_]/g, ' ');
+          const dashedName = rawName.replace(/\s+/g, '-');
+          await supabase
+            .from('quotation_requests')
+            .update({ product_type: 'Kitchen Countertop' })
+            .or(`product_type.ilike.%${rawName}%,product_type.ilike.%${spacedName}%,product_type.ilike.%${dashedName}%`);
+        } catch (qErr) {
+          console.warn('Quotation requests cleanup notice:', qErr);
+        }
+      }
+
+      showToast('Model deleted successfully from showroom & insights', 'success');
       setModels(models.filter((m) => m.id !== deleteTarget.id));
     } catch (error) {
       showToast(error.message || 'Failed to delete model', 'error');
@@ -509,7 +527,7 @@ export default function AdminModels() {
 
       const baseLen = parseFloat(formData.base_length) || (editingModel?.base_length ?? 2.4);
       const baseWid = parseFloat(formData.base_width) || (editingModel?.base_width ?? 0.6);
-      const structureType = editingModel?.structure_type || inferStructureType(formData.name);
+      const structureType = formData.structure_type || editingModel?.structure_type || inferStructureType(formData.name) || 'countertop';
 
       const payload = {
         name: formData.name.trim(),
@@ -629,11 +647,46 @@ export default function AdminModels() {
                     type="text"
                     required
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onChange={(e) => {
+                      const newName = e.target.value;
+                      setFormData(prev => ({
+                        ...prev,
+                        name: newName,
+                        structure_type: prev.structure_type && prev.structure_type !== inferStructureType(prev.name)
+                          ? prev.structure_type
+                          : inferStructureType(newName),
+                      }));
+                    }}
                     placeholder="e.g. Modern Kitchen Countertop"
                     disabled={submitting}
                     className="w-full border border-[#E2E8F0] rounded-xl px-4 py-2.5 text-[#232B32] focus:outline-none focus:border-[#C5A059] focus:ring focus:ring-[#C5A059]/20 transition-all disabled:bg-[#F9F9FB] disabled:opacity-70"
                   />
+                </div>
+
+                {/* Structure Category */}
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-[#232B32]">
+                      Structure Category <span className="text-red-500">*</span>
+                    </label>
+                    <span className="text-[11px] text-[#C5A059] font-medium">
+                      Auto-inferred from model name
+                    </span>
+                  </div>
+                  <select
+                    value={formData.structure_type || inferStructureType(formData.name)}
+                    onChange={(e) => setFormData({ ...formData, structure_type: e.target.value })}
+                    disabled={submitting}
+                    className="w-full border border-[#E2E8F0] rounded-xl px-4 py-2.5 text-[#232B32] bg-[#FFFFFF] focus:outline-none focus:border-[#C5A059] focus:ring focus:ring-[#C5A059]/20 transition-all text-sm disabled:bg-[#F9F9FB] disabled:opacity-70"
+                  >
+                    <option value="countertop">Kitchen / Vanity Countertop (Countertop)</option>
+                    <option value="island">Island / Bar / Reception Counter (Island)</option>
+                    <option value="wall">Wall Cladding / Slab (Wall)</option>
+                    <option value="floor">Floor Slab (Floor)</option>
+                  </select>
+                  <p className="text-[11px] text-[#6B7280]">
+                    Determines automatic pricing formulas (mitering, cutouts, wall anchors) and high-level macro category in analytics.
+                  </p>
                 </div>
 
                 {/* 2. 3D Model File (.glb) */}
@@ -697,7 +750,7 @@ export default function AdminModels() {
                         </span>
                       </div>
                       <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-[#FFFFFF] border border-[#E2E8F0] text-[#6B7280]">
-                        Auto-inferred Type: <strong className="text-[#232B32]">{STRUCTURE_TYPE_LABELS[inferStructureType(formData.name)] || 'Countertop'}</strong>
+                        Selected Category: <strong className="text-[#232B32]">{STRUCTURE_TYPE_LABELS[formData.structure_type || inferStructureType(formData.name)] || 'Countertop'}</strong>
                       </span>
                     </div>
                   </div>

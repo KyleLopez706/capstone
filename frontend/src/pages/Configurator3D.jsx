@@ -129,8 +129,8 @@ export default function Configurator3D() {
           .order('name'),
         supabase
           .from('materials')
-          .select('id, name, price_per_sqm, color_url, hex_code')
-          .limit(32),
+          .select('id, name, price_per_sqm, color_url, hex_code, stock_status, slab_count, allocated_slabs, soft_hold_slabs, slab_length, slab_width, stock_sqm, reorder_threshold, is_archived')
+          .limit(64),
         supabase
           .from('cabinet_materials')
           .select('id, name, color_url, hex_code')
@@ -176,10 +176,22 @@ export default function Configurator3D() {
          the on-demand loading is extremely fast and won't crash the browser's 
          download queue.
       ─────────────────────────────────────────────────────────────────── */
+      let materialsData = materialsResult.data;
       if (materialsResult.error) {
-        console.warn('[Configurator3D] Materials fetch failed:', materialsResult.error.message);
-      } else {
-        const activeMaterials = (materialsResult.data || []).filter(m => !m.is_archived);
+        console.warn('[Configurator3D] Enhanced materials fetch failed, retrying baseline:', materialsResult.error.message);
+        const fallbackRes = await supabase
+          .from('materials')
+          .select('id, name, price_per_sqm, color_url, hex_code')
+          .limit(32);
+        if (fallbackRes.error) {
+          console.warn('[Configurator3D] Baseline materials fetch failed:', fallbackRes.error.message);
+        } else {
+          materialsData = fallbackRes.data;
+        }
+      }
+
+      if (materialsData) {
+        const activeMaterials = materialsData.filter(m => !m.is_archived);
         setMaterials(activeMaterials);
         if (activeMaterials.length > 0) {
           setMaterial(activeMaterials[0]); // fallback if query param is invalid

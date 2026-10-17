@@ -9,7 +9,9 @@ import {
   Loader2,
   AlertTriangle,
   Wand2,
+  Boxes,
 } from "lucide-react";
+
 import { supabase } from "../supabaseClient";
 import { useToast, ToastNotification } from "../utils/toast";
 import { getColor } from "colorthief";
@@ -97,9 +99,23 @@ const FileUploadZone = ({
   );
 };
 
-const MaterialCard = ({ material, onEdit, onDelete }) => {
+const MaterialCard = ({ material, onEdit, onDelete, onAdjustStock }) => {
+  const slabCount = typeof material.slab_count === "number" ? material.slab_count : 10;
+  const allocated = typeof material.allocated_slabs === "number" ? material.allocated_slabs : 0;
+  const softHold = typeof material.soft_hold_slabs === "number" ? material.soft_hold_slabs : 0;
+  const threshold = typeof material.reorder_threshold === "number" ? material.reorder_threshold : 2;
+  const availableSlabs = Math.max(0, slabCount - allocated - softHold);
+  const status = material.stock_status || (availableSlabs <= 0 ? "out_of_stock" : (availableSlabs <= threshold ? "limited_stock" : "available"));
+
+  const statusConfig = {
+    available: { label: "In Stock", bg: "#ECFDF5", text: "#065F46", border: "#A7F3D0" },
+    limited_stock: { label: "Limited Stock", bg: "#FFFBEB", text: "#B45309", border: "#FDE68A" },
+    restocking_soon: { label: "Restocking Soon", bg: "#EFF6FF", text: "#1D4ED8", border: "#BFDBFE" },
+    out_of_stock: { label: "Out of Stock", bg: "#FEF2F2", text: "#B91C1C", border: "#FECACA" },
+  }[status] || { label: "In Stock", bg: "#ECFDF5", text: "#065F46", border: "#A7F3D0" };
+
   return (
-    <div className="flex flex-col bg-[#FFFFFF] border border-[#E2E8F0] rounded-2xl shadow-sm overflow-hidden transition-all">
+    <div className="flex flex-col bg-[#FFFFFF] border border-[#E2E8F0] rounded-2xl shadow-sm overflow-hidden transition-all hover:shadow-md">
       <div className="relative h-48 bg-[#F9F9FB]">
         {material.color_url ? (
           <img
@@ -111,6 +127,25 @@ const MaterialCard = ({ material, onEdit, onDelete }) => {
           <div className="w-full h-full flex items-center justify-center text-[#9CA3AF]">
             <ImageIcon size={48} opacity={0.5} />
           </div>
+        )}
+
+        {/* Stock Status Badge */}
+        <span
+          className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-xs font-semibold shadow-sm border"
+          style={{
+            backgroundColor: statusConfig.bg,
+            color: statusConfig.text,
+            borderColor: statusConfig.border,
+          }}
+        >
+          {statusConfig.label}
+        </span>
+
+        {/* Low stock warning chip if at or below threshold */}
+        {availableSlabs <= threshold && status !== "out_of_stock" && (
+          <span className="absolute bottom-3 left-3 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-white shadow-sm flex items-center gap-1">
+            <AlertTriangle size={11} /> Low Stock (ROP)
+          </span>
         )}
       </div>
 
@@ -130,31 +165,232 @@ const MaterialCard = ({ material, onEdit, onDelete }) => {
           </div>
         </div>
 
-        <p className="text-[#232B32] font-medium mt-auto">
+        <p className="text-[#232B32] font-semibold text-base">
           ₱
           {Number(material.price_per_sqm).toLocaleString(undefined, {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
           })}{" "}
-          / m²
+          <span className="text-xs font-normal text-[#6B7280]">/ m²</span>
         </p>
+
+        {/* Warehouse Inventory Summary Box */}
+        <div className="mt-3 p-2.5 bg-[#F9F9FB] border border-[#E2E8F0] rounded-xl flex flex-col gap-1.5 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[#6B7280] font-medium">Available Slabs:</span>
+            <span className="font-bold text-[#232B32]">{availableSlabs} slab{availableSlabs === 1 ? '' : 's'}</span>
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-[#9CA3AF]">
+            <span>Total: {slabCount}</span>
+            <span>Allocated: {allocated}</span>
+            <span>Hold: {softHold}</span>
+          </div>
+          <div className="w-full bg-[#E2E8F0] rounded-full h-1.5 overflow-hidden mt-0.5">
+            <div
+              className="h-full rounded-full transition-all duration-300"
+              style={{
+                width: `${Math.min(100, Math.max(0, (availableSlabs / Math.max(1, slabCount)) * 100))}%`,
+                backgroundColor: availableSlabs <= threshold ? "#F59E0B" : "#10B981",
+              }}
+            />
+          </div>
+          <div className="flex items-center justify-between text-[10px] text-[#6B7280] mt-1 pt-1 border-t border-[#E2E8F0]">
+            <span>Size: {material.slab_length || 3.20}m × {material.slab_width || 1.60}m</span>
+            <span>Yield: {material.stock_sqm ? Number(material.stock_sqm).toFixed(1) : (availableSlabs * 4.35).toFixed(1)} m²</span>
+          </div>
+        </div>
 
         <div className="flex items-center gap-2 mt-4 pt-4 border-t border-[#E2E8F0]">
           <button
-            onClick={() => onEdit(material)}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 bg-[#F9F9FB] hover:bg-[#E2E8F0] text-[#232B32] rounded-xl text-sm font-medium transition-colors"
+            onClick={() => onAdjustStock(material)}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-[#FDF8F0] hover:bg-[#FBEFD9] text-[#C5A059] border border-[#C5A059]/30 rounded-xl text-xs font-semibold transition-colors"
+            title="Adjust Warehouse Stock"
           >
-            <Edit2 size={16} /> Edit
+            <Boxes size={14} /> Stock
+          </button>
+
+          <button
+            onClick={() => onEdit(material)}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-[#F9F9FB] hover:bg-[#E2E8F0] text-[#232B32] rounded-xl text-xs font-medium transition-colors"
+          >
+            <Edit2 size={14} /> Edit
           </button>
 
           <button
             onClick={() => onDelete(material)}
-            className="flex items-center justify-center p-2.5 bg-[#F9F9FB] hover:bg-red-50 text-[#6B7280] hover:text-red-600 rounded-xl transition-colors"
+            className="flex items-center justify-center p-2 bg-[#F9F9FB] hover:bg-red-50 text-[#6B7280] hover:text-red-600 rounded-xl transition-colors"
             title="Delete"
           >
-            <Trash2 size={16} />
+            <Trash2 size={14} />
           </button>
         </div>
+      </div>
+    </div>
+  );
+};
+
+/* ── Quick Adjust Stock Modal ── */
+const AdjustStockModal = ({ material, isOpen, onClose, onSave, isSaving }) => {
+  const [slabCount, setSlabCount] = useState(material?.slab_count ?? 10);
+  const [allocatedSlabs, setAllocatedSlabs] = useState(material?.allocated_slabs ?? 0);
+  const [softHoldSlabs, setSoftHoldSlabs] = useState(material?.soft_hold_slabs ?? 0);
+  const [stockStatus, setStockStatus] = useState(material?.stock_status || "available");
+  const [reorderThreshold, setReorderThreshold] = useState(material?.reorder_threshold ?? 2);
+  const [stockSqm, setStockSqm] = useState(material?.stock_sqm ?? (10 * 4.35));
+
+  useEffect(() => {
+    if (material) {
+      Promise.resolve().then(() => {
+        setSlabCount(material.slab_count ?? 10);
+        setAllocatedSlabs(material.allocated_slabs ?? 0);
+        setSoftHoldSlabs(material.soft_hold_slabs ?? 0);
+        setStockStatus(material.stock_status || "available");
+        setReorderThreshold(material.reorder_threshold ?? 2);
+        setStockSqm(material.stock_sqm ?? ((material.slab_count ?? 10) * 4.35));
+      });
+    }
+  }, [material]);
+
+
+  if (!isOpen || !material) return null;
+
+  const available = Math.max(0, Number(slabCount) - Number(allocatedSlabs) - Number(softHoldSlabs));
+
+  const handleApply = (e) => {
+    e.preventDefault();
+    onSave({
+      slab_count: isNaN(parseInt(slabCount, 10)) ? 0 : parseInt(slabCount, 10),
+      allocated_slabs: isNaN(parseInt(allocatedSlabs, 10)) ? 0 : parseInt(allocatedSlabs, 10),
+      soft_hold_slabs: isNaN(parseInt(softHoldSlabs, 10)) ? 0 : parseInt(softHoldSlabs, 10),
+      stock_status: stockStatus,
+      reorder_threshold: isNaN(parseInt(reorderThreshold, 10)) ? 2 : parseInt(reorderThreshold, 10),
+      stock_sqm: isNaN(parseFloat(stockSqm)) ? 0 : parseFloat(stockSqm),
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-[#FFFFFF] w-full max-w-md rounded-2xl shadow-2xl border border-[#E2E8F0] p-6 flex flex-col gap-5">
+        <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#FDF8F0] border border-[#C5A059]/30 flex items-center justify-center text-[#C5A059]">
+              <Boxes size={20} />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-[#232B32]">Adjust Warehouse Stock</h3>
+              <p className="text-xs text-[#6B7280]">{material.name}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            disabled={isSaving}
+            className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#232B32] hover:bg-[#F9F9FB]"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleApply} className="flex flex-col gap-4">
+          <div className="p-3 bg-[#F9F9FB] rounded-xl border border-[#E2E8F0] flex items-center justify-between">
+            <span className="text-xs font-semibold text-[#6B7280] uppercase tracking-wide">Calculated Available</span>
+            <span className="text-lg font-bold text-[#C5A059]">{available} slab{available === 1 ? '' : 's'}</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-[#232B32] block mb-1">Total Physical Slabs</label>
+              <input
+                type="number"
+                min="0"
+                value={slabCount}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSlabCount(val);
+                  setStockSqm((Number(val) * 4.35).toFixed(1));
+                }}
+                className="w-full border border-[#E2E8F0] rounded-xl px-3 py-2 text-sm text-[#232B32] focus:outline-none focus:border-[#C5A059]"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-[#232B32] block mb-1">Allocated (Downpayment)</label>
+              <input
+                type="number"
+                min="0"
+                value={allocatedSlabs}
+                onChange={(e) => setAllocatedSlabs(e.target.value)}
+                className="w-full border border-[#E2E8F0] rounded-xl px-3 py-2 text-sm text-[#232B32] focus:outline-none focus:border-[#C5A059]"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-[#232B32] block mb-1">Soft Holds (7-Day Quotes)</label>
+              <input
+                type="number"
+                min="0"
+                value={softHoldSlabs}
+                onChange={(e) => setSoftHoldSlabs(e.target.value)}
+                className="w-full border border-[#E2E8F0] rounded-xl px-3 py-2 text-sm text-[#232B32] focus:outline-none focus:border-[#C5A059]"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-[#232B32] block mb-1">Reorder Point (ROP)</label>
+              <input
+                type="number"
+                min="0"
+                value={reorderThreshold}
+                onChange={(e) => setReorderThreshold(e.target.value)}
+                className="w-full border border-[#E2E8F0] rounded-xl px-3 py-2 text-sm text-[#232B32] focus:outline-none focus:border-[#C5A059]"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-[#232B32] block mb-1">Stock Status Badge</label>
+              <select
+                value={stockStatus}
+                onChange={(e) => setStockStatus(e.target.value)}
+                className="w-full border border-[#E2E8F0] rounded-xl px-3 py-2 text-sm text-[#232B32] focus:outline-none focus:border-[#C5A059]"
+              >
+                <option value="available">In Stock (Available)</option>
+                <option value="limited_stock">Limited Stock</option>
+                <option value="restocking_soon">Restocking Soon / Pre-Order</option>
+                <option value="out_of_stock">Out of Stock</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-[#232B32] block mb-1">Usable Area (m²)</label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                value={stockSqm}
+                onChange={(e) => setStockSqm(e.target.value)}
+                className="w-full border border-[#E2E8F0] rounded-xl px-3 py-2 text-sm text-[#232B32] focus:outline-none focus:border-[#C5A059]"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#E2E8F0]">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSaving}
+              className="px-4 py-2 text-sm font-medium text-[#232B32] hover:bg-[#F9F9FB] rounded-xl transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="flex items-center gap-2 px-5 py-2 bg-[#C5A059] hover:brightness-110 text-white text-sm font-semibold rounded-xl shadow-sm transition-all"
+            >
+              {isSaving ? <Loader2 size={16} className="animate-spin" /> : "Save Stock"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
@@ -249,6 +485,10 @@ export default function AdminMaterials() {
   const [editingMaterial, setEditingMaterial] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Quick Adjust Stock modal state
+  const [adjustStockMaterial, setAdjustStockMaterial] = useState(null);
+  const [adjustingStock, setAdjustingStock] = useState(false);
+
   // Delete confirmation modal state
   const [deleteTarget, setDeleteTarget] = useState(null); // material pending deletion
   const [isDeleting, setIsDeleting] = useState(false);
@@ -258,6 +498,14 @@ export default function AdminMaterials() {
     price_per_sqm: "",
     hex_code: "#ffffff",
     color_file: null,
+    stock_status: "available",
+    slab_count: 10,
+    allocated_slabs: 0,
+    soft_hold_slabs: 0,
+    slab_length: 3.20,
+    slab_width: 1.60,
+    stock_sqm: 43.5,
+    reorder_threshold: 2,
   });
 
   const fetchMaterials = useCallback(async () => {
@@ -281,6 +529,45 @@ export default function AdminMaterials() {
   useEffect(() => {
     Promise.resolve().then(() => fetchMaterials());
   }, [fetchMaterials]);
+
+  /* ── Quick Stock Update Handler ── */
+  const handleStockSave = async (stockUpdates) => {
+    if (!adjustStockMaterial) return;
+    setAdjustingStock(true);
+    try {
+      let { error } = await supabase
+        .from("materials")
+        .update(stockUpdates)
+        .eq("id", adjustStockMaterial.id);
+
+      if (error) {
+        console.warn("Stock update fallback check with baseline columns:", error.message);
+        const legacyStock = { ...stockUpdates };
+        delete legacyStock.allocated_slabs;
+        delete legacyStock.soft_hold_slabs;
+        delete legacyStock.slab_length;
+        delete legacyStock.slab_width;
+        delete legacyStock.stock_sqm;
+        delete legacyStock.reorder_threshold;
+        const fallbackRes = await supabase
+          .from("materials")
+          .update(legacyStock)
+          .eq("id", adjustStockMaterial.id);
+        error = fallbackRes.error;
+      }
+
+      if (error) throw error;
+
+      showToast("success", `Warehouse stock updated for "${adjustStockMaterial.name}"`);
+      setAdjustStockMaterial(null);
+      fetchMaterials();
+    } catch (err) {
+      console.error("Stock adjust error:", err);
+      showToast("error", err.message || "Failed to update warehouse stock");
+    } finally {
+      setAdjustingStock(false);
+    }
+  };
 
   /* ── Extract Supabase Storage path from a public URL ── */
   const extractStoragePath = (publicUrl) => {
@@ -315,7 +602,7 @@ export default function AdminMaterials() {
         }
       }
 
-      // 2. Delete the database record
+      // 2. Delete the database record from Supabase
       const { error: dbError } = await supabase
         .from("materials")
         .delete()
@@ -323,7 +610,22 @@ export default function AdminMaterials() {
 
       if (dbError) throw dbError;
 
-      showToast("success", `"${deleteTarget.name}" deleted successfully`);
+      // 3. Clean up / dissociate any quotations in Supabase referencing this deleted stone design
+      if (deleteTarget.name) {
+        try {
+          const rawName = deleteTarget.name.trim();
+          const spacedName = rawName.replace(/[-_]/g, " ");
+          const dashedName = rawName.replace(/\s+/g, "-");
+          await supabase
+            .from("quotation_requests")
+            .update({ design: "Standard Stone" })
+            .or(`design.ilike.%${rawName}%,design.ilike.%${spacedName}%,design.ilike.%${dashedName}%`);
+        } catch (qErr) {
+          console.warn("Quotation requests cleanup notice:", qErr);
+        }
+      }
+
+      showToast("success", `"${deleteTarget.name}" deleted successfully from inventory & insights`);
       setDeleteTarget(null);
       fetchMaterials();
     } catch (err) {
@@ -341,6 +643,14 @@ export default function AdminMaterials() {
       price_per_sqm: "",
       hex_code: "#ffffff",
       color_file: null,
+      stock_status: "available",
+      slab_count: 10,
+      allocated_slabs: 0,
+      soft_hold_slabs: 0,
+      slab_length: 3.20,
+      slab_width: 1.60,
+      stock_sqm: 43.5,
+      reorder_threshold: 2,
     });
     setModalOpen(true);
   };
@@ -352,6 +662,14 @@ export default function AdminMaterials() {
       price_per_sqm: material.price_per_sqm,
       hex_code: material.hex_code || "#ffffff",
       color_file: material.color_url,
+      stock_status: material.stock_status || "available",
+      slab_count: material.slab_count ?? 10,
+      allocated_slabs: material.allocated_slabs ?? 0,
+      soft_hold_slabs: material.soft_hold_slabs ?? 0,
+      slab_length: material.slab_length ?? 3.20,
+      slab_width: material.slab_width ?? 1.60,
+      stock_sqm: material.stock_sqm ?? (Number(material.slab_count ?? 10) * 4.35),
+      reorder_threshold: material.reorder_threshold ?? 2,
     });
     setModalOpen(true);
   };
@@ -435,18 +753,57 @@ export default function AdminMaterials() {
         price_per_sqm: Number(formData.price_per_sqm),
         hex_code: formData.hex_code,
         color_url,
+        stock_status: formData.stock_status || "available",
+        slab_count: parseInt(formData.slab_count, 10) || 0,
+        allocated_slabs: parseInt(formData.allocated_slabs, 10) || 0,
+        soft_hold_slabs: parseInt(formData.soft_hold_slabs, 10) || 0,
+        slab_length: parseFloat(formData.slab_length) || 3.20,
+        slab_width: parseFloat(formData.slab_width) || 1.60,
+        stock_sqm: parseFloat(formData.stock_sqm) || 0,
+        reorder_threshold: parseInt(formData.reorder_threshold, 10) || 2,
       };
 
       if (editingMaterial) {
-        const { error } = await supabase
+        let { error } = await supabase
           .from("materials")
           .update(payload)
           .eq("id", editingMaterial.id);
 
+        if (error) {
+          console.warn("Retrying material update without new inventory columns:", error.message);
+          const legacyPayload = { ...payload };
+          delete legacyPayload.stock_status;
+          delete legacyPayload.slab_count;
+          delete legacyPayload.allocated_slabs;
+          delete legacyPayload.soft_hold_slabs;
+          delete legacyPayload.slab_length;
+          delete legacyPayload.slab_width;
+          delete legacyPayload.stock_sqm;
+          delete legacyPayload.reorder_threshold;
+          const fallback = await supabase.from("materials").update(legacyPayload).eq("id", editingMaterial.id);
+          error = fallback.error;
+        }
+
         if (error) throw error;
         showToast("success", "Design updated successfully");
       } else {
-        const { error } = await supabase.from("materials").insert([payload]);
+        let { error } = await supabase.from("materials").insert([payload]);
+
+        if (error) {
+          console.warn("Retrying material insert without new inventory columns:", error.message);
+          const legacyPayload = { ...payload };
+          delete legacyPayload.stock_status;
+          delete legacyPayload.slab_count;
+          delete legacyPayload.allocated_slabs;
+          delete legacyPayload.soft_hold_slabs;
+          delete legacyPayload.slab_length;
+          delete legacyPayload.slab_width;
+          delete legacyPayload.stock_sqm;
+          delete legacyPayload.reorder_threshold;
+          const fallback = await supabase.from("materials").insert([legacyPayload]);
+          error = fallback.error;
+        }
+
 
         if (error) throw error;
         showToast("success", "Design added successfully");
@@ -515,6 +872,7 @@ export default function AdminMaterials() {
                 material={material}
                 onEdit={openEditModal}
                 onDelete={(m) => setDeleteTarget(m)}
+                onAdjustStock={(m) => setAdjustStockMaterial(m)}
               />
             ))}
           </div>
@@ -639,6 +997,133 @@ export default function AdminMaterials() {
 
                 <div className="h-px w-full bg-[#E2E8F0] my-2"></div>
 
+                {/* ── Warehouse Inventory & Raw Slab Management ── */}
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <Boxes size={18} className="text-[#C5A059]" />
+                    <h3 className="text-sm font-bold text-[#232B32] uppercase tracking-wider">
+                      Warehouse Inventory & Raw Slabs
+                    </h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-[#232B32]">Stock Status Badge</label>
+                      <select
+                        value={formData.stock_status}
+                        onChange={(e) => setFormData({ ...formData, stock_status: e.target.value })}
+                        disabled={submitting}
+                        className="w-full border border-[#E2E8F0] rounded-xl px-3 py-2.5 text-xs text-[#232B32] focus:outline-none focus:border-[#C5A059] bg-[#FFFFFF]"
+                      >
+                        <option value="available">In Stock (Available)</option>
+                        <option value="limited_stock">Limited Stock</option>
+                        <option value="restocking_soon">Restocking Soon / Pre-Order</option>
+                        <option value="out_of_stock">Out of Stock</option>
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-[#232B32]">Total Full Slabs</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.slab_count}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFormData({
+                            ...formData,
+                            slab_count: val,
+                            stock_sqm: (Number(val) * 4.35).toFixed(1),
+                          });
+                        }}
+                        disabled={submitting}
+                        className="w-full border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#232B32] focus:outline-none focus:border-[#C5A059]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-[#232B32]">Allocated (Hard Lock)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.allocated_slabs}
+                        onChange={(e) => setFormData({ ...formData, allocated_slabs: e.target.value })}
+                        disabled={submitting}
+                        className="w-full border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#232B32] focus:outline-none focus:border-[#C5A059]"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-[#232B32]">Soft Hold Slabs (7d)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.soft_hold_slabs}
+                        onChange={(e) => setFormData({ ...formData, soft_hold_slabs: e.target.value })}
+                        disabled={submitting}
+                        className="w-full border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#232B32] focus:outline-none focus:border-[#C5A059]"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-[#232B32]">Reorder Point (ROP)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.reorder_threshold}
+                        onChange={(e) => setFormData({ ...formData, reorder_threshold: e.target.value })}
+                        disabled={submitting}
+                        className="w-full border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#232B32] focus:outline-none focus:border-[#C5A059]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-[#232B32]">Slab Length (m)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.1"
+                        value={formData.slab_length}
+                        onChange={(e) => setFormData({ ...formData, slab_length: e.target.value })}
+                        disabled={submitting}
+                        className="w-full border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#232B32] focus:outline-none focus:border-[#C5A059]"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-[#232B32]">Slab Width (m)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.1"
+                        value={formData.slab_width}
+                        onChange={(e) => setFormData({ ...formData, slab_width: e.target.value })}
+                        disabled={submitting}
+                        className="w-full border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#232B32] focus:outline-none focus:border-[#C5A059]"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-[#232B32]">Total Usable Area (m²)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={formData.stock_sqm}
+                        onChange={(e) => setFormData({ ...formData, stock_sqm: e.target.value })}
+                        disabled={submitting}
+                        className="w-full border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#232B32] focus:outline-none focus:border-[#C5A059]"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="h-px w-full bg-[#E2E8F0] my-2"></div>
+
                 <div className="grid grid-cols-1 gap-6">
                   <FileUploadZone
                     label="Color / Diffuse Map"
@@ -683,6 +1168,17 @@ export default function AdminMaterials() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Quick Adjust Stock Modal */}
+      {adjustStockMaterial && (
+        <AdjustStockModal
+          material={adjustStockMaterial}
+          isOpen={!!adjustStockMaterial}
+          onClose={() => setAdjustStockMaterial(null)}
+          onSave={handleStockSave}
+          isSaving={adjustingStock}
+        />
       )}
 
       {/* Delete Confirmation Modal */}

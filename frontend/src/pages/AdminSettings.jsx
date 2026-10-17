@@ -2,14 +2,34 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { useToast, ToastNotification } from '../utils/toast';
 
+const RATE_GROUPS = [
+  {
+    category: "Fabrication & Cutout Rates",
+    description: "Cutting, profiling, sink and stove hole cutout rates for countertops.",
+    keys: ["cutting", "edge_polishing", "mitering", "sink_cutout", "cooktop_cutout"]
+  },
+  {
+    category: "Installation Rates",
+    description: "Labor rates applied per square meter of stone installed.",
+    keys: ["base_installation", "wall_cladding"]
+  },
+  {
+    category: "Logistics & Site Mobilization",
+    description: "Standard flat rates for transport and staging on job site.",
+    keys: ["delivery_cost", "mobilization_cost"]
+  }
+];
+
 const RATE_MAPPING = {
-  base_installation: { label: "Base Installation Rate", unit: "per m²" },
-  wall_cladding: { label: "Wall Cladding Rate", unit: "per m²" },
-  cutting: { label: "Cutting / Fabrication", unit: "per linear meter" },
-  edge_polishing: { label: "Edge Polishing", unit: "per linear meter" },
-  mitering: { label: "Mitering", unit: "per linear meter" },
-  delivery_cost: { label: "Delivery Fee", unit: "base rate" },
-  mobilization_cost: { label: "Mobilization Fee", unit: "base rate" }
+  cutting: { label: "Cutting / Fabrication", unit: "per linear meter", desc: "Perimeter and cut-to-size fabrication" },
+  edge_polishing: { label: "Edge Polishing", unit: "per linear meter", desc: "Front visible edge polishing" },
+  mitering: { label: "Mitering", unit: "per linear meter", desc: "45° edge bevel and miter joints" },
+  sink_cutout: { label: "Sink & Faucet Cutout", unit: "per set", desc: "Includes sink hole cutout & faucet boring" },
+  cooktop_cutout: { label: "Cooktop Cutout", unit: "per set", desc: "Includes stove/induction cutout & edge rounding" },
+  base_installation: { label: "Base Installation Rate", unit: "per m²", desc: "Countertop and flooring installation" },
+  wall_cladding: { label: "Wall Cladding (Installation using Stainless Steel Anchor)", unit: "per m²", desc: "Installation using Stainless Steel Anchor at ₱2,600 per square meter" },
+  delivery_cost: { label: "Delivery Fee", unit: "base rate", desc: "Transport of fabricated stone to customer site" },
+  mobilization_cost: { label: "Mobilization Fee", unit: "base rate", desc: "Crew staging, hoisting, and equipment mobilization" }
 };
 
 const AdminSettings = () => {
@@ -21,13 +41,11 @@ const AdminSettings = () => {
   const [termsAndConditions, setTermsAndConditions] = useState(
     "PAYMENT TERMS:\n- 60% of Total Contract Amount as down payment\n- 30% upon delivery\n- 10% balance upon completion of work\n\nOTHER TERMS:\n- Price quoted includes VAT\n- Warranty: 1 year on workmanship, manufacturer warranty on materials"
   );
-  const [termsId, setTermsId] = useState(null);
   const [isSavingTerms, setIsSavingTerms] = useState(false);
   const [contactPhone, setContactPhone] = useState("0919 585 9959");
-  const [contactEmail, setContactEmail] = useState("rolkoh@yahoo.com.ph");
+  const [contactEmail, setContactEmail] = useState("kyelopez706@gmail.com");
   const [contactFacebook, setContactFacebook] = useState("facebook.com/sixsigmaphil");
   const [contactViber, setContactViber] = useState("0919 585 9959");
-  const [contactInfoId, setContactInfoId] = useState(null);
   const [isSavingContact, setIsSavingContact] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingRates, setIsSavingRates] = useState(false);
@@ -43,18 +61,39 @@ const AdminSettings = () => {
       const { data, error } = await supabase.from('labor_rates').select('*');
       if (error) throw error;
       
-      const ratesData = {};
+      const defaultRates = {
+        base_installation: 1300,
+        wall_cladding: 2600,
+        cutting: 250,
+        edge_polishing: 800,
+        mitering: 900,
+        sink_cutout: 2500,
+        cooktop_cutout: 1800,
+        delivery_cost: 3000,
+        mobilization_cost: 2000,
+      };
+      const defaultUnits = {
+        base_installation: "sqm",
+        wall_cladding: "sqm",
+        cutting: "lm",
+        edge_polishing: "lm",
+        mitering: "lm",
+        sink_cutout: "set",
+        cooktop_cutout: "set",
+        delivery_cost: "flat_rate",
+        mobilization_cost: "flat_rate",
+      };
+
+      const ratesData = { ...defaultRates };
       const idsData = {};
-      const unitsData = {};
+      const unitsData = { ...defaultUnits };
       let vatData = 12;
       let vId = null;
       let termsText = "PAYMENT TERMS:\n- 60% of Total Contract Amount as down payment\n- 30% upon delivery\n- 10% balance upon completion of work\n\nOTHER TERMS:\n- Price quoted includes VAT\n- Warranty: 1 year on workmanship, manufacturer warranty on materials";
-      let tId = null;
       let contactPhoneData = "0919 585 9959";
-      let contactEmailData = "rolkoh@yahoo.com.ph";
+      let contactEmailData = "kyelopez706@gmail.com";
       let contactFacebookData = "facebook.com/sixsigmaphil";
       let contactViberData = "0919 585 9959";
-      let cId = null;
       
       data.forEach(item => {
         if (item.item_name === 'vat_percentage') {
@@ -63,7 +102,6 @@ const AdminSettings = () => {
         } else if (item.item_name === 'terms_and_conditions') {
           // terms_and_conditions is stored in unit_type as a text blob
           termsText = item.unit_type || termsText;
-          tId = item.id;
         } else if (item.item_name === 'contact_info') {
           try {
             const parsed = JSON.parse(item.unit_type);
@@ -74,7 +112,6 @@ const AdminSettings = () => {
           } catch (e) {
             console.warn("Failed to parse contact_info:", e);
           }
-          cId = item.id;
         } else if (RATE_MAPPING[item.item_name]) {
           ratesData[item.item_name] = item.rate_amount;
           idsData[item.item_name] = item.id;
@@ -107,12 +144,10 @@ const AdminSettings = () => {
       setVat(vatData);
       setVatId(vId);
       setTermsAndConditions(termsText);
-      setTermsId(tId);
       setContactPhone(contactPhoneData);
       setContactEmail(contactEmailData);
       setContactFacebook(contactFacebookData);
       setContactViber(contactViberData);
-      setContactInfoId(cId);
     } catch (error) {
       console.error('Error fetching settings:', error);
       showToast('error', 'Failed to load settings');
@@ -137,21 +172,39 @@ const AdminSettings = () => {
     setIsSavingRates(true);
     setShowRateConfirm(false);
     try {
-      const upsertData = Object.keys(rates).map(key => {
-        const payload = {
-          item_name: key,
-          rate_amount: parseFloat(rates[key]) || 0,
-          unit_type: unitTypes[key] || 'flat'
-        };
+      for (const key of Object.keys(rates)) {
+        const rateAmount = parseFloat(rates[key]) || 0;
+        const unitType = unitTypes[key] || 'flat';
+
         if (rateIds[key]) {
-          payload.id = rateIds[key];
+          const { error } = await supabase
+            .from('labor_rates')
+            .update({ rate_amount: rateAmount, unit_type: unitType, updated_at: new Date().toISOString() })
+            .eq('id', rateIds[key]);
+          if (error) throw error;
+        } else {
+          // Check if item_name already exists in DB
+          const { data: existing } = await supabase
+            .from('labor_rates')
+            .select('id')
+            .eq('item_name', key)
+            .maybeSingle();
+
+          if (existing?.id) {
+            const { error } = await supabase
+              .from('labor_rates')
+              .update({ rate_amount: rateAmount, unit_type: unitType, updated_at: new Date().toISOString() })
+              .eq('id', existing.id);
+            if (error) throw error;
+          } else {
+            const { error } = await supabase
+              .from('labor_rates')
+              .insert([{ item_name: key, rate_amount: rateAmount, unit_type: unitType }]);
+            if (error) throw error;
+          }
         }
-        return payload;
-      });
-      
-      const { error } = await supabase.from('labor_rates').upsert(upsertData);
-      if (error) throw error;
-      
+      }
+
       showToast('success', 'Rates updated successfully');
       fetchSettings(); // Refresh to get any new IDs
     } catch (error) {
@@ -256,23 +309,57 @@ const AdminSettings = () => {
           </div>
           
           <div className="p-6">
-            <div className="space-y-6">
-              {Object.entries(RATE_MAPPING).map(([key, info]) => (
-                <div key={key} className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="flex-1">
-                    <label className="block text-sm font-medium text-[#232B32] mb-1">{info.label}</label>
-                    <span className="text-xs text-[#6B7280]">{info.unit}</span>
+            <div className="space-y-8">
+              {RATE_GROUPS.map((group) => (
+                <div key={group.category} className="space-y-3">
+                  <div className="pb-2 border-b border-[#E2E8F0]">
+                    <h3 className="text-sm font-bold text-[#232B32]">{group.category}</h3>
+                    <p className="text-xs text-[#6B7280]">{group.description}</p>
                   </div>
-                  <div className="w-full md:w-48 relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]">₱</span>
-                    <input
-                      type="number"
-                      value={rates[key] ?? ''}
-                      onChange={(e) => handleRateChange(key, e.target.value)}
-                      className="w-full pl-8 pr-4 py-2.5 bg-[#F9F9FB] border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] text-[#232B32] transition-colors"
-                      placeholder="0.00"
-                      min="0"
-                    />
+                  <div className="space-y-3">
+                    {group.keys.map((key) => {
+                      const info = RATE_MAPPING[key];
+                      if (!info) return null;
+                      const isCutout = key === 'sink_cutout' || key === 'cooktop_cutout';
+                      return (
+                        <div
+                          key={key}
+                          className={`flex flex-col md:flex-row md:items-center justify-between gap-4 p-3.5 rounded-xl border transition-all ${
+                            isCutout
+                              ? 'bg-[#FDFBF7] border-[#C5A059]/40'
+                              : 'bg-[#F9F9FB] border-[#E2E8F0]'
+                          }`}
+                        >
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <label className="block text-sm font-semibold text-[#232B32]">
+                                {info.label}
+                              </label>
+                              {isCutout && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#C5A059]/15 text-[#C5A059]">
+                                  Countertop Cutout
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-[#6B7280] mt-0.5">{info.desc || info.unit}</p>
+                            <span className="text-[11px] font-semibold text-[#C5A059] block mt-0.5">
+                              Rate unit: {info.unit}
+                            </span>
+                          </div>
+                          <div className="w-full md:w-48 relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280] font-semibold">₱</span>
+                            <input
+                              type="number"
+                              value={rates[key] ?? ''}
+                              onChange={(e) => handleRateChange(key, e.target.value)}
+                              className="w-full pl-8 pr-4 py-2 bg-[#FFFFFF] border border-[#E2E8F0] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] text-[#232B32] font-semibold text-sm transition-colors"
+                              placeholder="0.00"
+                              min="0"
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -291,7 +378,7 @@ const AdminSettings = () => {
                   <button
                     onClick={saveRates}
                     disabled={isSavingRates}
-                    className="px-6 py-2.5 bg-[#C5A059] text-white text-sm font-medium rounded-lg hover:brightness-110 transition-all disabled:opacity-50 min-w-[120px]"
+                    className="px-6 py-2.5 bg-[#C5A059] text-[#FFFFFF] text-sm font-medium rounded-lg hover:brightness-110 transition-all disabled:opacity-50 min-w-[120px]"
                   >
                     {isSavingRates ? 'Saving...' : 'Yes, Save Rates'}
                   </button>
@@ -299,7 +386,7 @@ const AdminSettings = () => {
               ) : (
                 <button
                   onClick={() => setShowRateConfirm(true)}
-                  className="px-6 py-2.5 bg-[#C5A059] text-white text-sm font-medium rounded-lg hover:brightness-110 transition-all"
+                  className="px-6 py-2.5 bg-[#C5A059] text-[#FFFFFF] text-sm font-medium rounded-lg hover:brightness-110 transition-all"
                 >
                   Save Rates
                 </button>
@@ -348,7 +435,7 @@ const AdminSettings = () => {
                   <button
                     onClick={saveVat}
                     disabled={isSavingVat}
-                    className="px-6 py-2.5 bg-[#C5A059] text-white text-sm font-medium rounded-lg hover:brightness-110 transition-all disabled:opacity-50 min-w-[120px]"
+                    className="px-6 py-2.5 bg-[#C5A059] text-[#FFFFFF] text-sm font-medium rounded-lg hover:brightness-110 transition-all disabled:opacity-50 min-w-[120px]"
                   >
                     {isSavingVat ? 'Saving...' : 'Yes, Save Tax'}
                   </button>
@@ -356,7 +443,7 @@ const AdminSettings = () => {
               ) : (
                 <button
                   onClick={() => setShowVatConfirm(true)}
-                  className="px-6 py-2.5 bg-[#C5A059] text-white text-sm font-medium rounded-lg hover:brightness-110 transition-all"
+                  className="px-6 py-2.5 bg-[#C5A059] text-[#FFFFFF] text-sm font-medium rounded-lg hover:brightness-110 transition-all"
                 >
                   Save Tax
                 </button>
@@ -414,7 +501,7 @@ const AdminSettings = () => {
                   type="email"
                   value={contactEmail}
                   onChange={(e) => setContactEmail(e.target.value)}
-                  placeholder="e.g. rolkoh@yahoo.com.ph"
+                  placeholder="e.g. kyelopez706@gmail.com"
                   className="w-full px-4 py-2.5 bg-[#F9F9FB] border border-[#E2E8F0] rounded-lg text-sm text-[#232B32] focus:outline-none focus:ring-1 focus:ring-[#C5A059] focus:border-[#C5A059] transition-colors"
                 />
               </div>
@@ -444,7 +531,7 @@ const AdminSettings = () => {
               <button
                 onClick={saveContactInfo}
                 disabled={isSavingContact}
-                className="px-6 py-2.5 bg-[#C5A059] text-white text-sm font-medium rounded-lg hover:brightness-110 transition-all disabled:opacity-50 min-w-[170px]"
+                className="px-6 py-2.5 bg-[#C5A059] text-[#FFFFFF] text-sm font-medium rounded-lg hover:brightness-110 transition-all disabled:opacity-50 min-w-[170px]"
               >
                 {isSavingContact ? 'Saving...' : 'Save Contact Info'}
               </button>

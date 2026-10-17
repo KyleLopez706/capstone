@@ -152,11 +152,6 @@ export default function Home() {
 
         const materials = matsData || [];
 
-        if (popularList.length === 0) {
-          // Keep default 5 stones if no quotes exist yet
-          return;
-        }
-
         const cleanStr = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
         const results = [];
@@ -175,6 +170,9 @@ export default function Home() {
 
           // Match material in DB for texture image URL
           const dbMat = materials.find((m) => cleanStr(m.name) === key);
+
+          // If a custom stone was deleted from materials, skip it
+          if (!builtIn && !dbMat) return;
 
           const richDescription =
             STONE_DESCRIPTIONS[key] ||
@@ -200,7 +198,30 @@ export default function Home() {
           usedKeys.add(key);
         });
 
-        // 5. Backfill with remaining STONE_DESIGNS to always maintain 5 complete cards
+        // 5. Backfill with newly added materials from database so admin-added stones are visible immediately
+        materials.forEach((mat) => {
+          const key = cleanStr(mat.name);
+          if (results.length < 5 && key && !usedKeys.has(key)) {
+            const builtIn = STONE_DESIGNS.find(
+              (s) => cleanStr(s.name) === key || cleanStr(s.id) === key
+            );
+            const richDescription =
+              STONE_DESCRIPTIONS[key] ||
+              builtIn?.description ||
+              "A celebrated architectural favorite chosen by our clients for bespoke countertops and custom luxury installations.";
+
+            results.push({
+              id: `db-mat-${mat.id || key}`,
+              name: mat.name,
+              description: richDescription,
+              image: mat.color_url || builtIn?.image || blackMarquinaImg,
+              orderCount: 0,
+            });
+            usedKeys.add(key);
+          }
+        });
+
+        // 6. Final fallback with remaining STONE_DESIGNS to always maintain 5 complete luxury cards
         STONE_DESIGNS.forEach((stone) => {
           const key = cleanStr(stone.name);
           if (results.length < 5 && !usedKeys.has(key)) {

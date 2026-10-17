@@ -370,8 +370,19 @@ export default function DimensionPanel() {
             })}
           </p>
           <p className="text-[11px] mt-1" style={{ color: '#9CA3AF' }}>
-            Includes stone, fabrication, installation, logistics, & 12% VAT.
+            Preliminary estimate: Includes stone, fabrication, edge finishing, installation, & 12% VAT.
           </p>
+
+          {/* Industrial Raw Slabs Yield Indicator */}
+          <div className="mt-3 pt-3 border-t border-[rgba(226,232,240,0.1)] flex items-center justify-between text-xs">
+            <span style={{ color: '#C5A059' }} className="font-semibold flex items-center gap-1.5">
+              Estimated Raw Slabs:
+            </span>
+            <span className="font-semibold" style={{ color: '#F9F9FB' }}>
+              {pricing.requiredSlabs} slab{pricing.requiredSlabs === 1 ? '' : 's'}{' '}
+              <span className="text-[10px] font-normal text-[#9CA3AF]">(inc. 15% fabrication waste)</span>
+            </span>
+          </div>
 
           {/* Collapsible / expandable breakdown */}
           <button
@@ -405,9 +416,9 @@ export default function DimensionPanel() {
                 </span>
               </div>
               <div className="flex justify-between" style={{ color: '#9CA3AF' }}>
-                <span>Fabrication / Cutting ({pricing.perimeter.toFixed(2)}lm):</span>
+                <span>Cutting / Fabrication ({pricing.perimeter.toFixed(2)}lm):</span>
                 <span className="font-medium" style={{ color: '#F9F9FB' }}>
-                  ₱{pricing.fabricationCost.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ₱{pricing.cuttingCost.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
               {pricing.isCountertop && (pricing.edgePolishingCost + pricing.miteringCost > 0) && (
@@ -419,15 +430,15 @@ export default function DimensionPanel() {
                 </div>
               )}
               <div className="flex justify-between" style={{ color: '#9CA3AF' }}>
-                <span>Installation ({pricing.isWall ? 'Wall Cladding' : 'Base'}):</span>
+                <span>Installation ({pricing.isWall ? 'Wall Cladding w/ SS Anchor' : 'Base Installation'}):</span>
                 <span className="font-medium" style={{ color: '#F9F9FB' }}>
                   ₱{pricing.installCost.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
-              <div className="flex justify-between" style={{ color: '#9CA3AF' }}>
+              <div className="flex justify-between items-center py-0.5" style={{ color: '#9CA3AF' }}>
                 <span>Delivery & Mobilization:</span>
-                <span className="font-medium" style={{ color: '#F9F9FB' }}>
-                  ₱{(pricing.deliveryCost + pricing.mobilizationCost).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <span className="font-medium text-right text-[11px] italic" style={{ color: '#C5A059' }}>
+                  To be determined upon on-site inspection
                 </span>
               </div>
               <div className="flex justify-between" style={{ color: '#9CA3AF' }}>
@@ -440,6 +451,40 @@ export default function DimensionPanel() {
           )}
         </div>
 
+
+        {/* ── Out of Stock / Pre-Order Waitlist Guard Banner ── */}
+        {selectedMaterial && (() => {
+          const slabCount = typeof selectedMaterial.slab_count === 'number' ? selectedMaterial.slab_count : 10;
+          const allocated = typeof selectedMaterial.allocated_slabs === 'number' ? selectedMaterial.allocated_slabs : 0;
+          const softHold = typeof selectedMaterial.soft_hold_slabs === 'number' ? selectedMaterial.soft_hold_slabs : 0;
+          const available = Math.max(0, slabCount - allocated - softHold);
+          const isOut = selectedMaterial.stock_status === 'out_of_stock' || (selectedMaterial.stock_status !== 'available' && available <= 0);
+
+          if (isOut) {
+            return (
+              <div
+                className="rounded-xl p-3 flex items-start gap-2.5 text-xs"
+                style={{
+                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                }}
+              >
+                <svg className="w-4 h-4 shrink-0 mt-0.5 text-[#EF4444]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div>
+                  <p className="font-semibold" style={{ color: '#FCA5A5' }}>
+                    Warehouse Inventory Unavailable
+                  </p>
+                  <p className="mt-0.5 leading-relaxed" style={{ color: '#9CA3AF' }}>
+                    {selectedMaterial.name} is currently out of warehouse stock. Requesting a quote places your project on our priority pre-order waitlist for the next incoming quarry shipment.
+                  </p>
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })()}
 
         {/* ── Auth message (shown when user is not signed in) ── */}
         {authMsg && (
@@ -511,7 +556,11 @@ export default function DimensionPanel() {
             if (selectedMaterial && !checkingAuth) e.currentTarget.style.backgroundColor = '#C5A059';
           }}
         >
-          {checkingAuth ? 'Checking…' : 'Request a Quote'}
+          {checkingAuth
+            ? 'Checking…'
+            : selectedMaterial?.stock_status === 'out_of_stock'
+            ? 'Request Pre-Order / Waitlist Quote'
+            : 'Request a Quote'}
         </button>
 
       </div>

@@ -14,14 +14,82 @@ import {
    prevents API spam on rapid clicks (AGENTS.md §A).
 ───────────────────────────────────────── */
 
+/* ── Helper to resolve stock status and badge info ── */
+function getStockStatusInfo(material) {
+
+  const slabCount = typeof material?.slab_count === "number" ? material.slab_count : 10;
+  const allocated = typeof material?.allocated_slabs === "number" ? material.allocated_slabs : 0;
+  const softHold = typeof material?.soft_hold_slabs === "number" ? material.soft_hold_slabs : 0;
+  const threshold = typeof material?.reorder_threshold === "number" ? material.reorder_threshold : 2;
+  const availableSlabs = Math.max(0, slabCount - allocated - softHold);
+
+  let status = material?.stock_status;
+  if (!status) {
+    if (availableSlabs <= 0) {
+      status = "restocking_soon";
+    } else if (availableSlabs <= threshold) {
+      status = "limited_stock";
+    } else {
+      status = "available";
+    }
+  }
+
+  switch (status) {
+    case "limited_stock":
+      return {
+        status: "limited_stock",
+        label: "Limited Stock",
+        shortLabel: `${availableSlabs} left`,
+        badgeBg: "rgba(245, 158, 11, 0.9)",
+        badgeText: "#FFFFFF",
+        dotColor: "#F59E0B",
+        availableSlabs,
+      };
+    case "restocking_soon":
+      return {
+        status: "restocking_soon",
+        label: "Restocking Soon",
+        shortLabel: "Pre-Order",
+        badgeBg: "rgba(59, 130, 246, 0.9)",
+        badgeText: "#FFFFFF",
+        dotColor: "#60A5FA",
+        availableSlabs,
+      };
+    case "out_of_stock":
+      return {
+        status: "out_of_stock",
+        label: "Out of Stock",
+        shortLabel: "Unavailable",
+        badgeBg: "rgba(239, 68, 68, 0.9)",
+        badgeText: "#FFFFFF",
+        dotColor: "#EF4444",
+        availableSlabs,
+      };
+    case "available":
+    default:
+      return {
+        status: "available",
+        label: "In Stock",
+        shortLabel: `${availableSlabs} in stock`,
+        badgeBg: "rgba(16, 185, 129, 0.9)",
+        badgeText: "#FFFFFF",
+        dotColor: "#10B981",
+        availableSlabs,
+      };
+  }
+}
+
 /* ── Single swatch card ── */
 function MaterialSwatch({ material, isSelected, onSelect, isLocked }) {
+  const stock = getStockStatusInfo(material);
+  const isOutOfStock = stock.status === "out_of_stock";
+
   return (
     <button
       id={`swatch-${material.id}`}
       onClick={() => !isLocked && onSelect(material)}
       disabled={isLocked}
-      className="group relative w-full rounded-xl overflow-hidden focus:outline-none"
+      className="group relative w-full rounded-xl overflow-hidden focus:outline-none flex flex-col"
       style={{
         border: isSelected
           ? "2px solid #C5A059"
@@ -31,10 +99,11 @@ function MaterialSwatch({ material, isSelected, onSelect, isLocked }) {
         transition: "all 0.2s ease",
         cursor: isLocked ? "not-allowed" : "pointer",
         backgroundColor: "rgba(0, 0, 0, 0.2)",
+        opacity: isOutOfStock ? 0.8 : 1,
       }}
     >
       <div
-        className="w-full aspect-square overflow-hidden"
+        className="w-full aspect-square overflow-hidden relative"
         style={{ backgroundColor: "#1c2026" }}
       >
         {material.color_url && (
@@ -50,11 +119,23 @@ function MaterialSwatch({ material, isSelected, onSelect, isLocked }) {
             }}
           />
         )}
+
+        {/* Stock status badge in top-left */}
+        <span
+          className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase shadow-sm pointer-events-none"
+          style={{
+            backgroundColor: stock.badgeBg,
+            color: stock.badgeText,
+            backdropFilter: "blur(2px)",
+          }}
+        >
+          {stock.label}
+        </span>
       </div>
 
-      {/* Name label */}
+      {/* Name and Stock info */}
       <div
-        className="px-2 py-2 text-center"
+        className="w-full px-2 py-2 text-center"
         style={{
           backgroundColor: isSelected ? "rgba(197,160,89,0.08)" : "transparent",
         }}
@@ -64,6 +145,16 @@ function MaterialSwatch({ material, isSelected, onSelect, isLocked }) {
           style={{ color: isSelected ? "#C5A059" : "#F9F9FB" }}
         >
           {material.name}
+        </p>
+        <p
+          className="text-[10px] font-medium mt-0.5 flex items-center justify-center gap-1"
+          style={{ color: stock.dotColor }}
+        >
+          <span
+            className="w-1.5 h-1.5 rounded-full inline-block"
+            style={{ backgroundColor: stock.dotColor }}
+          />
+          {stock.shortLabel}
         </p>
       </div>
 
@@ -240,6 +331,67 @@ export default function MaterialPanel() {
               />
             ))}
           </div>
+
+          {/* Selected Stone Stock Availability Banner */}
+          {selectedMaterial && (() => {
+            const currentStock = getStockStatusInfo(selectedMaterial);
+            if (currentStock.status === "out_of_stock") {
+              return (
+                <div className="mt-3 rounded-xl p-3 flex items-start gap-2.5 bg-rose-500/10 border border-rose-500/30">
+                  <svg className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <div className="text-xs">
+                    <p className="font-semibold text-rose-300">Out of Stock Notice</p>
+                    <p className="text-[#9CA3AF] mt-0.5 leading-relaxed">
+                      {selectedMaterial.name} is currently out of warehouse inventory. You can still inspect it in 3D, but new quotation requests will be queued as backorders.
+                    </p>
+                  </div>
+                </div>
+              );
+            }
+            if (currentStock.status === "restocking_soon") {
+              return (
+                <div className="mt-3 rounded-xl p-3 flex items-start gap-2.5 bg-blue-500/10 border border-blue-500/30">
+                  <svg className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div className="text-xs">
+                    <p className="font-semibold text-blue-300">Pre-Order / Incoming Quarry Shipment</p>
+                    <p className="text-[#9CA3AF] mt-0.5 leading-relaxed">
+                      Current on-hand warehouse slabs are reserved. Submitting a quote request will reserve your slabs from our next incoming container (estimated lead time: 2–3 weeks).
+                    </p>
+                  </div>
+                </div>
+              );
+            }
+            if (currentStock.status === "limited_stock") {
+              return (
+                <div className="mt-3 rounded-xl p-3 flex items-start gap-2.5 bg-amber-500/10 border border-amber-500/30">
+                  <svg className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div className="text-xs">
+                    <p className="font-semibold text-amber-300">High Demand — Only {currentStock.availableSlabs} Slab{currentStock.availableSlabs === 1 ? '' : 's'} Remaining</p>
+                    <p className="text-[#9CA3AF] mt-0.5 leading-relaxed">
+                      Warehouse stock is running low. Requesting a quote places a 7-day soft hold on available slabs.
+                    </p>
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div className="mt-3 rounded-xl p-2.5 flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 text-xs">
+                <span className="flex items-center gap-1.5 text-emerald-400 font-medium">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse" />
+                  Warehouse Stock Available
+                </span>
+                <span className="text-[#9CA3AF]">
+                  {currentStock.availableSlabs} slab{currentStock.availableSlabs === 1 ? '' : 's'} ready for fabrication
+                </span>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Cabinet Finish Selection */}

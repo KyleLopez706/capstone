@@ -76,28 +76,49 @@ const TOAST_CONFIG = {
   },
 };
 
-export function ToastNotification({ toast, onDismiss }) {
-  if (!toast) return null;
-  const cfg = TOAST_CONFIG[toast.type] ?? TOAST_CONFIG.info;
+export function ToastNotification({
+  toast,
+  message,
+  type,
+  title,
+  onDismiss,
+  position = 'bottom-right',
+}) {
+  const activeToast = toast || (message ? { message, type, title } : null);
+  if (!activeToast) return null;
+  const cfg = TOAST_CONFIG[activeToast.type] ?? TOAST_CONFIG.info;
+  const displayTitle = activeToast.title || title || cfg.title;
+
+  const isBottom = position.startsWith('bottom');
+  const isRight = position.endsWith('right');
 
   return (
     <>
       <style>{`
-        @keyframes toast-in {
-          from { opacity: 0; transform: translateY(24px) scale(0.95); }
+        @keyframes toast-in-br {
+          from { opacity: 0; transform: translateY(20px) scale(0.96); }
           to   { opacity: 1; transform: translateY(0)    scale(1);    }
         }
       `}</style>
       <div
         style={{
-          position: 'fixed', bottom: '32px', right: '32px', zIndex: 99999,
-          display: 'flex', alignItems: 'flex-start', gap: '12px',
-          padding: '16px 20px', borderRadius: '14px',
+          position: 'fixed',
+          bottom: isBottom ? '24px' : 'auto',
+          top: isBottom ? 'auto' : '24px',
+          right: isRight ? '24px' : 'auto',
+          left: isRight ? 'auto' : '24px',
+          zIndex: 99999,
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '12px',
+          padding: '16px 20px',
+          borderRadius: '14px',
           backgroundColor: cfg.bg,
-          border: `1px solid ${cfg.border}`,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-          minWidth: '300px', maxWidth: '420px',
-          animation: 'toast-in 0.35s cubic-bezier(0.34,1.56,0.64,1) forwards',
+          border: `1.5px solid ${cfg.border}`,
+          boxShadow: '0 12px 36px rgba(0,0,0,0.28)',
+          maxWidth: 'calc(100vw - 32px)',
+          minWidth: '320px',
+          animation: 'toast-in-br 0.35s cubic-bezier(0.34,1.56,0.64,1) forwards',
         }}
         role="alert"
         aria-live="assertive"
@@ -115,25 +136,27 @@ export function ToastNotification({ toast, onDismiss }) {
         {/* Text */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ fontSize: '13px', fontWeight: 700, color: cfg.titleColor, margin: 0 }}>
-            {cfg.title}
+            {displayTitle}
           </p>
           <p style={{ fontSize: '12px', color: cfg.msgColor, margin: '3px 0 0', lineHeight: 1.5, wordBreak: 'break-word' }}>
-            {toast.message}
+            {activeToast.message}
           </p>
         </div>
 
         {/* Dismiss */}
-        <button
-          onClick={onDismiss}
-          aria-label="Dismiss notification"
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: cfg.dismissColor, fontSize: '20px', lineHeight: 1,
-            padding: '0 2px', flexShrink: 0,
-          }}
-        >
-          &times;
-        </button>
+        {onDismiss && (
+          <button
+            onClick={onDismiss}
+            aria-label="Dismiss notification"
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: cfg.dismissColor, fontSize: '20px', lineHeight: 1,
+              padding: '0 2px', flexShrink: 0,
+            }}
+          >
+            &times;
+          </button>
+        )}
       </div>
     </>
   );
