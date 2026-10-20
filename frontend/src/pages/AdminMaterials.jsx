@@ -251,6 +251,18 @@ const AdjustStockModal = ({ material, isOpen, onClose, onSave, isSaving }) => {
     }
   }, [material]);
 
+  // Dynamically align status badge with available inventory and ROP threshold
+  useEffect(() => {
+    const avail = Math.max(0, Number(slabCount) - Number(allocatedSlabs) - Number(softHoldSlabs));
+    const rop = Number(reorderThreshold) || 2;
+    if (avail <= 0) {
+      setStockStatus("out_of_stock");
+    } else if (avail <= rop) {
+      setStockStatus("limited_stock");
+    } else {
+      setStockStatus("available");
+    }
+  }, [slabCount, allocatedSlabs, softHoldSlabs, reorderThreshold]);
 
   if (!isOpen || !material) return null;
 
@@ -291,6 +303,14 @@ const AdjustStockModal = ({ material, isOpen, onClose, onSave, isSaving }) => {
         </div>
 
         <form onSubmit={handleApply} className="flex flex-col gap-4">
+          {/* Automated System Indicator */}
+          <div className="px-3 py-2 bg-[#F0FDF4] rounded-xl border border-[#BBF7D0] flex items-center gap-2 text-xs text-[#166534]">
+            <span className="w-2 h-2 rounded-full bg-[#16A34A] animate-pulse shrink-0" />
+            <span className="leading-snug">
+              <strong>Automated Inventory Engine:</strong> Physical slabs, downpayment allocations, soft holds, and ROP update automatically with quotations.
+            </span>
+          </div>
+
           <div className="p-3 bg-[#F9F9FB] rounded-xl border border-[#E2E8F0] flex items-center justify-between">
             <span className="text-xs font-semibold text-[#6B7280] uppercase tracking-wide">Calculated Available</span>
             <span className="text-lg font-bold text-[#C5A059]">{available} slab{available === 1 ? '' : 's'}</span>
@@ -528,6 +548,22 @@ export default function AdminMaterials() {
 
   useEffect(() => {
     Promise.resolve().then(() => fetchMaterials());
+
+    // Instant Realtime sync for automated inventory transitions
+    const channel = supabase
+      .channel("realtime_materials_inventory_sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "materials" },
+        () => {
+          fetchMaterials();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchMaterials]);
 
   /* ── Quick Stock Update Handler ── */

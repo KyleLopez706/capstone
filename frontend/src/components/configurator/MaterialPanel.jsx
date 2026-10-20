@@ -332,7 +332,7 @@ export default function MaterialPanel() {
             ))}
           </div>
 
-          {/* Selected Stone Stock Availability Banner */}
+          {/* Selected Stone Out of Stock Notice (Warehouse stock banner removed per user request) */}
           {selectedMaterial && (() => {
             const currentStock = getStockStatusInfo(selectedMaterial);
             if (currentStock.status === "out_of_stock") {
@@ -350,47 +350,7 @@ export default function MaterialPanel() {
                 </div>
               );
             }
-            if (currentStock.status === "restocking_soon") {
-              return (
-                <div className="mt-3 rounded-xl p-3 flex items-start gap-2.5 bg-blue-500/10 border border-blue-500/30">
-                  <svg className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div className="text-xs">
-                    <p className="font-semibold text-blue-300">Pre-Order / Incoming Quarry Shipment</p>
-                    <p className="text-[#9CA3AF] mt-0.5 leading-relaxed">
-                      Current on-hand warehouse slabs are reserved. Submitting a quote request will reserve your slabs from our next incoming container (estimated lead time: 2–3 weeks).
-                    </p>
-                  </div>
-                </div>
-              );
-            }
-            if (currentStock.status === "limited_stock") {
-              return (
-                <div className="mt-3 rounded-xl p-3 flex items-start gap-2.5 bg-amber-500/10 border border-amber-500/30">
-                  <svg className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div className="text-xs">
-                    <p className="font-semibold text-amber-300">High Demand — Only {currentStock.availableSlabs} Slab{currentStock.availableSlabs === 1 ? '' : 's'} Remaining</p>
-                    <p className="text-[#9CA3AF] mt-0.5 leading-relaxed">
-                      Warehouse stock is running low. Requesting a quote places a 7-day soft hold on available slabs.
-                    </p>
-                  </div>
-                </div>
-              );
-            }
-            return (
-              <div className="mt-3 rounded-xl p-2.5 flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 text-xs">
-                <span className="flex items-center gap-1.5 text-emerald-400 font-medium">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse" />
-                  Warehouse Stock Available
-                </span>
-                <span className="text-[#9CA3AF]">
-                  {currentStock.availableSlabs} slab{currentStock.availableSlabs === 1 ? '' : 's'} ready for fabrication
-                </span>
-              </div>
-            );
+            return null;
           })()}
         </div>
 

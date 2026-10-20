@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useToast, ToastNotification } from "../utils/toast";
+import { applyQuotationInventoryTransition, formatInventoryAuditEntry } from "../utils/inventoryManager.js";
 import emailjs from "@emailjs/browser";
 
 
@@ -95,58 +96,21 @@ const Row = ({ label, value }) => (
   </div>
 );
 
-/* ── Automated Stock Allocation on Downpayment ── */
-async function handleStockAllocationForDownpayment(request, supabaseClient) {
+/* ── Automated Inventory Lifecycle Transition ── */
+async function handleQuotationStatusInventoryTransition(prevStatus, newStatus, request, supabaseClient) {
   try {
     const rawSlabs = Math.max(1, Number(request.required_slabs) || Math.ceil((Number(request.area || 0) * 1.15) / 4.35));
     if (!request.design) return { success: false, reason: 'No material design specified' };
 
-    const { data: material, error: fetchErr } = await supabaseClient
-      .from('materials')
-      .select('id, name, slab_count, allocated_slabs, reorder_threshold')
-      .ilike('name', request.design.trim())
-      .maybeSingle();
-
-    if (fetchErr || !material) {
-      console.warn('[Dashboard] Could not find material for automated allocation:', request.design);
-      return { success: false, reason: `Material "${request.design}" not found in inventory` };
-    }
-
-    const currentSlabs = typeof material.slab_count === 'number' ? material.slab_count : (Number(material.slab_count) || 0);
-    const currentAlloc = typeof material.allocated_slabs === 'number' ? material.allocated_slabs : (Number(material.allocated_slabs) || 0);
-    const newAlloc = currentAlloc + rawSlabs;
-    const newSlabs = Math.max(0, currentSlabs - rawSlabs);
-    const threshold = typeof material.reorder_threshold === 'number' ? material.reorder_threshold : 2;
-    const newStatus = newSlabs === 0 ? 'out_of_stock' : (newSlabs <= threshold ? 'limited_stock' : 'available');
-
-    let { error: updateErr } = await supabaseClient
-      .from('materials')
-      .update({
-        allocated_slabs: newAlloc,
-        slab_count: newSlabs,
-        stock_status: newStatus,
-      })
-      .eq('id', material.id);
-
-    if (updateErr) {
-      console.warn('[Dashboard] Retrying material stock update without new inventory columns:', updateErr.message);
-      const fallbackRes = await supabaseClient
-        .from('materials')
-        .update({ stock_status: newStatus })
-        .eq('id', material.id);
-      updateErr = fallbackRes.error;
-    }
-
-    if (updateErr) throw updateErr;
-
-    return {
-      success: true,
-      materialName: material.name,
-      slabsDeducted: rawSlabs,
-      remainingSlabs: newSlabs,
-    };
+    return await applyQuotationInventoryTransition({
+      prevStatus,
+      newStatus,
+      design: request.design,
+      requiredSlabs: rawSlabs,
+      supabaseClient,
+    });
   } catch (err) {
-    console.error('[Dashboard] Error during automated stock deduction:', err);
+    console.error('[Dashboard] Error during automated inventory transition:', err);
     return { success: false, error: err };
   }
 }
@@ -181,18 +145,22 @@ function DetailModal({ request, onClose, onStatusChange, onRemarkAdded, onOpenFo
     try {
       let updatedHistory = [...remarksHistory];
 
-      // Automated Stock Deduction on downpayment_received
-      if (newStatus === 'downpayment_received' && status !== 'downpayment_received') {
-        const allocRes = await handleStockAllocationForDownpayment(request, supabase);
-        if (allocRes.success) {
-          const auditEntry = {
-            text: `Downpayment confirmed. Automatically hard-allocated ${allocRes.slabsDeducted} slab(s) from warehouse (${allocRes.materialName}). Stock remaining: ${allocRes.remainingSlabs} slab(s).`,
-            timestamp: new Date().toISOString(),
-            author: 'Inventory Engine',
-          };
-          updatedHistory = [auditEntry, ...updatedHistory];
-          setRemarksHistory(updatedHistory);
-          if (showToast) showToast(`Allocated ${allocRes.slabsDeducted} slab(s) from ${allocRes.materialName}!`, 'success');
+      // Automated Inventory Lifecycle Transition (Soft holds, Downpayment allocation, Completion deduction, Cancellation restore)
+      if (newStatus !== status) {
+        const invRes = await handleQuotationStatusInventoryTransition(status, newStatus, request, supabase);
+        if (invRes?.success && !invRes.unchanged) {
+          const auditEntry = formatInventoryAuditEntry(invRes, newStatus);
+          if (auditEntry) {
+            updatedHistory = [auditEntry, ...updatedHistory];
+            setRemarksHistory(updatedHistory);
+          }
+          if (newStatus === 'downpayment_received') {
+            if (showToast) showToast(`Downpayment recorded! Hard-allocated ${invRes.slabs} slab(s) of ${invRes.materialName}.`, 'success');
+          } else if (newStatus === 'cancelled') {
+            if (showToast) showToast(`Quotation cancelled. Restored ${invRes.slabs} slab(s) of ${invRes.materialName} to available stock.`, 'info');
+          } else if (newStatus === 'completed') {
+            if (showToast) showToast(`Project completed! Deducted ${invRes.slabs} physical slab(s) of ${invRes.materialName}.`, 'success');
+          }
         }
       }
 
@@ -966,17 +934,21 @@ export default function Dashboard() {
     }
     if (!Array.isArray(updatedHistory)) updatedHistory = [];
 
-    // Automated Stock Deduction on downpayment_received
-    if (newStatus === 'downpayment_received' && currentReq?.status !== 'downpayment_received') {
-      const allocRes = await handleStockAllocationForDownpayment(currentReq, supabase);
-      if (allocRes.success) {
-        const auditEntry = {
-          text: `Downpayment confirmed. Automatically hard-allocated ${allocRes.slabsDeducted} slab(s) from warehouse (${allocRes.materialName}). Stock remaining: ${allocRes.remainingSlabs} slab(s).`,
-          timestamp: new Date().toISOString(),
-          author: 'Inventory Engine',
-        };
-        updatedHistory = [auditEntry, ...updatedHistory];
-        showToast(`Downpayment recorded! Hard-allocated ${allocRes.slabsDeducted} slab(s) from ${allocRes.materialName}.`, 'success');
+    // Automated Inventory Lifecycle Transition (Soft holds, Downpayment allocation, Completion deduction, Cancellation restore)
+    if (newStatus !== currentReq?.status) {
+      const invRes = await handleQuotationStatusInventoryTransition(currentReq?.status, newStatus, currentReq, supabase);
+      if (invRes?.success && !invRes.unchanged) {
+        const auditEntry = formatInventoryAuditEntry(invRes, newStatus);
+        if (auditEntry) {
+          updatedHistory = [auditEntry, ...updatedHistory];
+        }
+        if (newStatus === 'downpayment_received') {
+          showToast(`Downpayment recorded! Hard-allocated ${invRes.slabs} slab(s) of ${invRes.materialName}.`, 'success');
+        } else if (newStatus === 'cancelled') {
+          showToast(`Quotation cancelled. Restored ${invRes.slabs} slab(s) of ${invRes.materialName} to available stock.`, 'info');
+        } else if (newStatus === 'completed') {
+          showToast(`Project completed! Deducted ${invRes.slabs} physical slab(s) of ${invRes.materialName}.`, 'success');
+        }
       }
     }
 

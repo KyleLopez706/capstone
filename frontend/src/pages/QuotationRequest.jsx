@@ -5,6 +5,7 @@ import { supabase } from '../supabaseClient';
 import useConfiguratorStore from '../store/configuratorStore';
 import { useToast, ToastNotification } from '../utils/toast';
 import { calculatePricing } from '../utils/pricingEngine';
+import { applyQuotationInventoryTransition } from '../utils/inventoryManager.js';
 import emailjs from '@emailjs/browser';
 
 /* ─────────────────────────────────────────────────────────────
@@ -624,6 +625,19 @@ export default function QuotationRequest() {
       }
 
       if (insertError) throw new Error(insertError.message);
+
+      // Automated Stone Inventory: Place 7-Day Soft Hold on raw slab(s)
+      try {
+        await applyQuotationInventoryTransition({
+          prevStatus: null,
+          newStatus: 'pending',
+          design: selectedMaterial?.name,
+          requiredSlabs: pricing.requiredSlabs || 1,
+          supabaseClient: supabase,
+        });
+      } catch (invErr) {
+        console.warn('[QuotationRequest] Non-blocking automated soft hold notice:', invErr);
+      }
 
       // 1. Instant cross-tab BroadcastChannel notification to swing Admin's bell immediately
       try {
