@@ -1,6 +1,61 @@
-import { Routes, Route, useNavigate } from "react-router-dom";
-import { useState, useEffect, lazy, Suspense, useRef } from "react";
+import { Routes, Route, useNavigate, Navigate } from "react-router-dom";
+import { useState, useEffect, lazy, Suspense, useRef, Component } from "react";
 import { supabase } from "./supabaseClient";
+
+/* ── Global Error Boundary ────────────────────────────────────────────────
+   Prevents entire application tree from crashing to a blank white screen
+   if any unexpected runtime error occurs.
+────────────────────────────────────────────────────────────────────────── */
+class GlobalErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("[GlobalErrorBoundary] Unhandled error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen w-full flex flex-col items-center justify-center p-6 bg-[#F9F9FB] text-[#232B32] text-center">
+          <div className="w-16 h-16 rounded-2xl bg-[#C5A059]/15 border border-[#C5A059]/30 flex items-center justify-center mb-4 text-[#C5A059]">
+            <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+            </svg>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-2">Something went wrong</h1>
+          <p className="text-sm text-[#6B7280] max-w-md mb-6 leading-relaxed">
+            The application experienced an unexpected interruption. Our technical team has been notified.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-2.5 rounded-xl bg-[#C5A059] hover:bg-[#b08d47] text-[#232B32] font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+            >
+              Refresh Page
+            </button>
+            <button
+              onClick={() => {
+                this.setState({ hasError: false });
+                window.location.href = "/";
+              }}
+              className="px-6 py-2.5 rounded-xl bg-[#232B32] hover:bg-[#2A313C] text-[#F9F9FB] font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+            >
+              Return to Home
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // Lazy load all pages to split the JavaScript bundle
 const Home = lazy(() => import("./pages/Home"));
@@ -192,7 +247,7 @@ function App() {
       sessionStorage.setItem("sixsigma_active", "1");
 
       // If user is actively on reset password page, do not route away
-      if (isResetRoute) return;
+      if (window.location.pathname === "/reset-password") return;
 
       // Check if current route is an admin destination
       const isCurrentAdminPath =
@@ -242,40 +297,48 @@ function App() {
   }
 
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen w-full flex items-center justify-center bg-[#F9F9FB]">
-          <div className="w-8 h-8 border-4 border-[#C5A059] border-t-transparent rounded-full animate-spin"></div>
-        </div>
-      }
-    >
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<UserLogin />} />
-        <Route path="/about" element={<About />} />
-        <Route path="/services" element={<Services />} />
-        <Route path="/gallery" element={<Gallery />} />
-        <Route path="/contact" element={<Contact />} />
-        <Route path="/configurator-3d" element={<Configurator3D />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/quotation-request" element={<QuotationRequest />} />
+    <GlobalErrorBoundary>
+      <Suspense
+        fallback={
+          <div className="min-h-screen w-full flex items-center justify-center bg-[#F9F9FB]">
+            <div className="w-8 h-8 border-4 border-[#C5A059] border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        }
+      >
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<UserLogin />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/services" element={<Services />} />
+          <Route path="/gallery" element={<Gallery />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/configurator-3d" element={<Configurator3D />} />
+          <Route path="/configurator-3d/*" element={<Configurator3D />} />
+          <Route path="/configurator" element={<Configurator3D />} />
+          <Route path="/configurator/*" element={<Configurator3D />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/quotation-request" element={<QuotationRequest />} />
 
-        <Route element={<AdminLayout />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/messages" element={<AdminMessages />} />
-          <Route path="/admin/settings" element={<AdminSettings />} />
-          <Route path="/admin/materials" element={<AdminMaterials />} />
-          <Route path="/admin/models" element={<AdminModels />} />
-          <Route
-            path="/admin/cabinet-colors"
-            element={<AdminCabinetColors />}
-          />
-          <Route path="/admin/gallery" element={<AdminGallery />} />
-        </Route>
-        <Route path="/admin/quotation/:id" element={<CreateQuotation />} />
-      </Routes>
-    </Suspense>
+          <Route element={<AdminLayout />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/messages" element={<AdminMessages />} />
+            <Route path="/admin/settings" element={<AdminSettings />} />
+            <Route path="/admin/materials" element={<AdminMaterials />} />
+            <Route path="/admin/models" element={<AdminModels />} />
+            <Route
+              path="/admin/cabinet-colors"
+              element={<AdminCabinetColors />}
+            />
+            <Route path="/admin/gallery" element={<AdminGallery />} />
+          </Route>
+          <Route path="/admin/quotation/:id" element={<CreateQuotation />} />
+
+          {/* Fallback route to prevent white screen on unknown URLs */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+    </GlobalErrorBoundary>
   );
 }
 

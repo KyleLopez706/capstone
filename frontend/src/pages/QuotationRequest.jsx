@@ -6,6 +6,7 @@ import useConfiguratorStore from '../store/configuratorStore';
 import { useToast, ToastNotification } from '../utils/toast';
 import { calculatePricing } from '../utils/pricingEngine';
 import { applyQuotationInventoryTransition } from '../utils/inventoryManager.js';
+import { incrementPopularProjectType } from '../utils/popularInsights.js';
 import emailjs from '@emailjs/browser';
 
 /* ─────────────────────────────────────────────────────────────
@@ -639,6 +640,13 @@ export default function QuotationRequest() {
         console.warn('[QuotationRequest] Non-blocking automated soft hold notice:', invErr);
       }
 
+      // Real-time Popularity Tracker: Increment Project Type demand counter
+      try {
+        await incrementPopularProjectType(quotePayload.product_type);
+      } catch (popErr) {
+        console.warn('[QuotationRequest] Non-blocking popularity tracker notice:', popErr);
+      }
+
       // 1. Instant cross-tab BroadcastChannel notification to swing Admin's bell immediately
       try {
         const bc = new BroadcastChannel('sixsigma_quotation_alert');
@@ -827,6 +835,58 @@ export default function QuotationRequest() {
             <SummaryRow label="Total Area"    value={`${area.toFixed(2)} m²`} />
             <SummaryRow label="Estimated Slabs" value={`${pricing.requiredSlabs} slab${pricing.requiredSlabs === 1 ? '' : 's'} (inc. 15% fabrication waste)`} />
             <SummaryRow label="Rate per m²"  value={fmt(ratePerSqm)} />
+
+            {/* Warehouse Stock Feasibility & Supplement Capacity Indicator */}
+            {(() => {
+              if (!selectedMaterial) return null;
+              const slabCount = typeof selectedMaterial.slab_count === 'number' ? selectedMaterial.slab_count : 10;
+              const allocated = typeof selectedMaterial.allocated_slabs === 'number' ? selectedMaterial.allocated_slabs : 0;
+              const softHold = typeof selectedMaterial.soft_hold_slabs === 'number' ? selectedMaterial.soft_hold_slabs : 0;
+              const netAvailable = Math.max(0, slabCount - softHold);
+              const isRestocking = selectedMaterial.stock_status === 'restocking_soon';
+              const isOutOfStock = selectedMaterial.stock_status === 'out_of_stock' || netAvailable <= 0;
+              const canSupplement = netAvailable >= (pricing.requiredSlabs || 1) && !isRestocking && !isOutOfStock;
+
+              return (
+                <div
+                  style={{
+                    marginTop: '14px',
+                    padding: '12px 14px',
+                    borderRadius: '12px',
+                    backgroundColor: canSupplement ? '#F0FDF4' : isRestocking ? '#EFF6FF' : '#FFFBEB',
+                    border: `1px solid ${canSupplement ? '#BBF7D0' : isRestocking ? '#BFDBFE' : '#FDE68A'}`,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                        backgroundColor: '#FFFFFF',
+                        color: canSupplement ? '#166534' : isRestocking ? '#1D4ED8' : '#B45309',
+                        border: `1px solid ${canSupplement ? '#BBF7D0' : isRestocking ? '#BFDBFE' : '#FDE68A'}`,
+                      }}
+                    >
+                      {canSupplement ? '✓ Warehouse Stock Ready' : isRestocking ? '⏳ Quarry Sourcing' : '⚠️ Limited Slabs'}
+                    </span>
+                    <span style={{ fontSize: '11px', color: '#6B7280', fontWeight: 600 }}>
+                      {netAvailable} slab(s) on-hand · {pricing.requiredSlabs} required
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#374151', margin: '6px 0 0', lineHeight: 1.4 }}>
+                    {canSupplement
+                      ? `Six Sigmaphil has ${netAvailable} available slab(s) in warehouse inventory to fully supplement and fabricate your ${pricing.requiredSlabs}-slab project immediately upon downpayment.`
+                      : isRestocking
+                      ? `Quarry replenishment container is in transit for ${selectedMaterial.name}. Your quote will reserve priority allocation upon arrival.`
+                      : `Warehouse has ${netAvailable} slab(s) on-hand (${pricing.requiredSlabs} needed). Six Sigmaphil will supplement additional slabs via priority quarry replenishment.`}
+                  </p>
+                </div>
+              );
+            })()}
 
             {/* Cost breakdown */}
             <div style={{ marginTop: '18px' }}>

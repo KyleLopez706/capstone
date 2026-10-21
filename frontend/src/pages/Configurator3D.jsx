@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Component } from 'react';
 import { useLocation }          from 'react-router-dom';
 import { useTexture }           from '@react-three/drei';
 import Navbar                   from '../components/Navbar';
@@ -7,6 +7,66 @@ import ConfiguratorLayout       from '../components/configurator/ConfiguratorLay
 import useConfiguratorStore     from '../store/configuratorStore';
 import { supabase }             from '../supabaseClient';
 import { useToast, ToastNotification } from '../utils/toast';
+
+/* ─────────────────────────────────────────
+   CONFIGURATOR ERROR BOUNDARY
+   Prevents any WebGL or Three.js crash from
+   blanking out the page with a white screen.
+───────────────────────────────────────── */
+class ConfiguratorErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('[ConfiguratorErrorBoundary] Caught error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center bg-[#15191E] text-[#F9F9FB]">
+          <div className="w-16 h-16 rounded-2xl bg-[#C5A059]/10 border border-[#C5A059]/30 flex items-center justify-center mb-4 text-[#C5A059]">
+            <svg fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+            </svg>
+          </div>
+          <h2 className="text-xl sm:text-2xl font-bold mb-2">3D Experience Temporarily Interrupted</h2>
+          <p className="text-sm text-[#9CA3AF] max-w-md mb-6 leading-relaxed">
+            The 3D graphics canvas encountered a hardware or network glitch while rendering the stone surfaces.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={() => {
+                this.setState({ hasError: false });
+                window.location.reload();
+              }}
+              className="px-5 py-2.5 rounded-xl bg-[#C5A059] hover:bg-[#b08d47] text-[#232B32] font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+            >
+              Reload 3D Experience
+            </button>
+            <button
+              onClick={() => {
+                useConfiguratorStore.getState().resetConfigurator();
+                this.setState({ hasError: false });
+                window.location.href = '/configurator-3d';
+              }}
+              className="px-5 py-2.5 rounded-xl bg-[#232B32] hover:bg-[#2A313C] text-[#F9F9FB] border border-[#2D343E] font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+            >
+              Reset to Showroom
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 /* ─────────────────────────────────────────
    CONFIGURATOR 3D PAGE
@@ -154,6 +214,25 @@ export default function Configurator3D() {
           ...s, model_url: addCacheVersion(s.model_url),
         }));
         setStructures(versioned);
+        
+        // If arriving directly in configurator mode, guarantee a valid active structure
+        const currentStructure = useConfiguratorStore.getState().selectedStructure;
+        const currentAppMode = useConfiguratorStore.getState().appMode;
+        if (currentAppMode === 'configurator') {
+          if (!currentStructure || !currentStructure.model_url) {
+            const kitchen = versioned.find(s => s.name?.toLowerCase().includes('kitchen')) || versioned[0];
+            setStructure(kitchen);
+          } else {
+            // Keep the structure synced with versioned URL and db properties
+            const matching = versioned.find(
+              s => s.id === currentStructure.id || s.name?.toLowerCase() === currentStructure.name?.toLowerCase()
+            );
+            if (matching && matching.model_url !== currentStructure.model_url) {
+              setStructure(matching);
+            }
+          }
+        }
+
         // Only preload the first GLB eagerly to avoid N × GLB egress on cold load.
         // The carousel renders all models inside <Suspense> so remaining GLBs
         // stream in on-demand as the user scrolls to them.
@@ -194,8 +273,30 @@ export default function Configurator3D() {
         const activeMaterials = materialsData.filter(m => !m.is_archived);
         setMaterials(activeMaterials);
         if (activeMaterials.length > 0) {
-          setMaterial(activeMaterials[0]); // fallback if query param is invalid
-          preloadMaterialTextures([activeMaterials[0]]);
+          const currentMat = useConfiguratorStore.getState().selectedMaterial;
+          const matchingMat = currentMat
+            ? activeMaterials.find(
+                (m) =>
+                  m.id === currentMat.id ||
+                  (m.name && currentMat.name && m.name.toLowerCase().trim() === currentMat.name.toLowerCase().trim())
+              )
+            : null;
+
+          if (matchingMat) {
+            setMaterial(matchingMat);
+            preloadMaterialTextures([matchingMat]);
+          } else if (currentMat && (currentMat.color_url || currentMat.image)) {
+            // Material selected from Home page popular stones or custom preview
+            const enrichedMat = {
+              ...currentMat,
+              color_url: currentMat.color_url || currentMat.image,
+            };
+            setMaterial(enrichedMat);
+            preloadMaterialTextures([enrichedMat]);
+          } else {
+            setMaterial(activeMaterials[0]);
+            preloadMaterialTextures([activeMaterials[0]]);
+          }
         }
       }
 
@@ -274,16 +375,20 @@ export default function Configurator3D() {
 
       ) : (appMode === 'showroom' || !selectedStructure) ? (
         /* ─────────── SHOWROOM MODE ─────────── */
-        <div className="flex-1 overflow-hidden relative">
-          <ShowroomCanvas
-            structures={structures}
-            onStructureSelect={handleStructureSelect}
-          />
-        </div>
+        <ConfiguratorErrorBoundary>
+          <div className="flex-1 overflow-hidden relative">
+            <ShowroomCanvas
+              structures={structures}
+              onStructureSelect={handleStructureSelect}
+            />
+          </div>
+        </ConfiguratorErrorBoundary>
 
       ) : (
         /* ─────────── CONFIGURATOR MODE ─────────── */
-        <ConfiguratorLayout />
+        <ConfiguratorErrorBoundary>
+          <ConfiguratorLayout />
+        </ConfiguratorErrorBoundary>
       )}
     </div>
   );

@@ -4,6 +4,7 @@ import { supabase } from "../supabaseClient";
 import emailjs from '@emailjs/browser';
 import { jsPDF } from "jspdf";
 import { useToast, ToastNotification } from "../utils/toast";
+import { checkStockSupplementFeasibility } from "../utils/inventoryManager.js";
 import {
   calculatePricing,
   getStructureCategory,
@@ -80,7 +81,7 @@ export default function CreateQuotation() {
         const [reqRes, ratesRes, materialsRes] = await Promise.all([
           supabase.from('quotation_requests').select('*').eq('id', id).single(),
           supabase.from('labor_rates').select('*'),
-          supabase.from('materials').select('id, name, price_per_sqm, color_url').order('name'),
+          supabase.from('materials').select('id, name, price_per_sqm, color_url, slab_count, allocated_slabs, soft_hold_slabs, reorder_threshold, stock_status').order('name'),
         ]);
 
         if (reqRes.error || !reqRes.data) {
@@ -1011,6 +1012,41 @@ export default function CreateQuotation() {
             </div>
           </div>
         </div>
+
+        {/* Six Sigmaphil Warehouse Stock Supplement Feasibility */}
+        {(() => {
+          const feas = checkStockSupplementFeasibility({ ...request, design: stoneName, area: effectiveArea }, availableMaterials);
+          if (!feas) return null;
+          return (
+            <div
+              className="rounded-xl p-4 border flex flex-col gap-2"
+              style={{
+                backgroundColor: feas.badgeBg,
+                borderColor: feas.badgeBorder,
+              }}
+            >
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-white shadow-xs"
+                    style={{ color: feas.badgeColor, border: `1px solid ${feas.badgeBorder}` }}
+                  >
+                    {feas.badge}
+                  </span>
+                  <span className="text-xs font-bold" style={{ color: feas.badgeColor }}>
+                    {feas.canSupplement ? 'Six Sigmaphil Warehouse Has Sufficient Stock to Supplement This Quotation' : 'Warehouse Supplement Advisory'}
+                  </span>
+                </div>
+                <span className="text-xs font-semibold text-[#6B7280]">
+                  Available: <strong className="text-[#232B32]">{feas.availableSlabs} slab(s)</strong> · Required: <strong className="text-[#232B32]">{feas.requiredSlabs} slab(s)</strong> ({stoneName})
+                </span>
+              </div>
+              <p className="text-xs leading-relaxed text-[#374151]">
+                {feas.message}
+              </p>
+            </div>
+          );
+        })()}
 
         {/* SECTION 2: EDITABLE ON-SITE INSPECTED DIMENSIONS */}
         <div className="bg-[#FFFFFF] rounded-xl p-6 border-2 border-[#C5A059]/40 shadow-sm relative overflow-hidden">

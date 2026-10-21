@@ -156,6 +156,13 @@ function MaterialSwatch({ material, isSelected, onSelect, isLocked }) {
           />
           {stock.shortLabel}
         </p>
+        <p
+          className="text-[11px] font-bold mt-1 tracking-wide"
+          style={{ color: "#C5A059" }}
+        >
+          ₱{Number(material.price_per_sqm || 0).toLocaleString('en-PH', { minimumFractionDigits: 0 })}
+          <span className="text-[9px] font-normal text-[#9CA3AF]"> / m²</span>
+        </p>
       </div>
 
       {/* Gold checkmark on selected */}

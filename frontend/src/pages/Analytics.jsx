@@ -167,7 +167,57 @@ export default function Analytics() {
 
       if (reqRes.data) setRequests(reqRes.data);
       if (matRes.data) setCatalogMaterials(matRes.data);
-      if (structRes.data) setCatalogStructures(structRes.data);
+      if (structRes.data) {
+        setCatalogStructures(structRes.data);
+
+        // Keep homepage dynamic popular project types & 3D models in sync with active quotes
+        if (reqRes.data && reqRes.data.length > 0) {
+          try {
+            const counts = {};
+            reqRes.data.forEach((r) => {
+              const pt = (r.product_type || '').trim().toLowerCase();
+              const matched =
+                structRes.data.find((s) => s.name.toLowerCase() === pt) ||
+                structRes.data.find(
+                  (s) => pt.includes(s.name.toLowerCase()) || s.name.toLowerCase().includes(pt)
+                ) ||
+                structRes.data.find((s) => {
+                  if (pt.includes('bath') && s.name.toLowerCase().includes('bath')) return true;
+                  if (pt.includes('island') && s.structure_type === 'island') return true;
+                  if (pt.includes('wall') && s.structure_type === 'wall') return true;
+                  if (pt.includes('floor') && s.structure_type === 'floor') return true;
+                  if (pt.includes('kitchen') && s.name.toLowerCase().includes('kitchen')) return true;
+                  return false;
+                });
+              const key = matched ? matched.name : (r.product_type || 'Kitchen Countertop');
+              counts[key] = (counts[key] || 0) + 1;
+            });
+
+            const rankedList = structRes.data
+              .map((s) => ({
+                id: s.id,
+                name: s.name,
+                structure_type: s.structure_type,
+                base_length: s.base_length,
+                base_width: s.base_width,
+                model_url: s.model_url,
+                count: counts[s.name] || 0,
+              }))
+              .sort((a, b) => b.count - a.count);
+
+            supabase
+              .from('app_settings')
+              .upsert({
+                key: 'popular_project_types',
+                value: rankedList,
+                updated_at: new Date().toISOString(),
+              })
+              .then(() => {});
+          } catch (syncErr) {
+            console.warn('[Analytics] Sync popular project types notice:', syncErr);
+          }
+        }
+      }
     } catch (err) {
       console.error('[Analytics] Error:', err.message);
     } finally {

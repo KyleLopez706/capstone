@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import useConfiguratorStore from "../store/configuratorStore";
 import { supabase } from "../supabaseClient";
 import Navbar from "../components/Navbar";
+import HomePopular3DShowcase from "../components/HomePopular3DShowcase";
+import { fetchPopularProjectTypes } from "../utils/popularInsights";
 import kitchenImg from "../assets/kitchen.png";
 import blackMarquinaImg from "../assets/Black Marquina.jpg";
 import kitchenCountertopBlackMarquinaImg from "../assets/Kitchen countertop black marquina.png";
@@ -95,15 +97,27 @@ export default function Home() {
   const navigate = useNavigate();
   const setAppMode = useConfiguratorStore((s) => s.setAppMode);
   const [popularStones, setPopularStones] = useState(STONE_DESIGNS);
+  const [popularProjectTypes, setPopularProjectTypes] = useState([]);
 
   useEffect(() => {
     let isMounted = true;
 
-    const fetchPopularStones = async () => {
+    const loadPopularInsights = async () => {
+      // 1. Fetch dynamic popular project types & 3D models
+      try {
+        const projectTypes = await fetchPopularProjectTypes();
+        if (isMounted && projectTypes.length > 0) {
+          setPopularProjectTypes(projectTypes);
+        }
+      } catch (err) {
+        console.warn("Failed to load popular project types:", err);
+      }
+
+      // 2. Fetch dynamic popular stone designs
       try {
         let popularList = [];
 
-        // 1. Try secure RPC function `get_popular_stone_designs` (recommended by Supabase, clears Security Advisor warning)
+        // Try secure RPC function `get_popular_stone_designs`
         const { data: rpcData, error: rpcError } = await supabase.rpc('get_popular_stone_designs');
 
         if (!rpcError && Array.isArray(rpcData) && rpcData.length > 0) {
@@ -112,66 +126,49 @@ export default function Home() {
             count: Number(v.count) || 0,
           }));
         } else {
-          // 2. Fallback to public aggregate view `popular_stone_designs`
-          const { data: viewData, error: viewError } = await supabase
-            .from('popular_stone_designs')
-            .select('*')
-            .limit(5);
+          // Direct fallback: query quotation_requests (works when admin is logged in)
+          const { data: quotesData } = await supabase
+            .from('quotation_requests')
+            .select('design');
 
-          if (!viewError && viewData && viewData.length > 0) {
-            popularList = viewData.map((v) => ({
-              name: v.name || v.design,
-              count: Number(v.count) || 0,
-            }));
-          } else {
-            // 3. Direct fallback: query quotation_requests (works when admin is logged in)
-            const { data: quotesData } = await supabase
-              .from('quotation_requests')
-              .select('design');
-
-            if (quotesData && quotesData.length > 0) {
-              const counts = {};
-              quotesData.forEach((q) => {
-                if (q.design && typeof q.design === 'string') {
-                  const trimmed = q.design.trim();
-                  if (trimmed) counts[trimmed] = (counts[trimmed] || 0) + 1;
-                }
-              });
-              popularList = Object.entries(counts)
-                .map(([name, count]) => ({ name, count }))
-                .sort((a, b) => b.count - a.count)
-                .slice(0, 5);
-            }
+          if (quotesData && quotesData.length > 0) {
+            const counts = {};
+            quotesData.forEach((q) => {
+              if (q.design && typeof q.design === 'string') {
+                const trimmed = q.design.trim();
+                if (trimmed) counts[trimmed] = (counts[trimmed] || 0) + 1;
+              }
+            });
+            popularList = Object.entries(counts)
+              .map(([name, count]) => ({ name, count }))
+              .sort((a, b) => b.count - a.count)
+              .slice(0, 5);
           }
         }
 
-        // 3. Fetch materials table to grab public high-res texture URLs
+        // Fetch materials table to grab public high-res texture URLs, prices & live stock
         const { data: matsData } = await supabase
           .from('materials')
-          .select('id, name, color_url, hex_code');
+          .select('id, name, color_url, hex_code, price_per_sqm, stock_status, slab_count, allocated_slabs, soft_hold_slabs');
 
         const materials = matsData || [];
-
         const cleanStr = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
         const results = [];
         const usedKeys = new Set();
 
-        // 4. Map top popular designs to stone cards
+        // Map top popular designs to stone cards (Top 3 prioritized)
         popularList.forEach((item) => {
-          if (results.length >= 5) return;
+          if (results.length >= 3) return;
           const key = cleanStr(item.name);
           if (!key || usedKeys.has(key)) return;
 
-          // Match built-in asset if available (e.g. Salt & Pepper, Calacatta Quartz)
           const builtIn = STONE_DESIGNS.find(
             (s) => cleanStr(s.name) === key || cleanStr(s.id) === key
           );
 
-          // Match material in DB for texture image URL
           const dbMat = materials.find((m) => cleanStr(m.name) === key);
 
-          // If a custom stone was deleted from materials, skip it
           if (!builtIn && !dbMat) return;
 
           const richDescription =
@@ -179,29 +176,41 @@ export default function Home() {
             builtIn?.description ||
             "A celebrated architectural favorite chosen by our clients for bespoke countertops and custom luxury installations.";
 
+          const matPrice = Number(dbMat?.price_per_sqm || builtIn?.price_per_sqm || 4500);
+          const matStock = dbMat?.stock_status || 'available';
+          const textureUrl = dbMat?.color_url || builtIn?.image || blackMarquinaImg;
+
           if (builtIn) {
             results.push({
               ...builtIn,
               description: richDescription,
               orderCount: item.count,
-              image: builtIn.image || dbMat?.color_url,
+              image: textureUrl,
+              color_url: textureUrl,
+              price_per_sqm: matPrice,
+              stock_status: matStock,
+              slab_count: dbMat?.slab_count ?? 10,
             });
           } else {
             results.push({
               id: `popular-${key}`,
               name: item.name,
               description: richDescription,
-              image: dbMat?.color_url || blackMarquinaImg,
+              image: textureUrl,
+              color_url: textureUrl,
               orderCount: item.count,
+              price_per_sqm: matPrice,
+              stock_status: matStock,
+              slab_count: dbMat?.slab_count ?? 10,
             });
           }
           usedKeys.add(key);
         });
 
-        // 5. Backfill with newly added materials from database so admin-added stones are visible immediately
+        // Backfill with newly added materials from database
         materials.forEach((mat) => {
           const key = cleanStr(mat.name);
-          if (results.length < 5 && key && !usedKeys.has(key)) {
+          if (results.length < 3 && key && !usedKeys.has(key)) {
             const builtIn = STONE_DESIGNS.find(
               (s) => cleanStr(s.name) === key || cleanStr(s.id) === key
             );
@@ -210,22 +219,31 @@ export default function Home() {
               builtIn?.description ||
               "A celebrated architectural favorite chosen by our clients for bespoke countertops and custom luxury installations.";
 
+            const textureUrl = mat.color_url || builtIn?.image || blackMarquinaImg;
             results.push({
               id: `db-mat-${mat.id || key}`,
               name: mat.name,
               description: richDescription,
-              image: mat.color_url || builtIn?.image || blackMarquinaImg,
+              image: textureUrl,
+              color_url: textureUrl,
               orderCount: 0,
+              price_per_sqm: Number(mat.price_per_sqm || 4500),
+              stock_status: mat.stock_status || 'available',
+              slab_count: mat.slab_count ?? 10,
             });
             usedKeys.add(key);
           }
         });
 
-        // 6. Final fallback with remaining STONE_DESIGNS to always maintain 5 complete luxury cards
+        // Final fallback with remaining STONE_DESIGNS
         STONE_DESIGNS.forEach((stone) => {
           const key = cleanStr(stone.name);
-          if (results.length < 5 && !usedKeys.has(key)) {
-            results.push(stone);
+          if (results.length < 3 && !usedKeys.has(key)) {
+            results.push({
+              ...stone,
+              price_per_sqm: stone.price_per_sqm || 4500,
+              stock_status: 'available',
+            });
             usedKeys.add(key);
           }
         });
@@ -238,10 +256,22 @@ export default function Home() {
       }
     };
 
-    fetchPopularStones();
+    loadPopularInsights();
+
+    // Real-time subscription: when new quotations arrive or rankings shift, dynamically refresh
+    const channel = supabase
+      .channel('home_popular_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quotation_requests' }, () => {
+        loadPopularInsights();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => {
+        loadPopularInsights();
+      })
+      .subscribe();
 
     return () => {
       isMounted = false;
+      channel.unsubscribe();
     };
   }, []);
 
@@ -600,77 +630,11 @@ export default function Home() {
             {/* Accent divider */}
           </div>
 
-          {/* Stone Cards — flex-wrap with justify-center so the last 2 of 5 center */}
-          <div className="flex flex-wrap justify-center gap-6 lg:gap-8">
-            {popularStones.map((stone, index) => (
-              <div
-                key={stone.id}
-                className="group rounded-2xl overflow-hidden flex flex-col w-full md:w-[calc(50%-12px)] lg:w-[calc(33.333%-22px)]"
-                style={{
-                  backgroundColor: "#FFFFFF",
-                  border: "1px solid #E2E8F0",
-                  boxShadow: "0 4px 20px rgba(35,43,50,0.06)",
-                  transition: "transform 0.3s ease, box-shadow 0.3s ease",
-                  animationDelay: `${index * 80}ms`,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-6px)";
-                  e.currentTarget.style.boxShadow =
-                    "0 16px 40px rgba(35,43,50,0.14)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow =
-                    "0 4px 20px rgba(35,43,50,0.06)";
-                }}
-              >
-                {/* Stone Image */}
-                <div
-                  className="relative overflow-hidden"
-                  style={{ aspectRatio: "4/3" }}
-                >
-                  <img
-                    src={stone.image}
-                    alt={stone.name}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                </div>
-
-                {/* Card Content */}
-                <div className="flex flex-col flex-1 p-5 sm:p-6">
-                  {/* Name + Color chip */}
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <h3
-                      className="text-lg sm:text-xl font-semibold leading-snug"
-                      style={{ color: "#232B32" }}
-                    >
-                      {stone.name}
-                    </h3>
-                  </div>
-
-                  {/* Fancy gradient divider */}
-                  <div
-                    className="mb-3"
-                    style={{
-                      height: "1px",
-                      background:
-                        "linear-gradient(90deg, #E2E8F0 0%, transparent 100%)",
-                    }}
-                  />
-
-                  {/* Description */}
-                  <p
-                    className="text-sm leading-relaxed flex-1"
-                    style={{ color: "#6B7280" }}
-                  >
-                    {stone.description}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
+          {/* Top 3 Popular Stone Designs & Project Types with Live 3D Interactive Model Showcase */}
+          <HomePopular3DShowcase
+            popularStones={popularStones}
+            popularProjectTypes={popularProjectTypes}
+          />
         </div>
       </section>
 

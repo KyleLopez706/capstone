@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useToast, ToastNotification } from "../utils/toast";
-import { applyQuotationInventoryTransition, formatInventoryAuditEntry } from "../utils/inventoryManager.js";
+import { applyQuotationInventoryTransition, formatInventoryAuditEntry, checkStockSupplementFeasibility } from "../utils/inventoryManager.js";
 import emailjs from "@emailjs/browser";
 
 
@@ -116,7 +116,7 @@ async function handleQuotationStatusInventoryTransition(prevStatus, newStatus, r
 }
 
 /* ── Detail Modal ── */
-function DetailModal({ request, onClose, onStatusChange, onRemarkAdded, onOpenFollowUp, showToast }) {
+function DetailModal({ request, onClose, onStatusChange, onRemarkAdded, onOpenFollowUp, showToast, materials = [] }) {
   const [status, setStatus] = useState(request.status);
   const [saving, setSaving] = useState(false);
   const [remarksHistory, setRemarksHistory] = useState(() => {
@@ -155,11 +155,11 @@ function DetailModal({ request, onClose, onStatusChange, onRemarkAdded, onOpenFo
             setRemarksHistory(updatedHistory);
           }
           if (newStatus === 'downpayment_received') {
-            if (showToast) showToast(`Downpayment recorded! Hard-allocated ${invRes.slabs} slab(s) of ${invRes.materialName}.`, 'success');
+            if (showToast) showToast(`Downpayment recorded! Automatically deducted ${invRes.slabs} slab(s) of ${invRes.materialName} from warehouse stock.`, 'success');
           } else if (newStatus === 'cancelled') {
-            if (showToast) showToast(`Quotation cancelled. Restored ${invRes.slabs} slab(s) of ${invRes.materialName} to available stock.`, 'info');
+            if (showToast) showToast(`Quotation cancelled. Restored ${invRes.slabs} slab(s) of ${invRes.materialName} to warehouse stock.`, 'info');
           } else if (newStatus === 'completed') {
-            if (showToast) showToast(`Project completed! Deducted ${invRes.slabs} physical slab(s) of ${invRes.materialName}.`, 'success');
+            if (showToast) showToast(`Project completed! ${invRes.slabs} slab(s) of ${invRes.materialName} fulfilled.`, 'success');
           }
         }
       }
@@ -353,6 +353,55 @@ function DetailModal({ request, onClose, onStatusChange, onRemarkAdded, onOpenFo
               </select>
             </div>
           </div>
+
+          {/* Stock Supplement Feasibility Advisory (Six Sigmaphil Capacity Check) */}
+          {(() => {
+            const feas = checkStockSupplementFeasibility(request, materials);
+            if (!feas) return null;
+            return (
+              <div
+                style={{
+                  marginBottom: '18px',
+                  padding: '14px 16px',
+                  borderRadius: '12px',
+                  backgroundColor: feas.badgeBg,
+                  border: `1px solid ${feas.badgeBorder}`,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
+                        backgroundColor: '#FFFFFF',
+                        color: feas.badgeColor,
+                        border: `1px solid ${feas.badgeBorder}`,
+                      }}
+                    >
+                      {feas.badge}
+                    </span>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: feas.badgeColor }}>
+                      {feas.canSupplement ? 'Six Sigmaphil Can Supplement This Quotation' : 'Stock Supplement Advisory'}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: 600, color: '#6B7280' }}>
+                    Available: {feas.availableSlabs} slab(s) · Needed: {feas.requiredSlabs} slab(s)
+                  </span>
+                </div>
+                <p style={{ fontSize: '12px', color: '#374151', lineHeight: '1.5', margin: 0 }}>
+                  {feas.message}
+                </p>
+              </div>
+            );
+          })()}
 
           {/* Customer & Legitimacy Verification */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -771,6 +820,7 @@ export default function Dashboard() {
 
   /* ── Quotation data ── */
   const [requests, setRequests]         = useState([]);
+  const [materials, setMaterials]       = useState([]);
   const [dataLoading, setDataLoading]   = useState(true);
 
   /* ── Search & filter ── */
@@ -799,16 +849,25 @@ export default function Dashboard() {
   const fetchRequests = useCallback(async () => {
     setDataLoading(true);
 
-    const { data, error } = await supabase
-      .from('quotation_requests')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const [reqRes, matRes] = await Promise.all([
+      supabase
+        .from('quotation_requests')
+        .select('*')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('materials')
+        .select('id, name, slab_count, allocated_slabs, soft_hold_slabs, reorder_threshold, stock_status')
+    ]);
 
-    if (error) {
-      console.error('[Dashboard] Fetch error:', error.message);
+    if (reqRes.error) {
+      console.error('[Dashboard] Fetch error:', reqRes.error.message);
       showToast('Unable to load quotation requests. Please try again.', 'error');
     } else {
-      setRequests(data ?? []);
+      setRequests(reqRes.data ?? []);
+    }
+
+    if (matRes.data) {
+      setMaterials(matRes.data);
     }
 
     setDataLoading(false);
@@ -822,7 +881,7 @@ export default function Dashboard() {
       setIncomingAlert(quote);
     };
 
-    // 1. Supabase Realtime synchronization on quotation_requests
+    // 1. Supabase Realtime synchronization on quotation_requests and materials
     const channel = supabase
       .channel('dashboard_quotation_sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'quotation_requests' }, (payload) => {
@@ -830,6 +889,9 @@ export default function Dashboard() {
         if (payload.eventType === 'INSERT') {
           handleNewQuoteArrived(payload.new);
         }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, () => {
+        fetchRequests();
       })
       .subscribe();
 
@@ -943,11 +1005,11 @@ export default function Dashboard() {
           updatedHistory = [auditEntry, ...updatedHistory];
         }
         if (newStatus === 'downpayment_received') {
-          showToast(`Downpayment recorded! Hard-allocated ${invRes.slabs} slab(s) of ${invRes.materialName}.`, 'success');
+          showToast(`Downpayment recorded! Automatically deducted ${invRes.slabs} slab(s) of ${invRes.materialName} from warehouse stock.`, 'success');
         } else if (newStatus === 'cancelled') {
-          showToast(`Quotation cancelled. Restored ${invRes.slabs} slab(s) of ${invRes.materialName} to available stock.`, 'info');
+          showToast(`Quotation cancelled. Restored ${invRes.slabs} slab(s) of ${invRes.materialName} to warehouse stock.`, 'info');
         } else if (newStatus === 'completed') {
-          showToast(`Project completed! Deducted ${invRes.slabs} physical slab(s) of ${invRes.materialName}.`, 'success');
+          showToast(`Project completed! ${invRes.slabs} slab(s) of ${invRes.materialName} fulfilled.`, 'success');
         }
       }
     }
@@ -1452,9 +1514,35 @@ export default function Dashboard() {
                         </p>
                       </td>
 
-                      {/* Design */}
+                      {/* Design & Supplement Feasibility */}
                       <td className="px-5 py-4" style={{ fontSize: '13px', color: '#232B32', whiteSpace: 'nowrap' }}>
-                        {req.design}
+                        <div>
+                          <p style={{ margin: 0, fontWeight: 600 }}>{req.design}</p>
+                          {(() => {
+                            const feas = checkStockSupplementFeasibility(req, materials);
+                            if (!feas) return null;
+                            return (
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '3px',
+                                  marginTop: '4px',
+                                  padding: '1.5px 6px',
+                                  borderRadius: '4px',
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                  backgroundColor: feas.badgeBg,
+                                  color: feas.badgeColor,
+                                  border: `1px solid ${feas.badgeBorder}`,
+                                }}
+                                title={feas.message}
+                              >
+                                {feas.badge}
+                              </span>
+                            );
+                          })()}
+                        </div>
                       </td>
 
                       {/* Area */}
@@ -1602,6 +1690,7 @@ export default function Dashboard() {
           onRemarkAdded={handleRemarkAdded}
           onOpenFollowUp={(req) => setFollowUpRequest(req)}
           showToast={showToast}
+          materials={materials}
         />
       )}
 
