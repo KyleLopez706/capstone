@@ -28,23 +28,20 @@ function generateReadablePassword(length = 12) {
 }
 
 /**
- * Modal allowing an active Super Admin to create a new Admin or Super Admin account
- * with distinct email credentials and save it directly into Supabase Auth + profiles.
+ * Modal allowing the sole Super Admin to create new Admin accounts with
+ * unique email credentials and save them directly to Supabase Auth + profiles.
  */
-export default function CreateStaffAccountModal({ isOpen, defaultRole = "admin", ...props }) {
+export default function CreateStaffAccountModal({ isOpen, ...props }) {
   if (!isOpen) return null;
-  const resolvedDefaultRole = defaultRole === "super_admin" ? "super_admin" : "admin";
-  return <CreateStaffAccountDialog key={resolvedDefaultRole} defaultRole={resolvedDefaultRole} {...props} />;
+  return <CreateAdminDialog {...props} />;
 }
 
-function CreateStaffAccountDialog({
-  defaultRole,
+function CreateAdminDialog({
   existingEmails = [],
   onClose,
   onCreated,
   showToast,
 }) {
-  const [role, setRole] = useState(defaultRole);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -103,7 +100,7 @@ function CreateStaffAccountDialog({
       const { data, error } = await supabase.rpc("super_admin_create_account", {
         new_email: cleanEmail,
         new_password: password,
-        target_role: role,
+        target_role: "admin",
         new_full_name: cleanName || null,
       });
 
@@ -111,7 +108,7 @@ function CreateStaffAccountDialog({
 
       const created = data || {
         email: cleanEmail,
-        role,
+        role: "admin",
         full_name: cleanName || cleanEmail.split("@")[0],
       };
 
@@ -126,14 +123,14 @@ function CreateStaffAccountDialog({
 
       if (typeof showToast === "function") {
         showToast(
-          `New ${created.role === "super_admin" ? "Super Admin" : "Admin"} account (${created.email}) created successfully.`,
+          `New Admin account (${created.email}) created successfully.`,
           "success"
         );
       }
     } catch (err) {
-      console.error("[CreateStaffAccountModal] Create account error:", err);
+      console.error("[CreateStaffAccountModal] Create admin error:", err);
       const message =
-        err?.message || "Unable to create account. Please verify your Super Admin SQL setup and try again.";
+        err?.message || "Unable to create Admin account. Please verify your Super Admin SQL setup and try again.";
       setFormError(message);
       if (typeof showToast === "function") {
         showToast(message, "error");
@@ -145,8 +142,7 @@ function CreateStaffAccountDialog({
 
   const handleCopyCredentials = async () => {
     if (!createdSummary) return;
-    const roleLabel = createdSummary.role === "super_admin" ? "Super Admin" : "Admin";
-    const text = `SIX SIGMAPHIL (${roleLabel})\nEmail: ${createdSummary.email}\nPassword: ${createdSummary.password}`;
+    const text = `SIX SIGMAPHIL (Admin)\nEmail: ${createdSummary.email}\nPassword: ${createdSummary.password}`;
     try {
       await navigator.clipboard.writeText(text);
       setCopiedSummary(true);
@@ -172,10 +168,10 @@ function CreateStaffAccountDialog({
         <div className="px-6 py-5 bg-[#232B32] flex items-center justify-between gap-4 border-b border-[#C5A059]/30">
           <div>
             <p className="text-[11px] font-bold tracking-widest uppercase text-[#C5A059]">
-              SIX SIGMAPHIL • Provision Access
+              SIX SIGMAPHIL • Staff Access
             </p>
             <h2 id="create-staff-modal-title" className="text-lg font-semibold text-[#F9F9FB] mt-0.5">
-              {createdSummary ? "Account Created in Supabase" : "Create Admin / Super Admin"}
+              {createdSummary ? "Admin Account Created" : "Create New Admin Account"}
             </h2>
           </div>
           <button
@@ -203,10 +199,10 @@ function CreateStaffAccountDialog({
               </div>
               <div>
                 <h3 className="text-base font-bold text-[#232B32]">
-                  {createdSummary.role === "super_admin" ? "New Super Admin" : "New Admin"} Ready to Sign In
+                  New Admin Ready to Sign In
                 </h3>
                 <p className="text-xs text-[#6B7280] mt-1">
-                  The account has been saved in Supabase Authentication and profile records and can sign in immediately.
+                  The Admin account has been saved in Supabase Authentication and profile records and can sign in immediately.
                 </p>
               </div>
             </div>
@@ -214,9 +210,7 @@ function CreateStaffAccountDialog({
             <div className="rounded-xl bg-[#F9F9FB] border border-[#E2E8F0] p-4 space-y-2 text-xs">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[#6B7280]">Role</span>
-                <span className="font-bold uppercase tracking-wider text-[#232B32]">
-                  {createdSummary.role === "super_admin" ? "Super Admin" : "Admin"}
-                </span>
+                <span className="font-bold uppercase tracking-wider text-[#232B32]">Admin</span>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[#6B7280]">Name</span>
@@ -273,70 +267,13 @@ function CreateStaffAccountDialog({
               </div>
             )}
 
-            {/* Account Role */}
-            <div>
-              <label className="block text-xs font-semibold tracking-wider uppercase text-[#232B32] mb-2">
-                Account Role
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {[
-                  {
-                    value: "admin",
-                    title: "Admin",
-                    desc: "Manages quotations, materials, models & studio content.",
-                  },
-                  {
-                    value: "super_admin",
-                    title: "Super Admin",
-                    desc: "Full access control, credential management & governance.",
-                  },
-                ].map((opt) => {
-                  const selected = role === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      disabled={isSubmitting}
-                      onClick={() => setRole(opt.value)}
-                      className="text-left p-3.5 rounded-xl border transition-all cursor-pointer disabled:opacity-50"
-                      style={
-                        selected
-                          ? {
-                              backgroundColor: "#232B32",
-                              borderColor: "#C5A059",
-                              color: "#F9F9FB",
-                            }
-                          : {
-                              backgroundColor: "#F9F9FB",
-                              borderColor: "#E2E8F0",
-                              color: "#232B32",
-                            }
-                      }
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span
-                          className="text-xs font-bold tracking-wider uppercase"
-                          style={{ color: selected ? "#C5A059" : "#232B32" }}
-                        >
-                          {opt.title}
-                        </span>
-                        <span
-                          className="w-3.5 h-3.5 rounded-full border flex items-center justify-center"
-                          style={{ borderColor: selected ? "#C5A059" : "#9CA3AF" }}
-                        >
-                          {selected && <span className="w-2 h-2 rounded-full bg-[#C5A059]" />}
-                        </span>
-                      </div>
-                      <p
-                        className="text-[11px] mt-1 leading-snug"
-                        style={{ color: selected ? "#D1D5DB" : "#6B7280" }}
-                      >
-                        {opt.desc}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
+            <div className="px-4 py-3 rounded-xl bg-[#F9F9FB] border border-[#E2E8F0]">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[#232B32]">
+                Role: Staff Administrator
+              </p>
+              <p className="text-[11px] text-[#6B7280] mt-0.5">
+                Manages quotations, materials, models &amp; studio content. Only one Super Admin owner account exists for security.
+              </p>
             </div>
 
             {/* Full Name */}
@@ -353,7 +290,7 @@ function CreateStaffAccountDialog({
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 disabled={isSubmitting}
-                placeholder={role === "super_admin" ? "e.g., Executive Super Admin" : "e.g., Operations Admin"}
+                placeholder="e.g., Operations Admin"
                 className="w-full py-2.5 px-4 rounded-xl bg-[#FFFFFF] border border-[#E2E8F0] text-sm text-[#232B32] outline-none focus:border-[#C5A059] transition-colors disabled:opacity-60"
               />
             </div>
@@ -364,7 +301,7 @@ function CreateStaffAccountDialog({
                 htmlFor="new-staff-email"
                 className="block text-xs font-semibold tracking-wider uppercase text-[#232B32] mb-2"
               >
-                Login Email Address <span className="text-[#BE123C]">*</span>
+                Admin Login Email <span className="text-[#BE123C]">*</span>
               </label>
               <input
                 id="new-staff-email"
@@ -373,7 +310,7 @@ function CreateStaffAccountDialog({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isSubmitting}
-                placeholder={role === "super_admin" ? "newsuperadmin@sixsigmaphil.com" : "newadmin@sixsigmaphil.com"}
+                placeholder="newadmin@sixsigmaphil.com"
                 className="w-full py-2.5 px-4 rounded-xl bg-[#FFFFFF] border border-[#E2E8F0] text-sm text-[#232B32] outline-none focus:border-[#C5A059] transition-colors disabled:opacity-60"
               />
               <p className="text-[11px] text-[#6B7280] mt-1">
@@ -457,10 +394,8 @@ function CreateStaffAccountDialog({
                 {isSubmitting ? (
                   <>
                     <span className="w-4 h-4 border-2 border-[#232B32] border-t-transparent rounded-full animate-spin" />
-                    Creating Account…
+                    Creating Admin…
                   </>
-                ) : role === "super_admin" ? (
-                  "Create Super Admin Account"
                 ) : (
                   "Create Admin Account"
                 )}
