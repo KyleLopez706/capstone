@@ -17,8 +17,10 @@ import { useToast, ToastNotification } from "../utils/toast";
             and Google OAuth — all via Supabase GoTrue.
    On successful login, queries the profiles table to
    check the user role and routes accordingly:
-     - role === 'admin'  → /dashboard
-     - role === 'user'   → /
+     - is_active === false       → sign out & show error
+     - role === 'super_admin'    → /super-admin
+     - role === 'admin'          → /dashboard
+     - role === 'user'           → /
 ───────────────────────────────────────── */
 export default function UserLogin() {
   /* ── Sub-mode: "signin" | "signup" ── */
@@ -60,13 +62,18 @@ export default function UserLogin() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("mode") === "forgot") {
-      setForgotStep("request");
-    }
-  }, []);
+    const hadNotice = sessionStorage.getItem("sixsigma_deactivated_notice") === "1";
+    if (params.get("deactivated") !== "1" && !hadNotice) return;
+
+    sessionStorage.removeItem("sixsigma_deactivated_notice");
+    const timer = setTimeout(() => {
+      showToast("Your account has been deactivated. Please contact administration.", "error");
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [showToast]);
 
   /* ── Role-based routing helper ──
-     Queries only the 'role' column to keep the query lean (AGENTS.md §A).
+     Queries only 'role' and 'is_active' to keep the query lean (AGENTS.md §A).
      If RLS blocks the query, silently falls back to homepage (AGENTS.md §B). */
   const routeByRole = async (userId) => {
     if (isRouting.current) return;
@@ -76,13 +83,14 @@ export default function UserLogin() {
 
     const { data, error } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, is_active")
       .eq("id", userId)
       .single();
 
     if (error) {
       // RLS permission denial or profile trigger delay
       console.error("Role check failed:", error.message);
+      isRouting.current = false;
       if (returnTo) {
         localStorage.removeItem("sixsigma_return_to");
         sessionStorage.removeItem("returnTo");
@@ -93,7 +101,22 @@ export default function UserLogin() {
       return;
     }
 
-    if (data?.role === "admin") {
+    if (data?.is_active === false) {
+      await supabase.auth.signOut();
+      sessionStorage.removeItem("sixsigma_active");
+      localStorage.removeItem("sixsigma_remember");
+      isRouting.current = false;
+      showToast("Your account has been deactivated. Please contact administration.", "error");
+      return;
+    }
+
+    if (data?.role === "super_admin") {
+      localStorage.removeItem("sixsigma_return_to");
+      sessionStorage.removeItem("returnTo");
+      navigate("/super-admin");
+    } else if (data?.role === "admin") {
+      localStorage.removeItem("sixsigma_return_to");
+      sessionStorage.removeItem("returnTo");
       navigate("/dashboard");
     } else {
       if (returnTo) {

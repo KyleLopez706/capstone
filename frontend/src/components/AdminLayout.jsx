@@ -19,19 +19,36 @@ export default function AdminLayout() {
 
   // Global Auth Guard for Admin pages
   useEffect(() => {
+    let profileChannel;
+    let isMounted = true;
+
     const verifyAdmin = async () => {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError || !session) {
-        navigate('/login');
+        if (isMounted) navigate('/login');
         return;
       }
 
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('role')
+        .select('role, is_active')
         .eq('id', session.user.id)
         .single();
+
+      if (!isMounted) return;
+
+      if (profile?.is_active === false) {
+        await supabase.auth.signOut();
+        sessionStorage.setItem('sixsigma_deactivated_notice', '1');
+        navigate('/login?deactivated=1', { replace: true });
+        return;
+      }
+
+      if (profile?.role === 'super_admin') {
+        navigate('/super-admin', { replace: true });
+        return;
+      }
 
       if (profileError || profile?.role !== 'admin') {
         navigate('/');
@@ -39,9 +56,40 @@ export default function AdminLayout() {
       }
 
       setIsVerifying(false);
+
+      // Kick active admin session immediately if Super Admin deactivates or changes role
+      profileChannel = supabase
+        .channel(`admin-profile-guard-${session.user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'profiles',
+            filter: `id=eq.${session.user.id}`,
+          },
+          async (payload) => {
+            const updated = payload.new;
+            if (updated?.is_active === false) {
+              await supabase.auth.signOut();
+              sessionStorage.setItem('sixsigma_deactivated_notice', '1');
+              navigate('/login?deactivated=1', { replace: true });
+            } else if (updated?.role === 'super_admin') {
+              navigate('/super-admin', { replace: true });
+            } else if (updated?.role !== 'admin') {
+              navigate('/', { replace: true });
+            }
+          }
+        )
+        .subscribe();
     };
 
     verifyAdmin();
+
+    return () => {
+      isMounted = false;
+      if (profileChannel) supabase.removeChannel(profileChannel);
+    };
   }, [navigate]);
 
   // Click outside to close notification dropdown

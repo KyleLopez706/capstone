@@ -24,6 +24,10 @@ const ERROR_MAP = [
     message: 'Please verify your email address before signing in. Check your inbox.',
   },
   {
+    match: /user is banned|deactivated|banned/i,
+    message: 'This account has been deactivated. Please contact the administrator.',
+  },
+  {
     match: /user not found/i,
     message: 'No account found with this email address.',
   },

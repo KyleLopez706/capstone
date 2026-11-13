@@ -78,6 +78,36 @@ export default function CreateQuotation() {
     const fetchData = async () => {
       setLoading(true);
       try {
+        // Verify active admin session before loading quotation builder
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !session) {
+          navigate('/login', { replace: true });
+          return;
+        }
+
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('role, is_active')
+          .eq('id', session.user.id)
+          .single();
+
+        if (profile?.is_active === false) {
+          await supabase.auth.signOut();
+          sessionStorage.setItem('sixsigma_deactivated_notice', '1');
+          navigate('/login?deactivated=1', { replace: true });
+          return;
+        }
+
+        if (profile?.role === 'super_admin') {
+          navigate('/super-admin', { replace: true });
+          return;
+        }
+
+        if (profileError || profile?.role !== 'admin') {
+          navigate('/', { replace: true });
+          return;
+        }
+
         const [reqRes, ratesRes, materialsRes] = await Promise.all([
           supabase.from('quotation_requests').select('*').eq('id', id).single(),
           supabase.from('labor_rates').select('*'),

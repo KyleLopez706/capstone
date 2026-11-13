@@ -76,12 +76,17 @@ const About = lazy(() => import("./pages/About"));
 const Services = lazy(() => import("./pages/Services"));
 const Gallery = lazy(() => import("./pages/Gallery"));
 const Contact = lazy(() => import("./pages/Contact"));
+const SuperAdminDashboard = lazy(() => import("./pages/SuperAdminDashboard"));
+const SuperAdminCredentials = lazy(() => import("./pages/SuperAdminCredentials"));
+const SuperAdminLogin = lazy(() => import("./pages/SuperAdminLogin"));
 
-// Layout
+// Layouts
 const AdminLayout = lazy(() => import("./components/AdminLayout"));
+const SuperAdminLayout = lazy(() => import("./components/SuperAdminLayout"));
 
 function App() {
   const navigate = useNavigate();
+  const [activeUserId, setActiveUserId] = useState(null);
 
   // Prevents UI flashing (showing the Home page for a split second)
   // while Supabase is processing the Google login code in the background.
@@ -143,6 +148,8 @@ function App() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      setActiveUserId(session?.user?.id ?? null);
+
       /* ── Password Recovery ── */
       if (event === "PASSWORD_RECOVERY") {
         setIsProcessingOAuth(false);
@@ -185,11 +192,22 @@ function App() {
         try {
           const { data: profile } = await supabase
             .from("profiles")
-            .select("role")
+            .select("role, is_active")
             .eq("id", session.user.id)
             .single();
 
-          if (profile?.role === "admin") {
+          if (profile?.is_active === false) {
+            await supabase.auth.signOut();
+            sessionStorage.setItem("sixsigma_deactivated_notice", "1");
+            setIsProcessingOAuth(false);
+            navigate("/login?deactivated=1", { replace: true });
+            return;
+          }
+
+          if (profile?.role === "super_admin") {
+            setIsProcessingOAuth(false);
+            navigate("/super-admin", { replace: true });
+          } else if (profile?.role === "admin") {
             setIsProcessingOAuth(false);
             navigate("/dashboard", { replace: true });
           } else {
@@ -205,6 +223,7 @@ function App() {
 
       /* ── Sign Out — clean up everything ── */
       if (event === "SIGNED_OUT") {
+        setActiveUserId(null);
         setIsProcessingOAuth(false);
         sessionStorage.removeItem("sixsigma_active");
         localStorage.removeItem("sixsigma_remember");
@@ -215,6 +234,35 @@ function App() {
     return () => subscription.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* ── Real-time Deactivation Watcher for active sessions ── */
+  useEffect(() => {
+    if (!activeUserId) return;
+
+    const channel = supabase
+      .channel(`global-account-status-${activeUserId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "profiles",
+          filter: `id=eq.${activeUserId}`,
+        },
+        async (payload) => {
+          if (payload?.new?.is_active === false) {
+            await supabase.auth.signOut();
+            sessionStorage.setItem("sixsigma_deactivated_notice", "1");
+            navigate("/login?deactivated=1", { replace: true });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeUserId, navigate]);
 
   const bootRan = useRef(false);
 
@@ -249,21 +297,55 @@ function App() {
       // If user is actively on reset password page, do not route away
       if (window.location.pathname === "/reset-password") return;
 
-      // Check if current route is an admin destination
+      // Check if current route is an admin or super-admin destination
+      const currentPath = window.location.pathname;
       const isCurrentAdminPath =
-        window.location.pathname.startsWith("/admin/") ||
-        ["/dashboard", "/analytics", "/messages"].includes(window.location.pathname);
+        currentPath.startsWith("/admin/") ||
+        ["/dashboard", "/analytics", "/messages"].includes(currentPath);
+      const isCurrentSuperAdminPath =
+        currentPath.startsWith("/super-admin") &&
+        currentPath !== "/super-admin/login";
+
+      setActiveUserId(session.user.id);
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role")
+        .select("role, is_active")
         .eq("id", session.user.id)
         .single();
 
+      if (profile?.is_active === false) {
+        await supabase.auth.signOut();
+        sessionStorage.setItem("sixsigma_deactivated_notice", "1");
+        navigate("/login?deactivated=1", { replace: true });
+        return;
+      }
+
+      if (profile?.role === "super_admin") {
+        if (
+          !isCurrentSuperAdminPath &&
+          (isCurrentAdminPath ||
+            currentPath === "/login" ||
+            currentPath === "/super-admin/login")
+        ) {
+          navigate("/super-admin", { replace: true });
+        }
+        return;
+      }
+
       if (profile?.role === "admin") {
-        if (!isCurrentAdminPath && window.location.pathname === "/login") {
+        if (
+          isCurrentSuperAdminPath ||
+          currentPath === "/login" ||
+          currentPath === "/super-admin/login"
+        ) {
           navigate("/dashboard", { replace: true });
         }
+        return;
+      }
+
+      if (isCurrentAdminPath || isCurrentSuperAdminPath) {
+        navigate("/", { replace: true });
         return;
       }
 
@@ -318,6 +400,15 @@ function App() {
           <Route path="/configurator/*" element={<Configurator3D />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/quotation-request" element={<QuotationRequest />} />
+          <Route path="/super-admin/login" element={<SuperAdminLogin />} />
+
+          <Route element={<SuperAdminLayout />}>
+            <Route path="/super-admin" element={<SuperAdminDashboard />} />
+            <Route
+              path="/super-admin/credentials"
+              element={<SuperAdminCredentials />}
+            />
+          </Route>
 
           <Route element={<AdminLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />

@@ -218,6 +218,20 @@ export default function QuotationRequest() {
         return;
       }
 
+      /* Reject deactivated accounts immediately before permitting quote creation */
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_active')
+        .eq('id', session.user.id)
+        .single();
+
+      if (profile?.is_active === false) {
+        await supabase.auth.signOut();
+        sessionStorage.setItem('sixsigma_deactivated_notice', '1');
+        navigate('/login?deactivated=1', { replace: true });
+        return;
+      }
+
       /* Pre-fill email from the authenticated session */
       setForm((prev) => ({ ...prev, email: session.user.email ?? '' }));
 
@@ -589,6 +603,25 @@ export default function QuotationRequest() {
     setIsLoading(true);
 
     try {
+      // Re-verify active account status right before database insert
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        throw new Error('Your session has expired. Please sign in again.');
+      }
+
+      const { data: statusProfile } = await supabase
+        .from('profiles')
+        .select('is_active')
+        .eq('id', session.user.id)
+        .single();
+
+      if (statusProfile?.is_active === false) {
+        await supabase.auth.signOut();
+        sessionStorage.setItem('sixsigma_deactivated_notice', '1');
+        navigate('/login?deactivated=1', { replace: true });
+        return;
+      }
+
       const quotePayload = {
         request_id:    requestId,
         full_name:     form.fullName.trim(),

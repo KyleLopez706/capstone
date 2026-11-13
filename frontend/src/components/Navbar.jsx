@@ -17,7 +17,7 @@ const NAV_LINKS = [
 /* ─────────────────────────────────────────
    PROFILE DROPDOWN
 ───────────────────────────────────────── */
-function ProfileDropdown({ user, onSignOut }) {
+function ProfileDropdown({ user, role, onNavigate, onSignOut }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -90,8 +90,32 @@ function ProfileDropdown({ user, onSignOut }) {
             </p>
           </div>
 
-          {/* Sign Out */}
+          {/* Role-specific portal shortcut & Sign Out */}
           <div className="py-1">
+            {role === "super_admin" && (
+              <button
+                type="button"
+                onClick={() => { setOpen(false); onNavigate("/super-admin"); }}
+                className="w-full text-left px-4 py-2.5 text-sm font-medium transition-colors duration-150 cursor-pointer"
+                style={{ color: "#232B32" }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F9F9FB")}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+              >
+                Super Admin Portal
+              </button>
+            )}
+            {role === "admin" && (
+              <button
+                type="button"
+                onClick={() => { setOpen(false); onNavigate("/dashboard"); }}
+                className="w-full text-left px-4 py-2.5 text-sm font-medium transition-colors duration-150 cursor-pointer"
+                style={{ color: "#232B32" }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F9F9FB")}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+              >
+                Admin Dashboard
+              </button>
+            )}
             <button
               id="dropdown-signout-btn"
               onClick={() => { setOpen(false); onSignOut(); }}
@@ -120,25 +144,57 @@ export default function Navbar() {
 
   // Auth state — driven by Supabase session (single source of truth per AGENTS.md §B)
   const [user, setUser] = useState(null);
+  const [role, setRole] = useState(null);
 
   useEffect(() => {
+    const syncRoleAndStatus = async (sessionUser) => {
+      if (!sessionUser) {
+        setRole(null);
+        return;
+      }
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role, is_active")
+          .eq("id", sessionUser.id)
+          .single();
+
+        if (profile?.is_active === false) {
+          await supabase.auth.signOut();
+          sessionStorage.setItem("sixsigma_deactivated_notice", "1");
+          setUser(null);
+          setRole(null);
+          navigate("/login?deactivated=1", { replace: true });
+          return;
+        }
+        setRole(profile?.role || "user");
+      } catch (err) {
+        console.error("[Navbar] Role check notice:", err);
+      }
+    };
+
     // Grab the initial session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+      const nextUser = session?.user ?? null;
+      setUser(nextUser);
+      syncRoleAndStatus(nextUser);
     });
 
     // Subscribe to all future auth state changes (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+      const nextUser = session?.user ?? null;
+      setUser(nextUser);
+      syncRoleAndStatus(nextUser);
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [navigate]);
 
   const handleSignOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) console.error("Sign out error:", error.message);
     setUser(null);
+    setRole(null);
     navigate("/");
   };
 
@@ -198,7 +254,7 @@ export default function Navbar() {
         <div className="flex items-center gap-3">
           {/* Auth — driven by Supabase session */}
           {user ? (
-            <ProfileDropdown user={user} onSignOut={handleSignOut} />
+            <ProfileDropdown user={user} role={role} onNavigate={navigate} onSignOut={handleSignOut} />
           ) : (
             <button
               id="navbar-signin-btn"
