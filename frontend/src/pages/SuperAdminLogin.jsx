@@ -5,6 +5,10 @@ import { friendlyAuthError } from "../utils/authErrors";
 import { inputBase, onFocus, onBlur } from "../components/formConstants";
 import { InputIcon, EyeToggle, SubmitButton } from "../components/FormHelpers";
 import { useToast, ToastNotification } from "../utils/toast";
+import {
+  triggerDeactivatedPopup,
+  isDeactivatedAuthError,
+} from "../utils/deactivatedNotice";
 
 export default function SuperAdminLogin() {
   const [email, setEmail] = useState("");
@@ -30,7 +34,7 @@ export default function SuperAdminLogin() {
 
         if (profile?.is_active === false) {
           await supabase.auth.signOut();
-          showToast("Your account has been deactivated. Please contact administration.", "error");
+          triggerDeactivatedPopup({ role: profile?.role });
           return;
         }
 
@@ -45,7 +49,7 @@ export default function SuperAdminLogin() {
     };
 
     checkSession();
-  }, [navigate, showToast]);
+  }, [navigate]);
 
   const handleSignIn = async (e) => {
     e.preventDefault();
@@ -77,7 +81,7 @@ export default function SuperAdminLogin() {
 
       if (profile.is_active === false) {
         await supabase.auth.signOut();
-        showToast("This account has been deactivated. Please contact administration.", "error");
+        triggerDeactivatedPopup({ role: profile?.role });
         return;
       }
 
@@ -96,7 +100,11 @@ export default function SuperAdminLogin() {
 
       navigate("/super-admin", { replace: true });
     } catch (err) {
-      showToast(friendlyAuthError(err), "error");
+      if (isDeactivatedAuthError(err)) {
+        triggerDeactivatedPopup();
+      } else {
+        showToast(friendlyAuthError(err), "error");
+      }
     } finally {
       setLoading(false);
     }

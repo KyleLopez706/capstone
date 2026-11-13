@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate, Outlet, Link, useLocation } from "react-router-dom";
 import { supabase } from "../supabaseClient";
+import { triggerDeactivatedPopup } from "../utils/deactivatedNotice";
 
 export default function AdminLayout() {
   const navigate = useNavigate();
@@ -40,8 +41,8 @@ export default function AdminLayout() {
 
       if (profile?.is_active === false) {
         await supabase.auth.signOut();
-        sessionStorage.setItem('sixsigma_deactivated_notice', '1');
-        navigate('/login?deactivated=1', { replace: true });
+        triggerDeactivatedPopup({ role: 'admin' });
+        navigate('/login', { replace: true });
         return;
       }
 
@@ -72,8 +73,8 @@ export default function AdminLayout() {
             const updated = payload.new;
             if (updated?.is_active === false) {
               await supabase.auth.signOut();
-              sessionStorage.setItem('sixsigma_deactivated_notice', '1');
-              navigate('/login?deactivated=1', { replace: true });
+              triggerDeactivatedPopup({ role: 'admin' });
+              navigate('/login', { replace: true });
             } else if (updated?.role === 'super_admin') {
               navigate('/super-admin', { replace: true });
             } else if (updated?.role !== 'admin') {
@@ -221,10 +222,18 @@ export default function AdminLayout() {
           fetchQuotationData();
         }
       )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles' },
+        () => {
+          fetchQuotationData();
+        }
+      )
       .subscribe();
 
-    // 2. BroadcastChannel for instant cross-tab alerting
+    // 2. BroadcastChannel for instant cross-tab alerting & user activation status sync
     let bc;
+    let statusBc;
     try {
       bc = new BroadcastChannel('sixsigma_quotation_alert');
       bc.onmessage = (event) => {
@@ -233,6 +242,16 @@ export default function AdminLayout() {
         }
       };
     } catch (e) {}
+    try {
+      statusBc = new BroadcastChannel('sixsigma_account_status');
+      statusBc.onmessage = (event) => {
+        if (event.data?.type === 'ACCOUNT_STATUS_CHANGED') {
+          fetchQuotationData();
+        }
+      };
+    } catch {
+      // BroadcastChannel not supported in older contexts; storage event covers sync
+    }
 
     // 3. LocalStorage storage event fallback
     const handleStorage = (e) => {
@@ -241,6 +260,8 @@ export default function AdminLayout() {
           const parsed = JSON.parse(e.newValue);
           triggerIncomingQuoteAlert(parsed);
         } catch (err) {}
+      } else if (e.key === 'sixsigma_account_status_sync' && e.newValue) {
+        fetchQuotationData();
       }
     };
     window.addEventListener('storage', handleStorage);
@@ -249,6 +270,7 @@ export default function AdminLayout() {
       clearTimeout(swingTimerRef.current);
       supabase.removeChannel(channel);
       if (bc) bc.close();
+      if (statusBc) statusBc.close();
       window.removeEventListener('storage', handleStorage);
     };
   }, [isVerifying]);

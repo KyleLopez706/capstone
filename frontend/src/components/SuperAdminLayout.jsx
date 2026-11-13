@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
+import { triggerDeactivatedPopup } from "../utils/deactivatedNotice";
 
 const NAV_LINKS = [
   {
@@ -67,8 +68,8 @@ export default function SuperAdminLayout() {
 
         if (profile.is_active === false) {
           await supabase.auth.signOut();
-          sessionStorage.setItem("sixsigma_deactivated_notice", "1");
-          navigate("/login?deactivated=1", { replace: true });
+          triggerDeactivatedPopup({ role: "super_admin" });
+          navigate("/login", { replace: true });
           return;
         }
 
@@ -105,8 +106,8 @@ export default function SuperAdminLayout() {
               const updated = payload.new;
               if (updated?.is_active === false) {
                 await supabase.auth.signOut();
-                sessionStorage.setItem("sixsigma_deactivated_notice", "1");
-                navigate("/login?deactivated=1", { replace: true });
+                triggerDeactivatedPopup({ role: "super_admin" });
+                navigate("/login", { replace: true });
               } else if (updated?.role === "admin") {
                 navigate("/dashboard", { replace: true });
               } else if (updated?.role !== "super_admin") {

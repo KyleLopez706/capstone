@@ -4,6 +4,7 @@ import { jsPDF } from 'jspdf';
 import { supabase } from '../supabaseClient';
 import useConfiguratorStore from '../store/configuratorStore';
 import { useToast, ToastNotification } from '../utils/toast';
+import { triggerDeactivatedPopup } from '../utils/deactivatedNotice';
 import { calculatePricing } from '../utils/pricingEngine';
 import { applyQuotationInventoryTransition } from '../utils/inventoryManager.js';
 import { incrementPopularProjectType } from '../utils/popularInsights.js';
@@ -227,8 +228,8 @@ export default function QuotationRequest() {
 
       if (profile?.is_active === false) {
         await supabase.auth.signOut();
-        sessionStorage.setItem('sixsigma_deactivated_notice', '1');
-        navigate('/login?deactivated=1', { replace: true });
+        triggerDeactivatedPopup({ role: 'user' });
+        navigate('/login', { replace: true });
         return;
       }
 
@@ -617,12 +618,13 @@ export default function QuotationRequest() {
 
       if (statusProfile?.is_active === false) {
         await supabase.auth.signOut();
-        sessionStorage.setItem('sixsigma_deactivated_notice', '1');
-        navigate('/login?deactivated=1', { replace: true });
+        triggerDeactivatedPopup({ role: 'user' });
+        navigate('/login', { replace: true });
         return;
       }
 
       const quotePayload = {
+        user_id:       session.user.id,
         request_id:    requestId,
         full_name:     form.fullName.trim(),
         email:         form.email.trim(),
@@ -651,6 +653,7 @@ export default function QuotationRequest() {
       if (insertError) {
         console.warn('[QuotationRequest] Retrying insert with baseline schema:', insertError.message);
         const baselinePayload = { ...quotePayload };
+        delete baselinePayload.user_id;
         delete baselinePayload.required_slabs;
         delete baselinePayload.soft_hold_expires_at;
         delete baselinePayload.remarks;

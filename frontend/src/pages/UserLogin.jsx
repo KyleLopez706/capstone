@@ -10,6 +10,10 @@ import {
   BackButton,
 } from "../components/FormHelpers";
 import { useToast, ToastNotification } from "../utils/toast";
+import {
+  triggerDeactivatedPopup,
+  isDeactivatedAuthError,
+} from "../utils/deactivatedNotice";
 
 /* ─────────────────────────────────────────
    USER LOGIN PAGE
@@ -65,12 +69,8 @@ export default function UserLogin() {
     const hadNotice = sessionStorage.getItem("sixsigma_deactivated_notice") === "1";
     if (params.get("deactivated") !== "1" && !hadNotice) return;
 
-    sessionStorage.removeItem("sixsigma_deactivated_notice");
-    const timer = setTimeout(() => {
-      showToast("Your account has been deactivated. Please contact administration.", "error");
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [showToast]);
+    triggerDeactivatedPopup();
+  }, []);
 
   /* ── Role-based routing helper ──
      Queries only 'role' and 'is_active' to keep the query lean (AGENTS.md §A).
@@ -106,7 +106,7 @@ export default function UserLogin() {
       sessionStorage.removeItem("sixsigma_active");
       localStorage.removeItem("sixsigma_remember");
       isRouting.current = false;
-      showToast("Your account has been deactivated. Please contact administration.", "error");
+      triggerDeactivatedPopup({ role: data?.role });
       return;
     }
 
@@ -155,7 +155,11 @@ export default function UserLogin() {
 
       await routeByRole(data.user.id);
     } catch (err) {
-      showToast(friendlyAuthError(err), 'error');
+      if (isDeactivatedAuthError(err)) {
+        triggerDeactivatedPopup();
+      } else {
+        showToast(friendlyAuthError(err), 'error');
+      }
     } finally {
       setUserSignInLoading(false);
     }

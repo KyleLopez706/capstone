@@ -893,10 +893,14 @@ export default function Dashboard() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, () => {
         fetchRequests();
       })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, () => {
+        fetchRequests();
+      })
       .subscribe();
 
-    // 2. BroadcastChannel for instant cross-tab inbound alerts
+    // 2. BroadcastChannel for instant cross-tab inbound alerts & user activation status sync
     let bc;
+    let statusBc;
     try {
       bc = new BroadcastChannel('sixsigma_quotation_alert');
       bc.onmessage = (event) => {
@@ -905,6 +909,16 @@ export default function Dashboard() {
         }
       };
     } catch (e) {}
+    try {
+      statusBc = new BroadcastChannel('sixsigma_account_status');
+      statusBc.onmessage = (event) => {
+        if (event.data?.type === 'ACCOUNT_STATUS_CHANGED') {
+          fetchRequests();
+        }
+      };
+    } catch {
+      // BroadcastChannel not supported in older contexts; storage event covers sync
+    }
 
     // 3. LocalStorage storage event fallback
     const handleStorage = (e) => {
@@ -913,6 +927,8 @@ export default function Dashboard() {
           const parsed = JSON.parse(e.newValue);
           handleNewQuoteArrived(parsed);
         } catch (err) {}
+      } else if (e.key === 'sixsigma_account_status_sync' && e.newValue) {
+        fetchRequests();
       }
     };
     window.addEventListener('storage', handleStorage);
@@ -920,6 +936,7 @@ export default function Dashboard() {
     return () => {
       supabase.removeChannel(channel);
       if (bc) bc.close();
+      if (statusBc) statusBc.close();
       window.removeEventListener('storage', handleStorage);
     };
   }, [fetchRequests]);

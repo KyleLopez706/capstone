@@ -1,6 +1,8 @@
 import { Routes, Route, useNavigate, Navigate } from "react-router-dom";
 import { useState, useEffect, lazy, Suspense, useRef, Component } from "react";
 import { supabase } from "./supabaseClient";
+import DeactivatedAccountModal from "./components/DeactivatedAccountModal";
+import { triggerDeactivatedPopup } from "./utils/deactivatedNotice";
 
 /* ── Global Error Boundary ────────────────────────────────────────────────
    Prevents entire application tree from crashing to a blank white screen
@@ -198,9 +200,9 @@ function App() {
 
           if (profile?.is_active === false) {
             await supabase.auth.signOut();
-            sessionStorage.setItem("sixsigma_deactivated_notice", "1");
             setIsProcessingOAuth(false);
-            navigate("/login?deactivated=1", { replace: true });
+            triggerDeactivatedPopup({ role: profile?.role });
+            navigate("/login", { replace: true });
             return;
           }
 
@@ -252,8 +254,8 @@ function App() {
         async (payload) => {
           if (payload?.new?.is_active === false) {
             await supabase.auth.signOut();
-            sessionStorage.setItem("sixsigma_deactivated_notice", "1");
-            navigate("/login?deactivated=1", { replace: true });
+            triggerDeactivatedPopup({ role: payload?.new?.role });
+            navigate("/login", { replace: true });
           }
         }
       )
@@ -316,8 +318,8 @@ function App() {
 
       if (profile?.is_active === false) {
         await supabase.auth.signOut();
-        sessionStorage.setItem("sixsigma_deactivated_notice", "1");
-        navigate("/login?deactivated=1", { replace: true });
+        triggerDeactivatedPopup({ role: profile?.role });
+        navigate("/login", { replace: true });
         return;
       }
 
@@ -370,65 +372,64 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (isProcessingOAuth) {
-    return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-[#F9F9FB]">
-        <div className="w-8 h-8 border-4 border-[#C5A059] border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
   return (
     <GlobalErrorBoundary>
-      <Suspense
-        fallback={
-          <div className="min-h-screen w-full flex items-center justify-center bg-[#F9F9FB]">
-            <div className="w-8 h-8 border-4 border-[#C5A059] border-t-transparent rounded-full animate-spin"></div>
-          </div>
-        }
-      >
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<UserLogin />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/services" element={<Services />} />
-          <Route path="/gallery" element={<Gallery />} />
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/configurator-3d" element={<Configurator3D />} />
-          <Route path="/configurator-3d/*" element={<Configurator3D />} />
-          <Route path="/configurator" element={<Configurator3D />} />
-          <Route path="/configurator/*" element={<Configurator3D />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/quotation-request" element={<QuotationRequest />} />
-          <Route path="/super-admin/login" element={<SuperAdminLogin />} />
+      <DeactivatedAccountModal />
+      {isProcessingOAuth ? (
+        <div className="min-h-screen w-full flex items-center justify-center bg-[#F9F9FB]">
+          <div className="w-8 h-8 border-4 border-[#C5A059] border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      ) : (
+        <Suspense
+          fallback={
+            <div className="min-h-screen w-full flex items-center justify-center bg-[#F9F9FB]">
+              <div className="w-8 h-8 border-4 border-[#C5A059] border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          }
+        >
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<UserLogin />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/services" element={<Services />} />
+            <Route path="/gallery" element={<Gallery />} />
+            <Route path="/contact" element={<Contact />} />
+            <Route path="/configurator-3d" element={<Configurator3D />} />
+            <Route path="/configurator-3d/*" element={<Configurator3D />} />
+            <Route path="/configurator" element={<Configurator3D />} />
+            <Route path="/configurator/*" element={<Configurator3D />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/quotation-request" element={<QuotationRequest />} />
+            <Route path="/super-admin/login" element={<SuperAdminLogin />} />
 
-          <Route element={<SuperAdminLayout />}>
-            <Route path="/super-admin" element={<SuperAdminDashboard />} />
-            <Route
-              path="/super-admin/credentials"
-              element={<SuperAdminCredentials />}
-            />
-          </Route>
+            <Route element={<SuperAdminLayout />}>
+              <Route path="/super-admin" element={<SuperAdminDashboard />} />
+              <Route
+                path="/super-admin/credentials"
+                element={<SuperAdminCredentials />}
+              />
+            </Route>
 
-          <Route element={<AdminLayout />}>
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/messages" element={<AdminMessages />} />
-            <Route path="/admin/settings" element={<AdminSettings />} />
-            <Route path="/admin/materials" element={<AdminMaterials />} />
-            <Route path="/admin/models" element={<AdminModels />} />
-            <Route
-              path="/admin/cabinet-colors"
-              element={<AdminCabinetColors />}
-            />
-            <Route path="/admin/gallery" element={<AdminGallery />} />
-          </Route>
-          <Route path="/admin/quotation/:id" element={<CreateQuotation />} />
+            <Route element={<AdminLayout />}>
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/messages" element={<AdminMessages />} />
+              <Route path="/admin/settings" element={<AdminSettings />} />
+              <Route path="/admin/materials" element={<AdminMaterials />} />
+              <Route path="/admin/models" element={<AdminModels />} />
+              <Route
+                path="/admin/cabinet-colors"
+                element={<AdminCabinetColors />}
+              />
+              <Route path="/admin/gallery" element={<AdminGallery />} />
+            </Route>
+            <Route path="/admin/quotation/:id" element={<CreateQuotation />} />
 
-          {/* Fallback route to prevent white screen on unknown URLs */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
+            {/* Fallback route to prevent white screen on unknown URLs */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+      )}
     </GlobalErrorBoundary>
   );
 }

@@ -260,6 +260,28 @@ export default function SuperAdminDashboard() {
         )
       );
 
+      // Notify open Admin tabs immediately to refresh quotation overview when user status changes
+      try {
+        const statusBc = new BroadcastChannel("sixsigma_account_status");
+        statusBc.postMessage({
+          type: "ACCOUNT_STATUS_CHANGED",
+          userId: target.id,
+          role: target.role,
+          is_active: nextStatus,
+        });
+        statusBc.close();
+      } catch {
+        // Fallback below handles cross-tab sync
+      }
+      try {
+        localStorage.setItem(
+          "sixsigma_account_status_sync",
+          JSON.stringify({ userId: target.id, is_active: nextStatus, ts: Date.now() })
+        );
+      } catch {
+        // Ignore storage write restriction
+      }
+
       showToast(
         `${target.role === "admin" ? "Admin" : "User"} account (${target.email}) ${
           nextStatus ? "activated" : "deactivated"

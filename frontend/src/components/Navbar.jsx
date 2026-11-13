@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../supabaseClient";
+import { triggerDeactivatedPopup } from "../utils/deactivatedNotice";
 
 /* ─────────────────────────────────────────
    NAV LINKS — single source of truth shared
@@ -161,10 +162,10 @@ export default function Navbar() {
 
         if (profile?.is_active === false) {
           await supabase.auth.signOut();
-          sessionStorage.setItem("sixsigma_deactivated_notice", "1");
           setUser(null);
           setRole(null);
-          navigate("/login?deactivated=1", { replace: true });
+          triggerDeactivatedPopup({ role: profile?.role });
+          navigate("/login", { replace: true });
           return;
         }
         setRole(profile?.role || "user");

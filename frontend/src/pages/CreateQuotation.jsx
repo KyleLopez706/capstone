@@ -4,6 +4,7 @@ import { supabase } from "../supabaseClient";
 import emailjs from '@emailjs/browser';
 import { jsPDF } from "jspdf";
 import { useToast, ToastNotification } from "../utils/toast";
+import { triggerDeactivatedPopup } from "../utils/deactivatedNotice";
 import { checkStockSupplementFeasibility } from "../utils/inventoryManager.js";
 import {
   calculatePricing,
@@ -93,8 +94,8 @@ export default function CreateQuotation() {
 
         if (profile?.is_active === false) {
           await supabase.auth.signOut();
-          sessionStorage.setItem('sixsigma_deactivated_notice', '1');
-          navigate('/login?deactivated=1', { replace: true });
+          triggerDeactivatedPopup({ role: 'admin' });
+          navigate('/login', { replace: true });
           return;
         }
 
