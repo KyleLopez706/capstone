@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "../supabaseClient";
 import { useToast, ToastNotification } from "../utils/toast";
+import CreateStaffAccountModal from "../components/CreateStaffAccountModal";
 
 function formatDate(iso) {
   if (!iso) return "Never";
@@ -125,6 +126,12 @@ export default function SuperAdminDashboard() {
   const [statusFilter, setStatusFilter] = useState("all"); // 'all' | 'active' | 'inactive'
   const [confirmTarget, setConfirmTarget] = useState(null);
   const [actionLoadingId, setActionLoadingId] = useState(null);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+
+  const existingEmails = useMemo(
+    () => accounts.map((acc) => acc.email).filter(Boolean),
+    [accounts]
+  );
 
   const debounceRef = useRef(null);
   const { toast, showToast, dismissToast } = useToast();
@@ -306,6 +313,14 @@ export default function SuperAdminDashboard() {
         onCancel={() => !actionLoadingId && setConfirmTarget(null)}
         onConfirm={handleToggleAccountStatus}
       />
+      <CreateStaffAccountModal
+        isOpen={createModalOpen}
+        defaultRole="admin"
+        existingEmails={existingEmails}
+        onClose={() => setCreateModalOpen(false)}
+        onCreated={() => fetchAccounts(true)}
+        showToast={showToast}
+      />
 
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Page Banner */}
@@ -327,18 +342,34 @@ export default function SuperAdminDashboard() {
             </p>
           </div>
 
-          <button
-            type="button"
-            disabled={isLoading}
-            onClick={() => fetchAccounts(false)}
-            className="self-start md:self-auto py-2.5 px-4 rounded-xl bg-[#232B32] hover:bg-[#1a2025] text-[#F9F9FB] text-xs font-semibold tracking-wider uppercase transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-2 shrink-0"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M23 4v6h-6" />
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-            </svg>
-            Refresh Accounts
-          </button>
+          <div className="flex flex-wrap items-center gap-3 self-start md:self-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => setCreateModalOpen(true)}
+              className="py-2.5 px-4 rounded-xl bg-[#C5A059] hover:bg-[#b08d47] text-[#232B32] text-xs font-bold tracking-wider uppercase transition-colors cursor-pointer flex items-center gap-2"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="8.5" cy="7" r="4" />
+                <line x1="20" y1="8" x2="20" y2="14" />
+                <line x1="23" y1="11" x2="17" y2="11" />
+              </svg>
+              Create Account
+            </button>
+
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={() => fetchAccounts(false)}
+              className="py-2.5 px-4 rounded-xl bg-[#232B32] hover:bg-[#1a2025] text-[#F9F9FB] text-xs font-semibold tracking-wider uppercase transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-2"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M23 4v6h-6" />
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+              </svg>
+              Refresh Accounts
+            </button>
+          </div>
         </div>
 
         {/* Summary Metric Cards */}

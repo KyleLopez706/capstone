@@ -3,6 +3,7 @@ import { useOutletContext } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { useToast, ToastNotification } from "../utils/toast";
 import { EyeToggle } from "../components/FormHelpers";
+import CreateStaffAccountModal from "../components/CreateStaffAccountModal";
 
 function generateStrongPassword(length = 14) {
   const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -87,9 +88,9 @@ function CredentialConfirmModal({ pendingAction, saving, onCancel, onConfirm }) 
           </div>
 
           <p className="text-sm text-[#232B32] leading-relaxed">
-            {pendingAction.roleLabel === "Admin"
-              ? "Updating this Admin account's credentials takes effect immediately and logs out any active Admin sessions using old credentials."
-              : "Your Super Admin credentials will be updated immediately. Make sure to keep your new sign-in details secure."}
+            {pendingAction.isSelf
+              ? "Your own Super Admin credentials will be updated immediately. Make sure to keep your new sign-in details secure."
+              : `Updating this ${pendingAction.roleLabel} account's credentials takes effect immediately and logs out any active sessions using old credentials.`}
           </p>
 
           <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
@@ -138,11 +139,15 @@ export default function SuperAdminCredentials() {
   const [adminConfirmPassword, setAdminConfirmPassword] = useState("");
   const [showAdminPw, setShowAdminPw] = useState(false);
 
-  // Super Admin credential form state
+  // Super Admin credential form state (supports multiple Super Admin accounts)
+  const [selectedSuperId, setSelectedSuperId] = useState("");
   const [superEmail, setSuperEmail] = useState("");
   const [superPassword, setSuperPassword] = useState("");
   const [superConfirmPassword, setSuperConfirmPassword] = useState("");
   const [showSuperPw, setShowSuperPw] = useState(false);
+
+  // Create new Admin / Super Admin account modal
+  const [createModal, setCreateModal] = useState({ open: false, defaultRole: "admin" });
 
   const [pendingAction, setPendingAction] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -154,39 +159,58 @@ export default function SuperAdminCredentials() {
     [accounts]
   );
 
-  const currentSuperAdmin = useMemo(() => {
-    if (superAdminProfile?.id) {
-      const matched = accounts.find((a) => a.id === superAdminProfile.id);
-      if (matched) return matched;
-    }
-    return accounts.find((a) => a.role === "super_admin") || superAdminProfile || null;
-  }, [accounts, superAdminProfile]);
+  const superAdminAccounts = useMemo(
+    () => accounts.filter((a) => a.role === "super_admin"),
+    [accounts]
+  );
+
+  const existingEmails = useMemo(
+    () => accounts.map((a) => a.email).filter(Boolean),
+    [accounts]
+  );
 
   const selectedAdmin = useMemo(
     () => adminAccounts.find((a) => a.id === selectedAdminId) || null,
     [adminAccounts, selectedAdminId]
   );
 
-  const applyLoadedAccounts = useCallback((list) => {
-    setAccounts(list);
+  const selectedSuperAdmin = useMemo(
+    () =>
+      superAdminAccounts.find((a) => a.id === selectedSuperId) ||
+      superAdminAccounts.find((a) => a.id === superAdminProfile?.id) ||
+      superAdminAccounts[0] ||
+      superAdminProfile ||
+      null,
+    [superAdminAccounts, selectedSuperId, superAdminProfile]
+  );
 
-    const admins = list.filter((a) => a.role === "admin");
-    if (admins.length > 0) {
-      setSelectedAdminId((prev) => {
-        const stillExists = admins.find((a) => a.id === prev);
-        const chosen = stillExists || admins[0];
-        setAdminEmail(chosen.email || "");
-        return chosen.id;
-      });
-    }
+  const applyLoadedAccounts = useCallback(
+    (list) => {
+      setAccounts(list);
 
-    const selfSuper =
-      list.find((a) => a.id === superAdminProfile?.id) ||
-      list.find((a) => a.role === "super_admin");
-    if (selfSuper) {
-      setSuperEmail(selfSuper.email || "");
-    }
-  }, [superAdminProfile?.id]);
+      const admins = list.filter((a) => a.role === "admin");
+      if (admins.length > 0) {
+        setSelectedAdminId((prev) => {
+          const stillExists = admins.find((a) => a.id === prev);
+          const chosen = stillExists || admins[0];
+          setAdminEmail(chosen.email || "");
+          return chosen.id;
+        });
+      }
+
+      const supers = list.filter((a) => a.role === "super_admin");
+      if (supers.length > 0) {
+        setSelectedSuperId((prev) => {
+          const stillExists = supers.find((a) => a.id === prev);
+          const selfAcc = supers.find((a) => a.id === superAdminProfile?.id);
+          const chosen = stillExists || selfAcc || supers[0];
+          setSuperEmail(chosen.email || "");
+          return chosen.id;
+        });
+      }
+    },
+    [superAdminProfile?.id]
+  );
 
   const fetchAccounts = useCallback(async () => {
     setIsLoading(true);
@@ -194,12 +218,15 @@ export default function SuperAdminCredentials() {
     try {
       const { data, error } = await supabase.rpc("super_admin_list_accounts");
       if (error) throw error;
-      applyLoadedAccounts(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      applyLoadedAccounts(list);
+      return list;
     } catch (err) {
       console.error("[SuperAdminCredentials] Failed to load accounts:", err);
       const msg = "Unable to load credential records. Please verify your Super Admin SQL setup and try again.";
       setLoadError(msg);
       showToast(msg, "error");
+      return [];
     } finally {
       setIsLoading(false);
     }
@@ -240,9 +267,17 @@ export default function SuperAdminCredentials() {
     setAdminConfirmPassword("");
   };
 
+  const handleSelectSuperAdmin = (id) => {
+    setSelectedSuperId(id);
+    const chosen = superAdminAccounts.find((a) => a.id === id);
+    setSuperEmail(chosen?.email || "");
+    setSuperPassword("");
+    setSuperConfirmPassword("");
+  };
+
   const validateAndPrepare = ({ mode }) => {
     const isAdminMode = mode === "admin";
-    const target = isAdminMode ? selectedAdmin : currentSuperAdmin;
+    const target = isAdminMode ? selectedAdmin : selectedSuperAdmin;
     const rawEmail = (isAdminMode ? adminEmail : superEmail).trim().toLowerCase();
     const rawPw = isAdminMode ? adminPassword : superPassword;
     const rawConfirmPw = isAdminMode ? adminConfirmPassword : superConfirmPassword;
@@ -254,6 +289,14 @@ export default function SuperAdminCredentials() {
 
     if (!rawEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
       showToast("Please enter a valid email address.", "error");
+      return;
+    }
+
+    const emailTaken = accounts.some(
+      (a) => a.id !== target.id && (a.email || "").trim().toLowerCase() === rawEmail
+    );
+    if (emailTaken) {
+      showToast("This email address is already registered to another account.", "error");
       return;
     }
 
@@ -280,6 +323,7 @@ export default function SuperAdminCredentials() {
       mode,
       roleLabel: isAdminMode ? "Admin" : "Super Admin",
       targetId: target.id,
+      isSelf: target.id === superAdminProfile?.id,
       targetName: `${target.full_name || target.role} (${target.email})`,
       newEmail: emailChanged ? rawEmail : null,
       newPassword: passwordChanged ? rawPw : null,
@@ -309,12 +353,14 @@ export default function SuperAdminCredentials() {
         setSuperConfirmPassword("");
         if (updatedEmail) {
           setSuperEmail(updatedEmail);
-          if (typeof setSuperAdminProfile === "function") {
+          if (pendingAction.isSelf && typeof setSuperAdminProfile === "function") {
             setSuperAdminProfile((prev) => ({ ...prev, email: updatedEmail }));
           }
         }
         // Keep current Super Admin session fresh after self credential changes
-        await supabase.auth.refreshSession();
+        if (pendingAction.isSelf) {
+          await supabase.auth.refreshSession();
+        }
       }
 
       await fetchAccounts();
@@ -325,6 +371,23 @@ export default function SuperAdminCredentials() {
       showToast(err?.message || "Failed to update credentials. Please try again.", "error");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleAccountCreated = async (created) => {
+    await fetchAccounts();
+    if (created?.id) {
+      if (created.role === "admin") {
+        setSelectedAdminId(created.id);
+        setAdminEmail(created.email || "");
+        setAdminPassword("");
+        setAdminConfirmPassword("");
+      } else if (created.role === "super_admin") {
+        setSelectedSuperId(created.id);
+        setSuperEmail(created.email || "");
+        setSuperPassword("");
+        setSuperConfirmPassword("");
+      }
     }
   };
 
@@ -345,24 +408,48 @@ export default function SuperAdminCredentials() {
         onCancel={() => !isSaving && setPendingAction(null)}
         onConfirm={executeCredentialUpdate}
       />
+      <CreateStaffAccountModal
+        isOpen={createModal.open}
+        defaultRole={createModal.defaultRole}
+        existingEmails={existingEmails}
+        onClose={() => setCreateModal((prev) => ({ ...prev, open: false }))}
+        onCreated={handleAccountCreated}
+        showToast={showToast}
+      />
 
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header Banner */}
         <div
-          className="rounded-2xl p-6 md:p-8 border border-[#E2E8F0] shadow-xs"
+          className="rounded-2xl p-6 md:p-8 border border-[#E2E8F0] shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-4"
           style={{
             background: "linear-gradient(135deg, #FFFFFF 0%, #F9F9FB 100%)",
           }}
         >
-          <p className="text-[11px] font-bold tracking-widest uppercase text-[#C5A059]">
-            Security &amp; Authentication
-          </p>
-          <h1 className="text-2xl md:text-3xl font-bold text-[#232B32] mt-1">
-            Admin &amp; Super Admin Credentials
-          </h1>
-          <p className="text-sm text-[#6B7280] mt-1.5 max-w-2xl">
-            Update login emails and passwords for Admin accounts and your Super Admin account. Changes sync directly with Supabase Auth.
-          </p>
+          <div>
+            <p className="text-[11px] font-bold tracking-widest uppercase text-[#C5A059]">
+              Security &amp; Authentication
+            </p>
+            <h1 className="text-2xl md:text-3xl font-bold text-[#232B32] mt-1">
+              Admin &amp; Super Admin Credentials
+            </h1>
+            <p className="text-sm text-[#6B7280] mt-1.5 max-w-2xl">
+              Create new Admin or Super Admin accounts and manage login emails and passwords. Changes sync directly with Supabase Auth.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setCreateModal({ open: true, defaultRole: "admin" })}
+            className="self-start md:self-auto py-2.5 px-5 rounded-xl bg-[#C5A059] hover:bg-[#b08d47] text-[#232B32] text-xs font-bold tracking-wider uppercase transition-colors cursor-pointer flex items-center gap-2 shrink-0"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="8.5" cy="7" r="4" />
+              <line x1="20" y1="8" x2="20" y2="14" />
+              <line x1="23" y1="11" x2="17" y2="11" />
+            </svg>
+            Create Account
+          </button>
         </div>
 
         {loadError ? (
@@ -380,7 +467,7 @@ export default function SuperAdminCredentials() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             {/* Panel 1: Admin Account Credentials */}
             <div className="rounded-2xl bg-[#FFFFFF] border border-[#E2E8F0] shadow-xs overflow-hidden">
-              <div className="px-6 py-5 bg-[#232B32] flex items-center justify-between gap-3">
+              <div className="px-6 py-5 bg-[#232B32] flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <span className="text-[10px] font-bold tracking-widest uppercase text-[#C5A059]">
                     Staff Credential Control
@@ -389,18 +476,34 @@ export default function SuperAdminCredentials() {
                     Admin Credentials
                   </h2>
                 </div>
-                <span className="px-3 py-1 rounded-full text-[11px] font-semibold bg-[rgba(197,160,89,0.16)] text-[#C5A059] border border-[rgba(197,160,89,0.35)]">
-                  {adminAccounts.length} {adminAccounts.length === 1 ? "Admin" : "Admins"}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-full text-[11px] font-semibold bg-[rgba(197,160,89,0.16)] text-[#C5A059] border border-[rgba(197,160,89,0.35)]">
+                    {adminAccounts.length} {adminAccounts.length === 1 ? "Admin" : "Admins"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCreateModal({ open: true, defaultRole: "admin" })}
+                    className="py-1.5 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-[#C5A059] hover:bg-[#b08d47] text-[#232B32] transition-colors cursor-pointer"
+                  >
+                    + New Admin
+                  </button>
+                </div>
               </div>
 
               <div className="p-6">
                 {adminAccounts.length === 0 ? (
-                  <div className="p-6 rounded-xl bg-[#F9F9FB] border border-[#E2E8F0] text-center">
+                  <div className="p-6 rounded-xl bg-[#F9F9FB] border border-[#E2E8F0] text-center space-y-3">
                     <p className="text-sm font-semibold text-[#232B32]">No Admin accounts found</p>
-                    <p className="text-xs text-[#6B7280] mt-1">
-                      Ensure an account with <code className="font-mono">role = &apos;admin&apos;</code> exists in <code className="font-mono">public.profiles</code>.
+                    <p className="text-xs text-[#6B7280]">
+                      Create a new Admin account right from the Super Admin portal.
                     </p>
+                    <button
+                      type="button"
+                      onClick={() => setCreateModal({ open: true, defaultRole: "admin" })}
+                      className="py-2.5 px-4 rounded-xl bg-[#C5A059] hover:bg-[#b08d47] text-[#232B32] text-xs font-bold uppercase tracking-wider cursor-pointer"
+                    >
+                      Create First Admin
+                    </button>
                   </div>
                 ) : (
                   <form
@@ -534,20 +637,30 @@ export default function SuperAdminCredentials() {
               </div>
             </div>
 
-            {/* Panel 2: Super Admin Own Credentials */}
+            {/* Panel 2: Super Admin Credentials (supports multiple Super Admin accounts) */}
             <div className="rounded-2xl bg-[#FFFFFF] border border-[#E2E8F0] shadow-xs overflow-hidden">
-              <div className="px-6 py-5 bg-[#232B32] flex items-center justify-between gap-3">
+              <div className="px-6 py-5 bg-[#232B32] flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <span className="text-[10px] font-bold tracking-widest uppercase text-[#C5A059]">
-                    Owner / Executive Account
+                    Owner / Executive Accounts
                   </span>
                   <h2 className="text-lg font-semibold text-[#F9F9FB] mt-0.5">
                     Super Admin Credentials
                   </h2>
                 </div>
-                <span className="px-3 py-1 rounded-full text-[11px] font-semibold bg-[#ECFDF5] text-[#047857] border border-[#A7F3D0]">
-                  Active
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-full text-[11px] font-semibold bg-[rgba(197,160,89,0.16)] text-[#C5A059] border border-[rgba(197,160,89,0.35)]">
+                    {superAdminAccounts.length || 1}{" "}
+                    {(superAdminAccounts.length || 1) === 1 ? "Super Admin" : "Super Admins"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCreateModal({ open: true, defaultRole: "super_admin" })}
+                    className="py-1.5 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-[#C5A059] hover:bg-[#b08d47] text-[#232B32] transition-colors cursor-pointer"
+                  >
+                    + New Super Admin
+                  </button>
+                </div>
               </div>
 
               <div className="p-6">
@@ -558,13 +671,43 @@ export default function SuperAdminCredentials() {
                   }}
                   className="space-y-4"
                 >
-                  <div className="px-4 py-3 rounded-xl bg-[#F9F9FB] border border-[#E2E8F0]">
-                    <p className="text-xs font-semibold text-[#232B32]">
-                      {currentSuperAdmin?.full_name || "Six Sigmaphil Super Admin"}
-                    </p>
-                    <p className="text-[11px] text-[#6B7280] mt-0.5">
-                      Current Login: <span className="font-medium text-[#232B32]">{currentSuperAdmin?.email}</span>
-                    </p>
+                  {superAdminAccounts.length > 1 && (
+                    <div>
+                      <label
+                        htmlFor="select-superadmin-account"
+                        className="block text-xs font-semibold tracking-wider uppercase text-[#232B32] mb-2"
+                      >
+                        Select Super Admin Account
+                      </label>
+                      <select
+                        id="select-superadmin-account"
+                        value={selectedSuperId || selectedSuperAdmin?.id || ""}
+                        onChange={(e) => handleSelectSuperAdmin(e.target.value)}
+                        className="w-full py-2.5 px-4 rounded-xl bg-[#F9F9FB] border border-[#E2E8F0] text-sm text-[#232B32] outline-none focus:border-[#C5A059] cursor-pointer"
+                      >
+                        {superAdminAccounts.map((acc) => (
+                          <option key={acc.id} value={acc.id}>
+                            {acc.full_name || "Super Admin"} — {acc.email}
+                            {acc.id === superAdminProfile?.id ? " (You)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-[#F9F9FB] border border-[#E2E8F0]">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-[#232B32] truncate">
+                        {selectedSuperAdmin?.full_name || "Six Sigmaphil Super Admin"}
+                        {selectedSuperAdmin?.id === superAdminProfile?.id ? " (Current Session)" : ""}
+                      </p>
+                      <p className="text-[11px] text-[#6B7280] mt-0.5 truncate">
+                        Current Login: <span className="font-medium text-[#232B32]">{selectedSuperAdmin?.email}</span>
+                      </p>
+                    </div>
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold shrink-0 bg-[#ECFDF5] text-[#047857] border border-[#A7F3D0]">
+                      Active
+                    </span>
                   </div>
 
                   <div>
